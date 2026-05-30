@@ -1,0 +1,194 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/master.swiftdeps"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/CodeGenerator.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGenerator.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGenerator.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGenerator~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGenerator.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGenerator.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/CodeGeneratorParameter.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGeneratorParameter.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGeneratorParameter.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGeneratorParameter~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGeneratorParameter.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodeGeneratorParameter.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/CodePrinter.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodePrinter.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodePrinter.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodePrinter~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodePrinter.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/CodePrinter.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/Descriptor+Extensions.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor+Extensions.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor+Extensions.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor+Extensions~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor+Extensions.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor+Extensions.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/Descriptor.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Descriptor.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/FeatureResolver.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FeatureResolver.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FeatureResolver.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FeatureResolver~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FeatureResolver.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FeatureResolver.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/FieldNumbers.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FieldNumbers.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FieldNumbers.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FieldNumbers~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FieldNumbers.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/FieldNumbers.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/GeneratorOutputs.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/GeneratorOutputs.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/GeneratorOutputs.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/GeneratorOutputs~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/GeneratorOutputs.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/GeneratorOutputs.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Compiler_CodeGeneratorResponse+Extensions.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/Google_Protobuf_Edition+Extensions.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Edition+Extensions.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Edition+Extensions.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Edition+Extensions~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Edition+Extensions.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_Edition+Extensions.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/Google_Protobuf_SourceCodeInfo+Extensions.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_SourceCodeInfo+Extensions.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_SourceCodeInfo+Extensions.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_SourceCodeInfo+Extensions~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_SourceCodeInfo+Extensions.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/Google_Protobuf_SourceCodeInfo+Extensions.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/NamingUtils.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/NamingUtils.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/NamingUtils.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/NamingUtils~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/NamingUtils.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/NamingUtils.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/PluginLibEditionDefaults.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/PluginLibEditionDefaults.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/PluginLibEditionDefaults.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/PluginLibEditionDefaults~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/PluginLibEditionDefaults.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/PluginLibEditionDefaults.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/ProtoCompilerContext.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoCompilerContext.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoCompilerContext.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoCompilerContext~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoCompilerContext.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoCompilerContext.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/ProtoFileToModuleMappings.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoFileToModuleMappings.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoFileToModuleMappings.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoFileToModuleMappings~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoFileToModuleMappings.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProtoFileToModuleMappings.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/ProvidesDeprecationComment.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesDeprecationComment.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesDeprecationComment.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesDeprecationComment~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesDeprecationComment.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesDeprecationComment.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/ProvidesLocationPath.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesLocationPath.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesLocationPath.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesLocationPath~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesLocationPath.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesLocationPath.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/ProvidesSourceCodeLocation.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesSourceCodeLocation.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesSourceCodeLocation.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesSourceCodeLocation~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesSourceCodeLocation.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/ProvidesSourceCodeLocation.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/StandardErrorOutputStream.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StandardErrorOutputStream.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StandardErrorOutputStream.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StandardErrorOutputStream~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StandardErrorOutputStream.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StandardErrorOutputStream.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/StringUtils.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StringUtils.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StringUtils.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StringUtils~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StringUtils.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/StringUtils.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/SwiftLanguage.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftLanguage.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftLanguage.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftLanguage~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftLanguage.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftLanguage.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/SwiftProtobufInfo.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufInfo.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufInfo.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufInfo~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufInfo.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufInfo.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/SwiftProtobufNamer.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufNamer.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufNamer.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufNamer~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufNamer.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/SwiftProtobufNamer.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/UnicodeScalar+Extensions.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/UnicodeScalar+Extensions.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/UnicodeScalar+Extensions.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/UnicodeScalar+Extensions~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/UnicodeScalar+Extensions.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/UnicodeScalar+Extensions.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/plugin.pb.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/plugin.pb.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/plugin.pb.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/plugin.pb~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/plugin.pb.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/plugin.pb.dia"
+  },
+  "/Users/mert/menubar/.build/checkouts/swift-protobuf/Sources/SwiftProtobufPluginLibrary/swift_protobuf_module_mappings.pb.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/swift_protobuf_module_mappings.pb.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/swift_protobuf_module_mappings.pb.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/swift_protobuf_module_mappings.pb~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/swift_protobuf_module_mappings.pb.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/swift_protobuf_module_mappings.pb.dia"
+  },
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/DerivedSources/resource_bundle_accessor.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/resource_bundle_accessor.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/resource_bundle_accessor.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/resource_bundle_accessor~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/resource_bundle_accessor.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/SwiftProtobufPluginLibrary.build/resource_bundle_accessor.dia"
+  }
+}

@@ -2,17 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "MenubarApp",
+    name: "Oxine",
     platforms: [
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "MenubarApp", targets: ["MenubarApp"])
+        .executable(name: "Oxine", targets: ["Oxine"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.0.0")
     ],
     targets: [
         .executableTarget(
-            name: "MenubarApp",
-            dependencies: [],
+            name: "Oxine",
+            dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
             resources: []
         )
     ]

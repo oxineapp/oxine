@@ -1,0 +1,138 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/master.swiftdeps"
+  },
+  "/Users/mert/menubar/Sources/Oxine/Account.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Account.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Account.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Account~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Account.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Account.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/Auth.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Auth.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Auth.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Auth~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Auth.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Auth.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/AuthView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/AuthView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/AuthView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/AuthView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/AuthView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/AuthView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/ClipboardHistoryView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardHistoryView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardHistoryView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardHistoryView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardHistoryView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardHistoryView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/ClipboardManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ClipboardManager.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/FocusModeManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/FocusModeManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/FocusModeManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/FocusModeManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/FocusModeManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/FocusModeManager.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/Keychain.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Keychain.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Keychain.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Keychain~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Keychain.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Keychain.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/MainView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MainView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MainView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MainView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MainView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MainView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/MenubarApp.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MenubarApp.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MenubarApp.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MenubarApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MenubarApp.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MenubarApp.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/MigrationHandler.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MigrationHandler.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MigrationHandler.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MigrationHandler~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MigrationHandler.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/MigrationHandler.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/ObsidianVaultManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ObsidianVaultManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ObsidianVaultManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ObsidianVaultManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ObsidianVaultManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/ObsidianVaultManager.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/QRImport.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QRImport.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QRImport.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QRImport~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QRImport.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QRImport.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/QuickNotesView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QuickNotesView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QuickNotesView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QuickNotesView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QuickNotesView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/QuickNotesView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/SettingsView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SettingsView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SettingsView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SettingsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SettingsView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SettingsView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/SetupManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupManager.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/SetupView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SetupView.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/SimAuthImport.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SimAuthImport.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SimAuthImport.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SimAuthImport~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SimAuthImport.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/SimAuthImport.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/Store.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Store.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Store.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Store~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Store.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/Store.dia"
+  },
+  "/Users/mert/menubar/Sources/Oxine/TOTP.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/TOTP.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/TOTP.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/TOTP~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/TOTP.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Oxine.build/TOTP.dia"
+  }
+}

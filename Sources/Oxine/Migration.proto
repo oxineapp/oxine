@@ -1,0 +1,23 @@
+// Google Authenticator migration format
+// Based on reverse engineering from https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+
+syntax = "proto3";
+
+package google.authenticator;
+
+message MigrationPayload {
+  repeated OtpParameters otp_parameters = 1;
+  int32 version = 2;
+  bool encrypted = 3;
+}
+
+message OtpParameters {
+  string secret = 1;        // Base32 encoded secret
+  string name = 2;          // Account name (email typically)
+  string issuer = 3;        // Service name
+  string algorithm = 4;     // SHA1, SHA256, or SHA512
+  int32 digits = 5;         // Usually 6
+  int32 period = 6;         // Usually 30
+  uint64 counter = 7;       // For HOTP only
+  string otp_type = 8;      // "totp" or "hotp"
+}

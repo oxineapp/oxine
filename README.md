@@ -1,6 +1,10 @@
-# MenuBar App
+# Oxine
 
 A sleek, minimal-resource macOS menubar application with clipboard history, quick notes, Raycast integration, and Obsidian compatibility.
+
+![Oxine Main Interface](screenshot1.png)
+![Oxine Clipboard History](screenshot2.png)
+![Oxine Quick Notes](screenshot3.png)
 
 ## Features
 
@@ -31,7 +35,7 @@ A sleek, minimal-resource macOS menubar application with clipboard history, quic
 
 🧠 **Obsidian Compatibility**
 - Notes saved as markdown files with frontmatter
-- Automatic vault at `~/Documents/MenuBar Notes`
+- Automatic vault at `~/Documents/Oxine Notes`
 - Full Obsidian syntax support
 - Tags and metadata support
 - Link notes across vault
@@ -107,7 +111,7 @@ RAYCAST_INTEGRATION.md        - Raycast setup guide
 - Modern color scheme
 
 **Obsidian Vault**
-- Automatic folder creation at `~/Documents/MenuBar Notes`
+- Automatic folder creation at `~/Documents/Oxine Notes`
 - Markdown files with ISO8601 timestamps
 - YAML frontmatter with metadata
 - Full Unicode and formatting support
@@ -152,7 +156,7 @@ RAYCAST_INTEGRATION.md        - Raycast setup guide
 
 1. Open Obsidian
 2. Create or open a vault
-3. Link to `~/Documents/MenuBar Notes`
+3. Link to `~/Documents/Oxine Notes`
 4. See all notes automatically sync
 
 ## Customization
@@ -210,7 +214,7 @@ open MenubarApp.app
 ## Storage Locations
 
 - **App Data**: `~/Library/Preferences/com.menubar.*`
-- **Notes Vault**: `~/Documents/MenuBar Notes/`
+- **Notes Vault**: `~/Documents/Oxine Notes/`
 - **Log Stream**: `log stream --predicate 'process == "MenubarApp"'`
 
 ## Privacy & Security
@@ -255,12 +259,12 @@ open MenubarApp.app
 
 ### Raycast not saving notes?
 - Verify script is correct (see RAYCAST_INTEGRATION.md)
-- Check vault directory exists: `ls -la ~/Documents/MenuBar\ Notes/`
+- Check vault directory exists: `ls -la ~/Documents/Oxine\ Notes/`
 - Test manually: `bash raycast-extension-install.sh "test note"`
 
 ### Obsidian not syncing?
-- Confirm vault path: `~/Documents/MenuBar Notes`
-- Check file creation: `ls -la ~/Documents/MenuBar\ Notes/`
+- Confirm vault path: `~/Documents/Oxine Notes`
+- Check file creation: `ls -la ~/Documents/Oxine\ Notes/`
 - Reload vault in Obsidian (Cmd+R)
 
 ## License
