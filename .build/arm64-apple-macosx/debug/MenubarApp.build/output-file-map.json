@@ -1,0 +1,131 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/master.swiftdeps"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/Account.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/Auth.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/AuthView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/Keychain.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/MainView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/QRImport.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/SetupView.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/Store.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.dia"
+  },
+  "/Users/mert/menubar/Sources/MenubarApp/TOTP.swift": {
+    "dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.d",
+    "object": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o",
+    "swiftmodule": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP~partial.swiftmodule",
+    "swift-dependencies": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swiftdeps",
+    "diagnostics": "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.dia"
+  }
+}

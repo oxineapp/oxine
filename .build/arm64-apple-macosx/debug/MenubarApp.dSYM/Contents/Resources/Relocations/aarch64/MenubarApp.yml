@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp'
+relocations:     []
+...

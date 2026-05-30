@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "MenubarApp-arm64-apple-macosx26.0-debug.exe": ["<MenubarApp-arm64-apple-macosx26.0-debug.exe>"]
+  "MenubarApp-arm64-apple-macosx26.0-debug.module": ["<MenubarApp-arm64-apple-macosx26.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<MenubarApp-arm64-apple-macosx26.0-debug.exe>","<MenubarApp-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<MenubarApp-arm64-apple-macosx26.0-debug.exe>","<MenubarApp-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/mert/menubar/Sources/MenubarApp/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp":
+    is-mutated: true
+commands:
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist"]
+    description: "Write auxiliary file /Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist"
+
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/mert/menubar/Sources/MenubarApp/Account.swift","/Users/mert/menubar/Sources/MenubarApp/Auth.swift","/Users/mert/menubar/Sources/MenubarApp/AuthView.swift","/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift","/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift","/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift","/Users/mert/menubar/Sources/MenubarApp/Keychain.swift","/Users/mert/menubar/Sources/MenubarApp/MainView.swift","/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift","/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift","/Users/mert/menubar/Sources/MenubarApp/QRImport.swift","/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift","/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift","/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift","/Users/mert/menubar/Sources/MenubarApp/SetupView.swift","/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift","/Users/mert/menubar/Sources/MenubarApp/Store.swift","/Users/mert/menubar/Sources/MenubarApp/TOTP.swift"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources"]
+    description: "Write auxiliary file /Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources"
+
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList"
+
+  "/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<MenubarApp-arm64-apple-macosx26.0-debug.exe>":
+    tool: phony
+    inputs: ["<MenubarApp-arm64-apple-macosx26.0-debug.exe-CodeSigning>"]
+    outputs: ["<MenubarApp-arm64-apple-macosx26.0-debug.exe>"]
+
+  "<MenubarApp-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule"]
+    outputs: ["<MenubarApp-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.MenubarApp-arm64-apple-macosx26.0-debug.exe":
+    tool: shell
+    inputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/MenubarApp"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/mert/menubar/.build/arm64-apple-macosx/debug","-o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp","-module-name","MenubarApp","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_MenubarApp_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList","-target","arm64-apple-macosx26.0","-Xlinker","-add_ast_path","-Xlinker","/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g"]
+
+  "C.MenubarApp-arm64-apple-macosx26.0-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist"]
+    outputs: ["<MenubarApp-arm64-apple-macosx26.0-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/MenubarApp"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp"]
+
+  "C.MenubarApp-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/mert/menubar/Sources/MenubarApp/Account.swift","/Users/mert/menubar/Sources/MenubarApp/Auth.swift","/Users/mert/menubar/Sources/MenubarApp/AuthView.swift","/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift","/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift","/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift","/Users/mert/menubar/Sources/MenubarApp/Keychain.swift","/Users/mert/menubar/Sources/MenubarApp/MainView.swift","/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift","/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift","/Users/mert/menubar/Sources/MenubarApp/QRImport.swift","/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift","/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift","/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift","/Users/mert/menubar/Sources/MenubarApp/SetupView.swift","/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift","/Users/mert/menubar/Sources/MenubarApp/Store.swift","/Users/mert/menubar/Sources/MenubarApp/TOTP.swift","/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources"]
+    outputs: ["/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o","/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule"]
+    description: "Compiling Swift Module 'MenubarApp' (18 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","MenubarApp","-emit-dependencies","-emit-module","-emit-module-path","/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule","-output-file-map","/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/output-file-map.json","-incremental","-c","@/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources","-I","/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx26.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/mert/menubar/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/mert/menubar/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","MenubarApp_main","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","menubar"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/mert/menubar/Sources/MenubarApp/","/Users/mert/menubar/Package.swift","/Users/mert/menubar/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

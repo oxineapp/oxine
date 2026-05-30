@@ -1,0 +1,562 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.MenubarApp-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources",
+      "importPath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Account.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Auth.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/AuthView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Keychain.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/MainView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/QRImport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SetupView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Store.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/TOTP.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "MenubarApp",
+      "moduleOutputPath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule",
+      "objects" : [
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx26.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/mert/menubar/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "MenubarApp_main",
+        "-swift-version",
+        "6",
+        "-I",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-L",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-plugin-path",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "menubar"
+      ],
+      "outputFileMapPath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules/MenubarApp.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/mert/menubar/Sources/MenubarApp/Account.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/Auth.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/AuthView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/Keychain.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/MainView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/QRImport.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/SetupView.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/Store.swift",
+        "/Users/mert/menubar/Sources/MenubarApp/TOTP.swift"
+      ],
+      "tempsPath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "MenubarApp" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "MenubarApp",
+      "-package-name",
+      "menubar",
+      "-c",
+      "/Users/mert/menubar/Sources/MenubarApp/Account.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/Auth.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/AuthView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/Keychain.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/MainView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/QRImport.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/SetupView.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/Store.swift",
+      "/Users/mert/menubar/Sources/MenubarApp/TOTP.swift",
+      "-I",
+      "/Users/mert/menubar/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx26.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/mert/menubar/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/mert/menubar/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "MenubarApp_main",
+      "-swift-version",
+      "6",
+      "-I",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-L",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-plugin-path",
+      "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "menubar",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "MenubarApp" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp-entitlement.plist"
+    },
+    "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Account.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Auth.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/AuthView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ClipboardHistoryView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ClipboardManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/FocusModeManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Keychain.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/MainView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/MenubarApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/ObsidianVaultManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/QRImport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/QuickNotesView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SettingsView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SetupManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SetupView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/SimAuthImport.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/Store.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/Sources/MenubarApp/TOTP.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/sources"
+    },
+    "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Account.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Auth.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/AuthView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardHistoryView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ClipboardManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/FocusModeManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Keychain.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MainView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/MenubarApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/ObsidianVaultManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QRImport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/QuickNotesView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SettingsView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SetupView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/SimAuthImport.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/Store.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.build/TOTP.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/MenubarApp.product/Objects.LinkFileList"
+    },
+    "/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/mert/menubar/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}

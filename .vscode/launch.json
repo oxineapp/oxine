@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:menubar}",
+            "name": "Debug MenubarApp",
+            "target": "MenubarApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MenubarApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:menubar}",
+            "name": "Release MenubarApp",
+            "target": "MenubarApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MenubarApp"
+        }
+    ]
+}
