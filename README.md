@@ -1,10 +1,7 @@
 # Oxine
 
-A sleek, minimal-resource macOS menubar application with clipboard history, quick notes, Raycast integration, and Obsidian compatibility.
+A sleek, minimal-resource macOS menubar application with clipboard history, quick notes, and Obsidian compatibility.
 
-![Oxine Main Interface](screenshot1.png)
-![Oxine Clipboard History](screenshot2.png)
-![Oxine Quick Notes](screenshot3.png)
 
 ## Features
 
@@ -26,12 +23,6 @@ A sleek, minimal-resource macOS menubar application with clipboard history, quic
 - Up to 100 stored notes
 - Persistent storage
 - Context menu deletion
-
-🚀 **Raycast Integration**
-- Save notes directly from Raycast with **Shift+Enter**
-- Automatic Obsidian vault syncing
-- Bash script for easy setup
-- Works with Raycast script commands
 
 🧠 **Obsidian Compatibility**
 - Notes saved as markdown files with frontmatter
@@ -67,7 +58,7 @@ A sleek, minimal-resource macOS menubar application with clipboard history, quic
 
 ```bash
 cd /Users/mert/menubar
-open MenubarApp.app
+open Oxine.app
 ```
 
 ### 2. Find in Menubar
@@ -78,28 +69,22 @@ Look for the clipboard icon (📋) in your top-right menubar
 
 Press **`⇧⌘V`** anytime to toggle the popup
 
-### 4. Setup Raycast (Optional)
-
-See [RAYCAST_INTEGRATION.md](RAYCAST_INTEGRATION.md) for detailed setup
-
 ## Keyboard Shortcuts
 
 | Action | Shortcut |
 |--------|----------|
 | Toggle popup | `⇧⌘V` |
-| Save note (Raycast) | `⇧⏎` in Raycast |
 
 ## Architecture
 
 ### File Structure
 ```
-MenubarApp.swift              - Main app, menubar setup, delegation
+Oxine.swift              - Main app, menubar setup, delegation
 MainView.swift                - Tab container, UI theme, glassmorphic blur
 ClipboardHistoryView.swift    - Clipboard UI with transparency
 ClipboardManager.swift        - Clipboard monitoring and storage
 QuickNotesView.swift          - Notes UI, Obsidian integration
 SettingsView.swift            - Settings UI with integration status
-RAYCAST_INTEGRATION.md        - Raycast setup guide
 ```
 
 ### Key Components
@@ -115,12 +100,6 @@ RAYCAST_INTEGRATION.md        - Raycast setup guide
 - Markdown files with ISO8601 timestamps
 - YAML frontmatter with metadata
 - Full Unicode and formatting support
-
-**Raycast Integration**
-- Bash script command system
-- Direct vault file creation
-- UserDefaults sync
-- Unique UUID identifiers
 
 ## Usage Guide
 
@@ -141,16 +120,8 @@ RAYCAST_INTEGRATION.md        - Raycast setup guide
 
 - **Launch at Login**: Keep app running on startup
 - **Max Items**: Choose how many to store (25-200)
-- **Integrations**: See Raycast and Obsidian status
+- **Integrations**: See Obsidian status
 - **Keyboard Shortcuts**: View available shortcuts
-
-### Raycast Integration
-
-1. Follow [RAYCAST_INTEGRATION.md](RAYCAST_INTEGRATION.md)
-2. Create script command
-3. Type: `save-note Your note here`
-4. Press **Shift+Enter**
-5. Note appears in app and Obsidian vault
 
 ### Obsidian Sync
 
@@ -202,20 +173,20 @@ let vaultPath = URL...appendingPathComponent("Your Custom Path")
 swift build -c release
 
 # Create app bundle
-mkdir -p MenubarApp.app/Contents/MacOS
-mkdir -p MenubarApp.app/Contents/Resources
-cp .build/release/MenubarApp MenubarApp.app/Contents/MacOS/
-cp Info.plist MenubarApp.app/Contents/
+mkdir -p Oxine.app/Contents/MacOS
+mkdir -p Oxine.app/Contents/Resources
+cp .build/release/Oxine Oxine.app/Contents/MacOS/
+cp Info.plist Oxine.app/Contents/
 
 # Launch
-open MenubarApp.app
+open Oxine.app
 ```
 
 ## Storage Locations
 
-- **App Data**: `~/Library/Preferences/com.menubar.*`
+- **App Data**: `~/Library/Preferences/com.oxine.*`
 - **Notes Vault**: `~/Documents/Oxine Notes/`
-- **Log Stream**: `log stream --predicate 'process == "MenubarApp"'`
+- **Log Stream**: `log stream --predicate 'process == "Oxine"'`
 
 ## Privacy & Security
 
@@ -245,22 +216,17 @@ Ideas for expansion:
 ### App won't launch?
 ```bash
 # Check logs
-log stream --predicate 'process == "MenubarApp"'
+log stream --predicate 'process == "Oxine"'
 
 # Kill any existing process
-pgrep MenubarApp | xargs kill -9
+pgrep Oxine | xargs kill -9
 
 # Rebuild
 swift build -c release
 
 # Relaunch
-open MenubarApp.app
+open Oxine.app
 ```
-
-### Raycast not saving notes?
-- Verify script is correct (see RAYCAST_INTEGRATION.md)
-- Check vault directory exists: `ls -la ~/Documents/Oxine\ Notes/`
-- Test manually: `bash raycast-extension-install.sh "test note"`
 
 ### Obsidian not syncing?
 - Confirm vault path: `~/Documents/Oxine Notes`
@@ -273,8 +239,7 @@ MIT - Open source and free to use
 
 ## Version History
 
-**v2.0.0** - Raycast + Obsidian Integration
-- Added Raycast script integration
+**v2.0.0** - Obsidian Integration
 - Obsidian vault auto-sync
 - Sleek glassmorphic UI
 - Transparency effects throughout
