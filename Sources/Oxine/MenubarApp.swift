@@ -65,7 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 470),
-            styleMask: [.hudWindow, .borderless, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -77,7 +77,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel?.isMovableByWindowBackground = false
         panel?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel?.title = ""
-        panel?.contentViewController = NSHostingController(rootView: MainView(appDelegate: self))
+        let hostingController = NSHostingController(rootView: MainView(appDelegate: self))
+        hostingController.sizingOptions = []
+        panel?.contentViewController = hostingController
+        panel?.contentView?.wantsLayer = true
+        panel?.contentView?.layer?.cornerRadius = 18
+        panel?.contentView?.layer?.masksToBounds = true
         panel?.isReleasedWhenClosed = false
         panel?.hidesOnDeactivate = false
     }
@@ -193,10 +198,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let x = screenRect.midX - panelWidth / 2
         let y = screenRect.minY - panelHeight - 5
 
-        panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
         NSApp.activate(ignoringOtherApps: true)
-        panel.orderFront(nil as Any?)
-        panel.makeKey()
+        panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
+        panel.makeKeyAndOrderFront(nil)
 
         panelJustOpened = true
         panelJustOpenedTimer?.cancel()

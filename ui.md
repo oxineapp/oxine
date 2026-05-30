@@ -7,4 +7,4 @@ Combine the following layouts into a clean, cohesive view:
 2. SIDE/SLIDEOUT HISTORY PANELS: A compact vertical list layout for clipboard history (showing truncated text snippets and a relative timestamp like '2m ago') and a responsive thumbnail grid for screenshot/OCR history with a miniature search bar anchored at the top.
 3. INTERACTIONS & FOOTER: Implement frictionless state switching between the writing area and the history views. At the very bottom, include a muted, low-contrast utility footer showing a pulsing dot for 'Auto-saved' and a brief reminder text (e.g., 'Esc to dismiss'). 
 
-Ensure the visual weight is heavily focused on typography, content, and negative space rather than heavy container UI elements.
+Ensure the visual weight is heavily focused on typography, content, and negative space rather than heavy container UI elements.when

@@ -1,0 +1,23 @@
+.DS_Store
+*.swp
+*.swo
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# Xcode and Apple build products
+DerivedData/
+*.app/
+*.xcuserstate
+*.xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Logs and local runtime output
+*.log
+*.crash
+
+# Local editor state
+.vscode/

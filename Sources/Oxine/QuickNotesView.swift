@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotesView: View {
     @ObservedObject var notesManager: QuickNotesManager
+    @StateObject var justTypeSync = JustTypeSyncManager()
     @State var noteText = ""
     @FocusState var isFocused: Bool
 
@@ -17,6 +18,7 @@ struct NotesView: View {
             VStack(spacing: 10) {
                 writingCard
                 savedNotesList
+                JustTypeNotesSection(sync: justTypeSync, notesManager: notesManager)
             }
             .padding(10)
         }
@@ -108,6 +110,150 @@ struct NotesView: View {
                 }
             }
         }
+    }
+}
+
+struct JustTypeNotesSection: View {
+    @ObservedObject var sync: JustTypeSyncManager
+    @ObservedObject var notesManager: QuickNotesManager
+    @State private var showConnect = false
+    @State private var clientId = ""
+    @State private var privateKey = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "cloud")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+                Text("justtype")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.45))
+                Spacer()
+                if sync.isSyncing {
+                    ProgressView()
+                        .scaleEffect(0.55)
+                        .frame(width: 14, height: 14)
+                }
+                Button(sync.isConfigured ? "Sync" : "Connect") {
+                    if sync.isConfigured {
+                        Task { await sync.sync(notesManager: notesManager) }
+                    } else {
+                        showConnect = true
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.9))
+                .disabled(sync.isSyncing)
+            }
+
+            Text(sync.status)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.28))
+                .lineLimit(2)
+
+            if sync.isConfigured && !sync.sharedSlates.isEmpty {
+                Text("\(sync.sharedSlates.count) private slate(s) shared with this app")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.22))
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.035))
+        )
+        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+        .sheet(isPresented: $showConnect) {
+            JustTypeConnectView(sync: sync, isPresented: $showConnect, clientId: $clientId, privateKey: $privateKey)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
+            guard sync.isConfigured, !sync.isSyncing else { return }
+            Task { await sync.sync(notesManager: notesManager) }
+        }
+    }
+}
+
+struct JustTypeConnectView: View {
+    @ObservedObject var sync: JustTypeSyncManager
+    @Binding var isPresented: Bool
+    @Binding var clientId: String
+    @Binding var privateKey: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Connect justtype")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(sync.isAppConfigured ? "Sign in with justtype. On the consent screen, allow full private slate access so this app can read and edit your slates." : "Developer setup is required once before users can sign in. Use the client ID and app private key from the justtype dev portal.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.45))
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !sync.isAppConfigured {
+                TextField("Client ID", text: $clientId)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)))
+
+                Text("App private key PEM")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.35))
+
+                TextEditor(text: $privateKey)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .scrollContentBackground(.hidden)
+                    .frame(height: 120)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)))
+            }
+
+            HStack {
+                Button("Cancel") { isPresented = false }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                if sync.isConfigured {
+                    Button("Disconnect") {
+                        sync.disconnect()
+                        isPresented = false
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red.opacity(0.75))
+                }
+                if !sync.isAppConfigured {
+                    Button("Save app config") {
+                        sync.saveAppConfig(clientId: clientId, privateKeyPEM: privateKey)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                    .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || privateKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } else {
+                    Button(sync.isSigningIn ? "Signing in..." : "Sign in") {
+                        sync.signIn()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                    .disabled(sync.isSigningIn)
+                }
+            }
+
+            Text(sync.status)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.35))
+                .lineLimit(2)
+        }
+        .padding(16)
+        .frame(width: 330)
+        .background(Color(red: 0.07, green: 0.07, blue: 0.09))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -319,6 +465,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
     private let metadataPath = "notes-meta.json"
     private var pollTimer: Timer?
     private var knownFileDates: [String: Date] = [:]
+    var notesDirectory: URL? { vaultPath }
 
     override init() {
         super.init()
@@ -352,7 +499,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
     private func saveMetadata(_ meta: [String: Bool]) {
         guard let url = metadataURL(),
               let data = try? JSONSerialization.data(withJSONObject: meta) else { return }
-        try? data.write(to: url)
+            try? data.write(to: url)
     }
 
     func noteFileURL(filename: String) -> URL? {
@@ -386,7 +533,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         var seen: [String: Date] = [:]
 
         let files = (try? FileManager.default.contentsOfDirectory(at: vaultPath, includingPropertiesForKeys: [.contentModificationDateKey, .creationDateKey])) ?? []
-        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath {
+        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath && !file.lastPathComponent.hasPrefix(".") {
             let filename = file.deletingPathExtension().lastPathComponent
             let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
             seen[filename] = modDate
@@ -461,7 +608,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         guard let vaultPath else { return }
         let files = (try? FileManager.default.contentsOfDirectory(at: vaultPath, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         var current: [String: Date] = [:]
-        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath {
+        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath && !file.lastPathComponent.hasPrefix(".") {
             let filename = file.deletingPathExtension().lastPathComponent
             let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
             current[filename] = modDate
@@ -480,6 +627,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         if changed {
             scanForNotes()
             objectWillChange.send()
+            NotificationCenter.default.post(name: .notesDidChange, object: nil)
         }
     }
 
@@ -491,6 +639,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         notes.insert(note, at: 0)
         if notes.count > 100 { notes.removeLast() }
         persistNote(note)
+        NotificationCenter.default.post(name: .notesDidChange, object: nil)
     }
 
     func deleteNote(_ note: QuickNote) {
@@ -503,6 +652,7 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         saveMetadata(meta)
         knownFileDates.removeValue(forKey: note.filename)
         objectWillChange.send()
+        NotificationCenter.default.post(name: .notesDidChange, object: nil)
     }
 
     func pinNote(_ note: QuickNote) {
@@ -524,6 +674,31 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         if let modDate = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate {
             knownFileDates[note.filename] = modDate
         }
+    }
+
+    func note(idString: String) -> QuickNote? {
+        notes.first { $0.id.uuidString == idString }
+    }
+
+    func createSyncedNote(title: String?, content: String, slateNumber: Int) -> QuickNote {
+        let base = title?.isEmpty == false ? title! : "justtype slate \(slateNumber)"
+        let filename = generateFilename(from: base)
+        let note = QuickNote(id: UUID(), filename: filename, content: content, timestamp: Date())
+        notes.insert(note, at: 0)
+        persistNote(note)
+        return note
+    }
+
+    func writeSyncedNote(id: UUID, filename: String, content: String) {
+        let existing = notes.first { $0.id == id }
+        let note = QuickNote(id: id, filename: filename, content: content, timestamp: existing?.timestamp ?? Date(), isPinned: existing?.isPinned ?? false)
+        if let index = notes.firstIndex(where: { $0.id == id }) {
+            notes[index] = note
+        } else {
+            notes.insert(note, at: 0)
+        }
+        persistNote(note)
+        objectWillChange.send()
     }
 
     deinit {

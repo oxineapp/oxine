@@ -12,6 +12,48 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>MenuBar</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>justtype OAuth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.oxine.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>JustTypeClientID</key>
+	<string>jt_8db03c81171f1fcc8a9130c3426b6dff</string>
+	<key>JustTypePrivateKeyPEM</key>
+	<string>-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC5IHQl+DpIuTmZ
+LDbEnE6xxqYpYCD4uCrlCOLoNUbmpnJcNZQA6tCHxKVDIHcUBn0720/niIaFiFHC
+D14wOtmy7XbLIacVqnJYFkfwGDhYKGysjxNhUUuVf7jcT66lNqCRQTn+A+kWJvC7
+NzHHzkbB1JUKHKUP0z56V8fefybhDgZGOD8KP7XFL81x5uxkepOOwUpcTAFxGVIO
+mUsTbmIXnI9Ly0jaAhoj3q8jpkYfgo8kyd8X4V/0zmsd5dDhFofpelOoPSCEIV5v
+6reCI6G44haFWEbikOXsCGxJ50ndjbuEH56hWuPZtqqL/z3nH9g7JxUIJ8puHGUF
+qCgnpRc7AgMBAAECggEABBn/+MdjIzFXYVllbT25UJ8CF3CVymzqJmDoBhUIGRwe
+9IQLX2nUbO2ia7ZQbRUnuSfGwW547IR0q0QD5jWnlRtFwoJgXU6FcgYsWdlvhiR/
+I+OXnlRaxFksE1WAnRB0xkMXsdUMWP1L4Bn89FxRnQHEu5Ce55baj4NaXkea6OmI
+6kqZt86SvHC9LkY59JL0VbfsSEYWjzJgiNdB8uBNi/UeELcMp1YvNOSn6vDpRrlY
+MJtOLQTYl7XMreCUWNHrJpeZor52Ab0fAsOM8LS92jscjRuhAgjOJTpT5spRHTOa
+tN6ues0MJGV5i2FwmSyrLQe8Q2qqFc2KbTRjNAfs4QKBgQD10hoOfuRgRv1AvitT
+HoIq98tT+A6KGpDNx/OHefm5d7fAYoOkTwRsgbg4kvnKZPhqBoUEgDsbc5G/8Fqw
+LBNJ7i7VAnxv670w8nPqNVWoY2fYXxhrrjj6+2iHL8eZJmcHptezSRaUjhMCFZ4Q
+7Xg9JOUmbVRzP8L2beYES0CwlwKBgQDAyvJ2pLGhIH5t2IJvK7dd5H24S9geQIGD
+AN2w4xu5gRlYG9w0sfvRw1ILcMrFIyhPFpmyVjwyxqInWylpzgBtJGswqI58X2vN
+mTjLI5q++wmeulEdNAYUMLesfHcn/CMxT/1HeBXzXEeiq3OD9pxCohX6vka78nhr
+/jn1Pd4+/QKBgAIV4jq1QOLAN23RLzTpUVlj+MmhlR3+07OrOpmvozq7lUeAjnVa
+ZkM1Zoa0WIIrESB1JbPAEsBM3rOuKlbMSO2bo7IS71NTwKslo24dPbjL/xmK1P40
+4C7g6yYadasK9FzQQYw31oU0H10pKcoi+Z4rLfaBfvHrXJASppzqtoXJAoGAMeyc
+CwMtCGeMtc9KP5WXf1XrBG2HgpX7s7vmrKazCD+ZG4rjZDXu2uv0dAf6SkCHcKuO
+k3LnVdLALObbe42f6KN0qn4Ln8Np/CzAW0JWETyayiK/XIubQ2E2PxFgHdeaGWv4
+T6iWLpXn6wTw/ew/nLWycWMSmBr6+iQ0SACEa9UCgYEAuc0WzptbTcHFksLeVKs/
+81XxtL4OWyap96A+5igRWIesgO+EWXp759Ljv7FeAbnH28oKeMXM5ZcemdHeZI6f
+M+zOn2uMzN7W5dDeAc/R9FZLch3ApV1ts7NLdqbfjAG3P16zkBt5sXoHwbwlvOI4
+wdXh/dr3ncE/Be/11rIXY3w=
+-----END PRIVATE KEY-----</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -25,6 +67,6 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>LSUIElement</key>
-	<bool>true</bool>
+	<true/>
 </dict>
 </plist>
