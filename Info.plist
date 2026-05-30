@@ -12,6 +12,48 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>MenuBar</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>justtype OAuth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.oxine.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>JustTypeClientID</key>
+	<string>jt_8db03c81171f1fcc8a9130c3426b6dff</string>
+	<key>JustTypePrivateKeyPEM</key>
+	<string>***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
+-----END PRIVATE KEY-----</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -25,6 +67,6 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>LSUIElement</key>
-	<bool>true</bool>
+	<true/>
 </dict>
 </plist>

@@ -27,6 +27,13 @@ struct MainView: View {
                     .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.95)), removal: .opacity))
             }
         }
+        .frame(width: 360, height: 470)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(.white.opacity(0.08), lineWidth: 0.5)
+        )
         .onAppear {
             appDelegate?.isAuthVisible = (activeTab == 2)
             guard !didStart else { return }
@@ -73,12 +80,6 @@ struct MainView: View {
             }
         }
         .frame(width: 360, height: 470)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(.white.opacity(0.06), lineWidth: 0.5)
-        )
     }
 }
 

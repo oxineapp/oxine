@@ -9,7 +9,7 @@ struct SetupView: View {
         VStack(spacing: 0) {
             HStack {
                 HStack(spacing: 6) {
-                    ForEach(0..<2, id: \.self) { step in
+                    ForEach(0..<3, id: \.self) { step in
                         Capsule()
                             .fill(step <= currentStep ? Color(red: 0.4, green: 0.85, blue: 1.0) : Color.white.opacity(0.12))
                             .frame(height: 3)
@@ -28,15 +28,19 @@ struct SetupView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(20)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 6)
 
             VStack {
                 if currentStep == 0 {
                     Step1Welcome()
                         .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
-                } else {
+                } else if currentStep == 1 {
                     Step2Obsidian(isLoading: $isLoading)
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
+                } else {
+                    Step3JustType()
                         .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
                 }
             }
@@ -81,7 +85,7 @@ struct SetupView: View {
                                 .scaleEffect(0.7)
                                 .transition(.scale.combined(with: .opacity))
                         }
-                        Text(currentStep < 1 ? "Next" : "Finish")
+                        Text(currentStep < 2 ? "Next" : "Finish")
                             .font(.system(size: 13, weight: .bold))
                             .transition(.opacity)
                     }
@@ -98,44 +102,43 @@ struct SetupView: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isLoading)
             }
             .padding(20)
-            .padding(.top, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
         .background(Color(red: 0.06, green: 0.06, blue: 0.08))
-        .cornerRadius(18)
     }
 }
 
 struct Step1Welcome: View {
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        VStack(spacing: 14) {
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 56))
+                .font(.system(size: 38))
                 .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-            VStack(spacing: 12) {
+            VStack(spacing: 6) {
                 Text("Welcome to MenuBar")
-                    .font(.title2)
+                    .font(.system(size: 20, weight: .bold))
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 Text("Your clipboard and notes, right in the menubar")
-                    .font(.body)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 9) {
                 FeatureRow(icon: "clipboard", title: "Clipboard History", desc: "Save up to 200 items")
                 FeatureRow(icon: "note.text", title: "Quick Notes", desc: "Capture ideas instantly")
                 FeatureRow(icon: "brain.fill", title: "Obsidian Sync", desc: "Auto-sync to your vault")
             }
-            .padding(14)
+            .padding(12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.03)))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5)
             )
-            Spacer()
         }
-        .padding(20)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
     }
 }
 
@@ -145,18 +148,17 @@ struct Step2Obsidian: View {
     @State var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        VStack(spacing: 12) {
             Image(systemName: "brain.fill")
-                .font(.system(size: 56))
+                .font(.system(size: 38))
                 .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-            VStack(spacing: 12) {
+            VStack(spacing: 6) {
                 Text("Obsidian Integration")
-                    .font(.title2)
+                    .font(.system(size: 19, weight: .bold))
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 Text("Sync your notes to Obsidian automatically")
-                    .font(.body)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
@@ -165,7 +167,7 @@ struct Step2Obsidian: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.orange.opacity(0.9))
                     .multilineTextAlignment(.center)
-                    .padding(10)
+                    .padding(8)
                     .frame(maxWidth: .infinity)
                     .background(Color.orange.opacity(0.08))
                     .cornerRadius(8)
@@ -180,7 +182,7 @@ struct Step2Obsidian: View {
                         .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 9)
                 .background(Color.green.opacity(0.08))
                 .cornerRadius(10)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
@@ -191,9 +193,9 @@ struct Step2Obsidian: View {
                         else { Image(systemName: "checkmark.circle") }
                         Text("Auto-Setup Obsidian").fontWeight(.semibold)
                     }
-                    .font(.system(size: 13))
+                    .font(.system(size: 12, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 9)
                     .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
                     .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.12))
                     .cornerRadius(10)
@@ -202,17 +204,17 @@ struct Step2Obsidian: View {
                 .buttonStyle(.plain)
                 .disabled(isLoading)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("What happens:")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
                     .textCase(.uppercase).tracking(0.5)
-                Text("✓ Creates ~/Documents/MenuBar Notes\n✓ Sets up as Obsidian vault\n✓ Opens in Obsidian\n✓ Auto-syncs your notes")
+                Text("Creates ~/Documents/MenuBar Notes and opens it as an Obsidian vault.")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.65))
                     .lineSpacing(4)
             }
-            .padding(14)
+            .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white.opacity(0.03))
             .cornerRadius(10)
@@ -220,9 +222,9 @@ struct Step2Obsidian: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5)
             )
-            Spacer()
         }
-        .padding(20)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
     }
 
     private func setupObsidian() {
@@ -241,6 +243,100 @@ struct Step2Obsidian: View {
     }
 }
 
+struct Step3JustType: View {
+    @StateObject var sync = JustTypeSyncManager()
+    @State var clientId = ""
+    @State var privateKey = ""
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "cloud.fill")
+                .font(.system(size: 36))
+                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+            VStack(spacing: 6) {
+                Text("justtype Sync")
+                    .font(.system(size: 19, weight: .bold))
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Text("Sync local Markdown notes with private justtype slates.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recommended grant")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.4))
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                Text("Allow full private slate access when justtype asks. The read-private grant is also what lets this app edit delegated private slates.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.035))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+
+            VStack(spacing: 7) {
+                if !sync.isAppConfigured {
+                    TextField("Client ID", text: $clientId)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.85))
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.05)))
+
+                    Text("Developer setup: paste the app private key PEM shown once during justtype app registration.")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.32))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextEditor(text: $privateKey)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.85))
+                        .scrollContentBackground(.hidden)
+                        .frame(height: 58)
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.05)))
+
+                    Button("Save app config") {
+                        sync.saveAppConfig(clientId: clientId, privateKeyPEM: privateKey)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                    .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
+                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                    .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || privateKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } else {
+                    Button(sync.isSigningIn ? "Signing in..." : (sync.isConfigured ? "Signed in" : "Sign in with justtype")) {
+                        sync.signIn()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                    .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
+                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                    .disabled(sync.isSigningIn)
+                }
+
+                Text(sync.status)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.35))
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+    }
+}
+
 struct FeatureRow: View {
     let icon: String
     let title: String
@@ -249,12 +345,12 @@ struct FeatureRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(.system(size: 15))
                 .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.caption).fontWeight(.semibold).foregroundColor(.white)
-                Text(desc).font(.caption2).foregroundColor(.white.opacity(0.5))
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                Text(desc).font(.system(size: 10, weight: .medium)).foregroundColor(.white.opacity(0.5))
             }
             Spacer()
         }
