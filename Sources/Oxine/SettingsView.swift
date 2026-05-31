@@ -9,10 +9,30 @@ struct SettingsView: View {
     @AppStorage("showPreview", store: UserDefaults(suiteName: "com.menubar.settings")) var showPreview = true
     @AppStorage("maxItems", store: UserDefaults(suiteName: "com.menubar.settings")) var maxItems = 50
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.menubar.settings")) var glassOpacity = 0.7
-    
+    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.menubar.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
+    @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomWidth = 380.0
+    @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomHeight = 560.0
+    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
+
     @State var showClearConfirm = false
     @State var focusDimLevel = FocusModeManager.shared.overlayOpacity
     @State var focusBlurIntensity = FocusModeManager.shared.blurIntensity
+
+    /// Selecting a preset switches to it. Re-clicking the already-active Custom
+    /// toggles its lock (lock icon shown); a fresh switch to Custom starts unlocked.
+    private func selectPanelSize(_ size: OxinePanelSize) {
+        if size == .custom {
+            if panelSizePreset == OxinePanelSize.custom.rawValue {
+                panelCustomLocked.toggle()
+            } else {
+                panelSizePreset = OxinePanelSize.custom.rawValue
+                panelCustomLocked = false
+            }
+        } else {
+            panelSizePreset = size.rawValue
+        }
+        NotificationCenter.default.post(name: .panelSizeChanged, object: nil)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -69,7 +89,63 @@ struct SettingsView: View {
                                 .tint(Color(red: 0.4, green: 0.85, blue: 1.0))
                         }
                     }
-                    
+
+                    SettingSection(title: "Window") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Size")
+                                .foregroundColor(.white.opacity(0.8))
+
+                            HStack(spacing: 4) {
+                                ForEach(OxinePanelSize.allCases) { size in
+                                    let isActive = panelSizePreset == size.rawValue
+                                    Button(action: { selectPanelSize(size) }) {
+                                        HStack(spacing: 4) {
+                                            Text(size.label)
+                                                .font(.system(size: 11, weight: .medium))
+                                            if size == .custom && isActive {
+                                                Image(systemName: panelCustomLocked ? "lock.fill" : "lock.open")
+                                                    .font(.system(size: 9))
+                                            }
+                                        }
+                                        .foregroundColor(.white.opacity(isActive ? 0.9 : 0.4))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(isActive
+                                                      ? Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.14)
+                                                      : Color.white.opacity(0.04))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .stroke(.white.opacity(isActive ? 0.10 : 0.05), lineWidth: 0.5)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+
+                            if panelSizePreset == OxinePanelSize.custom.rawValue {
+                                HStack(spacing: 6) {
+                                    Image(systemName: panelCustomLocked ? "lock.fill" : "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.white.opacity(0.45))
+                                    Text(panelCustomLocked
+                                         ? "Locked. Click Custom again to unlock and resize."
+                                         : "Drag the panel edges to resize, then click Custom to lock it.")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.white.opacity(0.4))
+                                    Spacer()
+                                    Text("\(Int(panelCustomWidth))×\(Int(panelCustomHeight))")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.35))
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                                .transition(.opacity)
+                            }
+                        }
+                    }
+
 SettingSection(title: "Clipboard") {
                         HStack {
                             Text("Max items to store")
@@ -257,10 +333,14 @@ struct SettingSection<Content: View>: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.04))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    )
             )
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 12))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
