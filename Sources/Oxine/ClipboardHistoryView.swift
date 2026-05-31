@@ -57,7 +57,9 @@ struct ClipboardHistoryView: View {
 
     var itemsList: some View {
         ScrollView {
-            VStack(spacing: 4) {
+            // Lazy so a tab switch only builds the visible rows, not all ~200 at once
+            // (eager VStack here was the main tab-switch stutter).
+            LazyVStack(spacing: 4) {
                 ForEach(filteredItems) { item in
                     ClipboardItemRow(item: item, onDelete: {
                         clipboardManager.deleteItem(item)

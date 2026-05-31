@@ -87,7 +87,7 @@ struct NotesView: View {
     }
 
     var savedNotesList: some View {
-        VStack(spacing: 4) {
+        LazyVStack(spacing: 4) {
             if visibleNotes.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "square.and.pencil")
@@ -188,18 +188,20 @@ struct JustTypeNotesSection: View {
         .sheet(isPresented: $showConnect) {
             JustTypeConnectView(sync: sync, isPresented: $showConnect)
         }
+        // Bind only (cheap: loads the cached list for instant display). The network sync is NOT
+        // triggered here — doing it on appear fired a full refresh on every tab switch, landing
+        // network + decode work on the slide's first frames (the tab-switch stutter). Auto-sync
+        // happens on panel open (popoverDidShow) instead, which is bind-safe below.
         .onAppear { sync.bind(notesManager: notesManager) }
-        .task {
-            sync.bind(notesManager: notesManager)
-            if sync.isConfigured { await sync.refresh() }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
             // A local edit landed; push tracked notes (don't re-pull the whole list).
             guard sync.isConfigured, !sync.isSyncing else { return }
             Task { await sync.pushEdits() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
-            // Auto-sync with justtype every time the panel opens (pull list + remote edits, push local).
+            // Auto-sync with justtype every time the panel opens (pull list + remote edits, push
+            // local). Bind first so this works even if it fires before onAppear on first open.
+            sync.bind(notesManager: notesManager)
             guard sync.isConfigured, !sync.isSyncing else { return }
             Task { await sync.syncNow() }
         }
@@ -214,10 +216,15 @@ struct JustTypeItemRow: View {
     @State private var isHovered = false
 
     private var icon: String {
-        item.origin == .pushed ? "arrow.up.circle" : "tray.and.arrow.down"
+        switch item.origin {
+        case .pushed: return "arrow.up.circle"
+        case .published: return "globe"
+        case .shared: return "tray.and.arrow.down"
+        }
     }
 
     private var badge: String {
+        if item.origin == .published { return item.localNoteId == nil ? "Public" : "Public copy" }
         if item.origin == .shared && item.localNoteId == nil { return "Tap to open" }
         return "Synced"
     }
@@ -302,7 +309,7 @@ struct JustTypeConnectView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                Button("Cancel") { isPresented = false }
+                Button(sync.isConfigured ? "Done" : "Cancel") { isPresented = false }
                     .buttonStyle(.plain)
                     .foregroundColor(.white.opacity(0.5))
                 Spacer()

@@ -41,7 +41,7 @@ struct JustTypeTokenResponse: Codable {
 /// (`origin == .shared`). Persisted to disk so the list survives relaunches and
 /// we never re-pull/duplicate slates on every sync.
 struct JustTypeTrackedSlate: Codable, Identifiable {
-    enum Origin: String, Codable { case pushed, shared }
+    enum Origin: String, Codable { case pushed, shared, published }
 
     var id: String
     var origin: Origin
@@ -93,6 +93,20 @@ struct JustTypeDelegatedSlate: Codable {
 struct JustTypePublicKeyResponse: Codable {
     let public_key: String?
     let key_scheme: String?
+}
+
+/// A published (public) slate from GET /api/oauth/slates/published. Public, so `content` is
+/// returned as plaintext — no wrapped key, no decryption.
+struct JustTypePublishedSlate: Codable {
+    let slate_number: Int
+    let title: String?
+    let share_id: String?
+    let content: String
+    let word_count: Int?
+    let char_count: Int?
+    let created_at: String?
+    let updated_at: String?
+    let published_at: String?
 }
 
 /// Response to POST /api/oauth/slates/create-delegated. The slate is created and delegated to
@@ -311,9 +325,9 @@ enum JustTypeOAuth {
     static let baseURL = URL(string: "https://justtype.io")!
     static let redirectURI = "com.oxine.app://oauth/justtype"
     static let callbackScheme = "com.oxine.app"
-    static let scope = "identity slates:read:meta slates:read:private slates:create slates:delete slates:publish"
+    static let scope = "identity slates:read:meta slates:read:private slates:read:public slates:create slates:delete slates:publish"
     /// Oxine's public OAuth client id. Safe to embed: a public client uses PKCE, no secret.
-    static let clientId = "jt_82ed84d707b9e3ad057ad3060fb552cf"
+    static let clientId = "jt_24f282e7fc75f36b1f389ba84fe28e81"
 
     /// Registering this install's device public key at authorize time binds it to the issued
     /// token, so private reads work immediately after the code exchange (no separate call,
@@ -321,21 +335,34 @@ enum JustTypeOAuth {
     static func authorizeURL(state: String, verifier: String, devicePublicKey: String, deviceName: String?) -> URL? {
         guard let authorize = URL(string: "/oauth/authorize", relativeTo: baseURL)?.absoluteURL else { return nil }
         var comps = URLComponents(url: authorize, resolvingAgainstBaseURL: false)
-        var items = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: clientId),
-            URLQueryItem(name: "redirect_uri", value: redirectURI),
-            URLQueryItem(name: "scope", value: scope),
-            URLQueryItem(name: "state", value: state),
-            URLQueryItem(name: "code_challenge", value: JustTypeCrypto.pkceChallenge(verifier: verifier)),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "device_public_key", value: devicePublicKey),
+        var pairs: [(String, String)] = [
+            ("response_type", "code"),
+            ("client_id", clientId),
+            ("redirect_uri", redirectURI),
+            ("scope", scope),
+            ("state", state),
+            ("code_challenge", JustTypeCrypto.pkceChallenge(verifier: verifier)),
+            ("code_challenge_method", "S256"),
+            ("device_public_key", devicePublicKey),
         ]
         if let deviceName, !deviceName.isEmpty {
-            items.append(URLQueryItem(name: "device_name", value: String(deviceName.prefix(120))))
+            pairs.append(("device_name", String(deviceName.prefix(120))))
         }
-        comps?.queryItems = items
+        // Strictly percent-encode each value (only unreserved chars survive). Critical for
+        // device_public_key: standard base64 SPKI contains +, /, =, and a server treats a raw
+        // `+` in a query as a space — which corrupts the key. Encoding them as %2B/%2F/%3D makes
+        // justtype receive the exact base64. (URLComponents.queryItems would leave + raw.)
+        comps?.percentEncodedQueryItems = pairs.map {
+            URLQueryItem(name: $0.0, value: percentEncodeStrict($0.1))
+        }
         return comps?.url
+    }
+
+    /// Percent-encode for safe query transport: everything except RFC 3986 unreserved chars.
+    private static func percentEncodeStrict(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     static func exchangeCode(clientId: String, code: String, verifier: String) async throws -> JustTypeTokenResponse {
@@ -468,6 +495,11 @@ final class JustTypeAPI: @unchecked Sendable {
         return try decode([JustTypeSlateSummary].self, from: data, response: response, label: "GET /shared")
     }
 
+    func publishedSlates() async throws -> [JustTypePublishedSlate] {
+        let (data, response) = try await perform(request("/api/oauth/slates/published"), label: "GET /slates/published")
+        return try decode([JustTypePublishedSlate].self, from: data, response: response, label: "GET /slates/published")
+    }
+
     func slate(_ number: Int) async throws -> JustTypeDelegatedSlate {
         let (data, response) = try await perform(request("/api/oauth/slates/\(number)"), label: "GET /slates/\(number)")
         return try decode(JustTypeDelegatedSlate.self, from: data, response: response, label: "GET /slates/\(number)")
@@ -527,6 +559,9 @@ final class JustTypeSyncManager: ObservableObject {
     private weak var notesManager: QuickNotesManager?
     private var authSession: ASWebAuthenticationSession?
     private let presentationContext = JustTypePresentationContext()
+    /// Plaintext content of published slates from the last refresh, keyed by slate number, so
+    /// opening a published row materializes a local note without another fetch. Not persisted.
+    private var publishedContent: [Int: (title: String?, content: String)] = [:]
 
     nonisolated(unsafe) private var connectionObserver: NSObjectProtocol?
 
@@ -605,11 +640,30 @@ final class JustTypeSyncManager: ObservableObject {
                     return
                 }
                 guard let callbackURL,
-                      let comps = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
-                      comps.queryItems?.first(where: { $0.name == "state" })?.value == state,
-                      let code = comps.queryItems?.first(where: { $0.name == "code" })?.value else {
+                      let comps = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false) else {
                     self.finishExternalAuthentication()
                     self.status = "Invalid justtype callback"
+                    return
+                }
+                let items = comps.queryItems ?? []
+                func q(_ name: String) -> String? { items.first { $0.name == name }?.value }
+                // Log only the param names, never values — the auth code is a one-time secret.
+                log("[JustType] callback params=\(items.map { $0.name }.joined(separator: ","))")
+                // justtype redirected back with an OAuth error rather than a code.
+                if let err = q("error") {
+                    let detail = q("error_description")?.replacingOccurrences(of: "+", with: " ") ?? err
+                    self.finishExternalAuthentication()
+                    self.status = "justtype: \(detail)"
+                    return
+                }
+                guard q("state") == state else {
+                    self.finishExternalAuthentication()
+                    self.status = "justtype callback state mismatch"
+                    return
+                }
+                guard let code = q("code") else {
+                    self.finishExternalAuthentication()
+                    self.status = "justtype callback had no code"
                     return
                 }
 
@@ -725,7 +779,7 @@ final class JustTypeSyncManager: ObservableObject {
             let credentials = try await currentCredentials()
             let api = try makeAPI(credentials)
             let summaries = try await api.sharedSlates()
-            let remoteNumbers = Set(summaries.map { $0.slate_number })
+            var remoteNumbers = Set(summaries.map { $0.slate_number })
             var cache = loadCache()
 
             for summary in summaries {
@@ -760,11 +814,51 @@ final class JustTypeSyncManager: ObservableObject {
                 }
             }
 
-            // Reconcile deletions: any tracked slate with a number that's no longer in /shared was
-            // deleted (or revoked) on justtype — drop it from the section. App-created slates are
-            // delegated immediately, so they're always present here too; this is what makes a slate
-            // deleted on justtype.io finally disappear from the list. Items without a number yet
-            // (none, post create-delegated) are left alone.
+            // Published (public) slates: separate endpoint, plaintext content, no decryption.
+            // Tolerate failure (e.g. the slates:read:public scope not granted yet) so it never
+            // breaks the private-slate sync.
+            do {
+                let published = try await api.publishedSlates()
+                log("[JustType] published slates fetched: \(published.count)")
+                for p in published {
+                    remoteNumbers.insert(p.slate_number)
+                    publishedContent[p.slate_number] = (p.title, p.content)
+                    let title = (p.title?.isEmpty == false) ? p.title! : "Published \(p.slate_number)"
+                    if let idx = cache.firstIndex(where: { $0.slateNumber == p.slate_number }) {
+                        cache[idx].origin = .published
+                        cache[idx].title = title
+                        cache[idx].lastRemoteUpdatedAt = p.updated_at ?? cache[idx].lastRemoteUpdatedAt
+                        // Keep an opened local copy current with the published text.
+                        if let noteId = cache[idx].localNoteId, let existing = notesManager.note(idString: noteId) {
+                            let remoteHash = JustTypeCrypto.sha256Hex(p.content)
+                            if remoteHash != cache[idx].lastSyncedHash {
+                                notesManager.writeSyncedNote(id: existing.id, filename: existing.filename, content: p.content)
+                                cache[idx].lastSyncedHash = remoteHash
+                            }
+                        }
+                    } else {
+                        cache.append(JustTypeTrackedSlate(
+                            id: JustTypeTrackedSlate.slateID(p.slate_number),
+                            origin: .published,
+                            slateNumber: p.slate_number,
+                            dropId: nil,
+                            title: title,
+                            localNoteId: nil,
+                            localFilename: nil,
+                            lastSyncedHash: nil,
+                            lastRemoteUpdatedAt: p.updated_at
+                        ))
+                    }
+                }
+            } catch {
+                log("[JustType] published slates fetch failed (scope not granted yet?): \(error.localizedDescription)")
+            }
+
+            // Reconcile deletions: any tracked slate with a number that's no longer in /shared or
+            // /published was deleted (or revoked/unpublished) on justtype — drop it from the
+            // section. App-created slates are delegated immediately, so they're always present
+            // here too; this is what makes a slate deleted on justtype.io finally disappear from
+            // the list. Items without a number yet (none, post create-delegated) are left alone.
             cache.removeAll { $0.slateNumber.map { !remoteNumbers.contains($0) } ?? false }
 
             saveCache(cache)
@@ -799,7 +893,9 @@ final class JustTypeSyncManager: ObservableObject {
             var cache = loadCache()
             var pushedCount = 0
             for idx in cache.indices {
-                guard let slateNumber = cache[idx].slateNumber,
+                // Published slates are public, edited on justtype — never push local edits to them.
+                guard cache[idx].origin != .published,
+                      let slateNumber = cache[idx].slateNumber,
                       let noteId = cache[idx].localNoteId,
                       let note = notesManager.note(idString: noteId) else { continue }
                 let body = cleanedContent(note.content)
@@ -887,6 +983,11 @@ final class JustTypeSyncManager: ObservableObject {
             status = Self.loadCredentials() == nil ? "Connect justtype" : "This note isn\u{2019}t available yet"
             return
         }
+        // Published slates are public plaintext — materialize directly, no decryption.
+        if item.origin == .published {
+            await openPublished(item, slateNumber: slateNumber)
+            return
+        }
         isSyncing = true
         defer { isSyncing = false }
         do {
@@ -901,6 +1002,37 @@ final class JustTypeSyncManager: ObservableObject {
                 cache[idx].localFilename = note.filename
                 cache[idx].lastSyncedHash = JustTypeCrypto.sha256Hex(decrypted.content)
                 if let t = decrypted.title, !t.isEmpty { cache[idx].title = t }
+            }
+            saveCache(cache)
+            NoteOpener.open(note, notesManager: notesManager)
+        } catch {
+            status = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// Open a published (public) slate: use the plaintext content cached from the last refresh,
+    /// re-fetching the published list if needed, then materialize a local note.
+    private func openPublished(_ item: JustTypeTrackedSlate, slateNumber: Int) async {
+        guard let notesManager else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            var entry = publishedContent[slateNumber]
+            if entry == nil {
+                let credentials = try await currentCredentials()
+                let api = try makeAPI(credentials)
+                if let p = try await api.publishedSlates().first(where: { $0.slate_number == slateNumber }) {
+                    entry = (p.title, p.content)
+                    publishedContent[slateNumber] = entry
+                }
+            }
+            guard let entry else { status = "This note isn\u{2019}t available yet"; return }
+            let note = notesManager.createSyncedNote(title: entry.title, content: entry.content, slateNumber: slateNumber)
+            var cache = loadCache()
+            if let idx = cache.firstIndex(where: { $0.id == item.id }) {
+                cache[idx].localNoteId = note.id.uuidString
+                cache[idx].localFilename = note.filename
+                cache[idx].lastSyncedHash = JustTypeCrypto.sha256Hex(entry.content)
             }
             saveCache(cache)
             NoteOpener.open(note, notesManager: notesManager)
