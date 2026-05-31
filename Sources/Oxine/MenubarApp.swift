@@ -30,7 +30,7 @@ class KeyablePanel: NSPanel {
 }
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     static weak var instance: AppDelegate?
 
     var statusItem: NSStatusItem?
@@ -44,11 +44,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var panelJustOpenedTimer: DispatchWorkItem?
     var closeReason = ""
     var isAuthVisible = false
+    var isProgrammaticResize = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         setupEventMonitoring()
         setupBiometricObservers()
+        setupSizeObserver()
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
     }
@@ -63,9 +65,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.target = self
         }
 
+        let initial = OxinePanelLayout.current
         panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 470),
-            styleMask: [.borderless, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: initial.width, height: initial.height),
+            styleMask: [.borderless, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -81,10 +84,70 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hostingController.sizingOptions = []
         panel?.contentViewController = hostingController
         panel?.contentView?.wantsLayer = true
-        panel?.contentView?.layer?.cornerRadius = 18
+        panel?.contentView?.layer?.cornerRadius = 20
         panel?.contentView?.layer?.masksToBounds = true
         panel?.isReleasedWhenClosed = false
         panel?.hidesOnDeactivate = false
+        panel?.delegate = self
+        applyPanelSize()
+    }
+
+    /// Authoritative resize clamp. AppKit's minSize/maxSize aren't honored for
+    /// this borderless, hosting-controller-backed panel, so we enforce bounds
+    /// here on every live-resize tick — and refuse resizes entirely when locked.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        if isProgrammaticResize { return frameSize }
+        guard OxinePanelLayout.isResizable else { return sender.frame.size }
+        let lo = OxinePanelLayout.minSize
+        let hi = OxinePanelLayout.maxSize
+        return NSSize(
+            width: min(max(frameSize.width, lo.width), hi.width),
+            height: min(max(frameSize.height, lo.height), hi.height)
+        )
+    }
+
+    private func setupSizeObserver() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleSizeChanged),
+            name: .panelSizeChanged, object: nil
+        )
+        if let panel {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(panelDidResize(_:)),
+                name: NSWindow.didResizeNotification, object: panel
+            )
+        }
+    }
+
+    @objc private func handleSizeChanged() { applyPanelSize() }
+
+    /// Apply min/max constraints for the current preset and, if visible, resize
+    /// in place keeping the top edge pinned under the menubar.
+    func applyPanelSize() {
+        guard let panel else { return }
+        let size = OxinePanelLayout.current
+        // Use frame-based min/max — AppKit honors these during live resize even
+        // for a borderless panel; contentMinSize gets reset by the host controller.
+        let lo = OxinePanelLayout.isResizable ? OxinePanelLayout.minSize : size
+        let hi = OxinePanelLayout.isResizable ? OxinePanelLayout.maxSize : size
+        panel.minSize = lo
+        panel.maxSize = hi
+        panel.contentMinSize = lo
+        panel.contentMaxSize = hi
+        guard panel.isVisible else { return }
+        isProgrammaticResize = true
+        var frame = panel.frame
+        let top = frame.maxY
+        frame.size = size
+        frame.origin.y = top - size.height
+        panel.setFrame(frame, display: true, animate: true)
+        isProgrammaticResize = false
+    }
+
+    /// Persist user drag-resizes when the Custom preset is active.
+    @objc private func panelDidResize(_ n: Notification) {
+        guard !isProgrammaticResize, OxinePanelLayout.isResizable, let panel else { return }
+        OxinePanelLayout.setCustomSize(panel.frame.size)
     }
 
     private func setupEventMonitoring() {
@@ -193,8 +256,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let buttonRect = button.convert(button.bounds, to: nil)
         let screenRect = button.window?.convertToScreen(buttonRect) ?? .zero
 
-        let panelWidth: CGFloat = 360
-        let panelHeight: CGFloat = 470
+        let size = OxinePanelLayout.current
+        let panelWidth: CGFloat = size.width
+        let panelHeight: CGFloat = size.height
         let x = screenRect.midX - panelWidth / 2
         let y = screenRect.minY - panelHeight - 5
 

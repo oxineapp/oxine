@@ -13,6 +13,12 @@ struct NotesView: View {
         }
     }
 
+    // Notes tracked by justtype live in the justtype section, not the normal list.
+    var visibleNotes: [QuickNote] {
+        let tracked = justTypeSync.trackedLocalNoteIds
+        return sortedNotes.filter { !tracked.contains($0.id.uuidString) }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
@@ -22,6 +28,7 @@ struct NotesView: View {
             }
             .padding(10)
         }
+        .onAppear { justTypeSync.bind(notesManager: notesManager) }
         .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
             isFocused = true
         }
@@ -81,7 +88,7 @@ struct NotesView: View {
 
     var savedNotesList: some View {
         VStack(spacing: 4) {
-            if notesManager.notes.isEmpty {
+            if visibleNotes.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 18))
@@ -93,20 +100,24 @@ struct NotesView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             } else {
-                ForEach(sortedNotes) { note in
+                ForEach(visibleNotes) { note in
                     NoteItemRow(note: note, onDelete: {
                         notesManager.deleteNote(note)
                     }, onPin: {
                         notesManager.pinNote(note)
                     }, onOpenInObsidian: {
-                        let vaultName = "MenuBar Notes"
-                        let fileName = note.filename.isEmpty ? note.id.uuidString : note.filename
-                        if let encodedVault = vaultName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                           let encodedFile = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                           let url = URL(string: "obsidian://open?vault=\(encodedVault)&file=\(encodedFile)") {
-                            NSWorkspace.shared.open(url)
-                        }
+                        NoteOpener.open(note, notesManager: notesManager)
                     })
+                    .contextMenu {
+                        Button("Open") { NoteOpener.open(note, notesManager: notesManager) }
+                        if justTypeSync.isConfigured {
+                            Button("Add to justtype") {
+                                Task { await justTypeSync.addToJustType(note: note) }
+                            }
+                        }
+                        Divider()
+                        Button("Delete", role: .destructive) { notesManager.deleteNote(note) }
+                    }
                 }
             }
         }
@@ -137,7 +148,7 @@ struct JustTypeNotesSection: View {
                 }
                 Button(sync.isConfigured ? "Sync" : "Connect") {
                     if sync.isConfigured {
-                        Task { await sync.sync(notesManager: notesManager) }
+                        Task { await sync.syncNow() }
                     } else {
                         showConnect = true
                     }
@@ -148,15 +159,26 @@ struct JustTypeNotesSection: View {
                 .disabled(sync.isSyncing)
             }
 
-            Text(sync.status)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.28))
-                .lineLimit(2)
-
-            if sync.isConfigured && !sync.sharedSlates.isEmpty {
-                Text("\(sync.sharedSlates.count) private slate(s) shared with this app")
+            if !sync.status.isEmpty {
+                Text(sync.status)
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.22))
+                    .foregroundColor(.white.opacity(0.28))
+                    .lineLimit(2)
+            }
+
+            if sync.isConfigured {
+                if sync.items.isEmpty {
+                    Text("Right-click a note \u{2192} \u{201C}Add to justtype\u{201D}, or Sync to pull notes you\u{2019}ve shared with this app.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.22))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    VStack(spacing: 4) {
+                        ForEach(sync.items) { item in
+                            JustTypeItemRow(item: item, sync: sync)
+                        }
+                    }
+                }
             }
         }
         .padding(10)
@@ -168,10 +190,101 @@ struct JustTypeNotesSection: View {
         .sheet(isPresented: $showConnect) {
             JustTypeConnectView(sync: sync, isPresented: $showConnect, clientId: $clientId, privateKey: $privateKey)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
-            guard sync.isConfigured, !sync.isSyncing else { return }
-            Task { await sync.sync(notesManager: notesManager) }
+        .onAppear { sync.bind(notesManager: notesManager) }
+        .task {
+            sync.bind(notesManager: notesManager)
+            if sync.isConfigured { await sync.refresh() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
+            // A local edit landed; push tracked notes (don't re-pull the whole list).
+            guard sync.isConfigured, !sync.isSyncing else { return }
+            Task { await sync.pushEdits() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
+            // Auto-sync with justtype every time the panel opens (pull list + remote edits, push local).
+            guard sync.isConfigured, !sync.isSyncing else { return }
+            Task { await sync.syncNow() }
+        }
+    }
+}
+
+/// A single row in the justtype subsection. Tap to open (fetch + decrypt on first open);
+/// right-click for Open / Unsync.
+struct JustTypeItemRow: View {
+    let item: JustTypeTrackedSlate
+    @ObservedObject var sync: JustTypeSyncManager
+    @State private var isHovered = false
+
+    private var icon: String {
+        item.origin == .pushed ? "arrow.up.circle" : "tray.and.arrow.down"
+    }
+
+    private var badge: String {
+        if item.origin == .shared && item.localNoteId == nil { return "Tap to open" }
+        return "Synced"
+    }
+
+    var body: some View {
+        Button {
+            Task { await sync.open(item) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.4))
+                Text(item.title.isEmpty ? "Untitled" : item.title)
+                    .lineLimit(1)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.85))
+                Spacer()
+                Text(badge)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(isHovered ? 0.08 : 0.03))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Open")
+        .contextMenu {
+            Button("Open") { Task { await sync.open(item) } }
+            if item.origin == .pushed {
+                Button("Unsync from justtype", role: .destructive) {
+                    Task { await sync.unsync(item) }
+                }
+            }
+        }
+    }
+}
+
+/// Opens a note in Obsidian when it's installed, otherwise falls back to TextEdit on the .md file.
+enum NoteOpener {
+    static func open(_ note: QuickNote, notesManager: QuickNotesManager) {
+        let vaultName = "MenuBar Notes"
+        let fileName = note.filename.isEmpty ? note.id.uuidString : note.filename
+        if obsidianInstalled,
+           let encodedVault = vaultName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let encodedFile = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: "obsidian://open?vault=\(encodedVault)&file=\(encodedFile)") {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        guard let fileURL = notesManager.noteFileURL(filename: note.filename) else { return }
+        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
+        if FileManager.default.fileExists(atPath: textEdit.path) {
+            NSWorkspace.shared.open([fileURL], withApplicationAt: textEdit, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(fileURL)
+        }
+    }
+
+    static var obsidianInstalled: Bool {
+        guard let scheme = URL(string: "obsidian://open") else { return false }
+        return NSWorkspace.shared.urlForApplication(toOpen: scheme) != nil
     }
 }
 
