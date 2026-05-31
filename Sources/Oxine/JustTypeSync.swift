@@ -310,7 +310,7 @@ enum JustTypeOAuth {
     static let callbackScheme = "com.oxine.app"
     static let scope = "identity slates:read:meta slates:read:private slates:create slates:delete slates:publish"
     /// Oxine's public OAuth client id. Safe to embed: a public client uses PKCE, no secret.
-    static let clientId = "jt_8db03c81171f1fcc8a9130c3426b6dff"
+    static let clientId = "jt_82ed84d707b9e3ad057ad3060fb552cf"
 
     /// Registering this install's device public key at authorize time binds it to the issued
     /// token, so private reads work immediately after the code exchange (no separate call,
