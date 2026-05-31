@@ -128,8 +128,6 @@ struct JustTypeNotesSection: View {
     @ObservedObject var sync: JustTypeSyncManager
     @ObservedObject var notesManager: QuickNotesManager
     @State private var showConnect = false
-    @State private var clientId = ""
-    @State private var privateKey = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -188,7 +186,7 @@ struct JustTypeNotesSection: View {
         )
         .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
         .sheet(isPresented: $showConnect) {
-            JustTypeConnectView(sync: sync, isPresented: $showConnect, clientId: $clientId, privateKey: $privateKey)
+            JustTypeConnectView(sync: sync, isPresented: $showConnect)
         }
         .onAppear { sync.bind(notesManager: notesManager) }
         .task {
@@ -291,8 +289,6 @@ enum NoteOpener {
 struct JustTypeConnectView: View {
     @ObservedObject var sync: JustTypeSyncManager
     @Binding var isPresented: Bool
-    @Binding var clientId: String
-    @Binding var privateKey: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -300,31 +296,10 @@ struct JustTypeConnectView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text(sync.isAppConfigured ? "Sign in with justtype. On the consent screen, allow full private slate access so this app can read and edit your slates." : "Developer setup is required once before users can sign in. Use the client ID and app private key from the justtype dev portal.")
+            Text("Sign in with justtype. On the consent screen, allow full private slate access so this app can read and edit your slates. Your notes stay end-to-end encrypted to this device.")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.45))
                 .fixedSize(horizontal: false, vertical: true)
-
-            if !sync.isAppConfigured {
-                TextField("Client ID", text: $clientId)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)))
-
-                Text("App private key PEM")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.35))
-
-                TextEditor(text: $privateKey)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
-                    .scrollContentBackground(.hidden)
-                    .frame(height: 120)
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)))
-            }
 
             HStack {
                 Button("Cancel") { isPresented = false }
@@ -339,23 +314,13 @@ struct JustTypeConnectView: View {
                     .buttonStyle(.plain)
                     .foregroundColor(.red.opacity(0.75))
                 }
-                if !sync.isAppConfigured {
-                    Button("Save app config") {
-                        sync.saveAppConfig(clientId: clientId, privateKeyPEM: privateKey)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                    .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || privateKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                } else {
-                    Button(sync.isSigningIn ? "Signing in..." : "Sign in") {
-                        sync.signIn()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                    .disabled(sync.isSigningIn)
+                Button(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Reconnect" : "Connect")) {
+                    sync.signIn()
                 }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .disabled(sync.isSigningIn)
             }
 
             Text(sync.status)

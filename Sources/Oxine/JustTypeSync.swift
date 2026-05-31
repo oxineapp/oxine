@@ -13,12 +13,16 @@ struct JustTypeCredentials: Codable {
     var accessToken: String
     var expiresAt: Date
     var scope: String
-    var privateKeyPEM: String
+    /// The server-assigned id for THIS install's registered device key, when known.
+    /// Optional: the authorize-time registration path binds the install to the token
+    /// silently (server resolves us from the bearer token), so this is only populated
+    /// by the explicit POST /api/oauth/devices fallback. Old credentials decode with nil.
+    var deviceId: String?
 }
 
-struct JustTypeAppConfig: Codable {
-    var clientId: String
-    var privateKeyPEM: String
+struct JustTypeDeviceRegistration: Codable {
+    let device_id: String?
+    let key_scheme: String?
 }
 
 struct JustTypeTokenResponse: Codable {
@@ -77,6 +81,10 @@ struct JustTypeDelegatedSlate: Codable {
     let enc_content: String?
     let enc_title: String?
     let shared_at: String?   // ISO8601
+    /// Set by the server when the slate is shared with this install but the user's client
+    /// hasn't wrapped its content key to our device key yet (inherent E2E timing, NOT an
+    /// error). When true, wrapped_key/enc_content are absent — poll, don't fail.
+    let pending_device: Bool?
 }
 
 struct JustTypePublicKeyResponse: Codable {
@@ -143,60 +151,8 @@ enum JustTypeCrypto {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    static func importPrivateKey(pem: String) -> SecKey? {
-        let cleaned = pem
-            .replacingOccurrences(of: "***REMOVED***", with: "")
-            .replacingOccurrences(of: "-----END PRIVATE KEY-----", with: "")
-            .replacingOccurrences(of: "-----BEGIN RSA PRIVATE KEY-----", with: "")
-            .replacingOccurrences(of: "-----END RSA PRIVATE KEY-----", with: "")
-            .components(separatedBy: .whitespacesAndNewlines)
-            .joined()
-        guard let data = Data(base64Encoded: cleaned) else { return nil }
-        let attrs: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
-        ]
-        // SecKeyCreateWithData wants PKCS#1 (RSAPrivateKey) for RSA. A PEM labelled
-        // "BEGIN PRIVATE KEY" is PKCS#8, which wraps the PKCS#1 key in a SEQUENCE +
-        // AlgorithmIdentifier + OCTET STRING. Try the data as-is (PKCS#1), then unwrap.
-        if let key = SecKeyCreateWithData(data as CFData, attrs as CFDictionary, nil) {
-            return key
-        }
-        if let pkcs1 = pkcs1(fromPKCS8: data) {
-            return SecKeyCreateWithData(pkcs1 as CFData, attrs as CFDictionary, nil)
-        }
-        return nil
-    }
-
-    /// Extracts the inner PKCS#1 `RSAPrivateKey` from a PKCS#8 `PrivateKeyInfo` DER blob:
-    /// SEQUENCE { INTEGER version, SEQUENCE algorithmIdentifier, OCTET STRING privateKey }.
-    static func pkcs1(fromPKCS8 der: Data) -> Data? {
-        let b = [UInt8](der)
-        var idx = 0
-        // Reads one DER tag-length-value; advances idx to the value, returns value bounds.
-        func readTLV() -> (tag: UInt8, start: Int, len: Int)? {
-            guard idx + 2 <= b.count else { return nil }
-            let tag = b[idx]; idx += 1
-            var len = Int(b[idx]); idx += 1
-            if len & 0x80 != 0 {
-                let n = len & 0x7f
-                guard n >= 1, n <= 4, idx + n <= b.count else { return nil }
-                len = 0
-                for _ in 0..<n { len = (len << 8) | Int(b[idx]); idx += 1 }
-            }
-            guard idx + len <= b.count else { return nil }
-            return (tag, idx, len)
-        }
-        guard let seq = readTLV(), seq.tag == 0x30 else { return nil }   // outer SEQUENCE
-        idx = seq.start
-        guard let version = readTLV(), version.tag == 0x02 else { return nil }
-        idx = version.start + version.len
-        guard let alg = readTLV(), alg.tag == 0x30 else { return nil }   // AlgorithmIdentifier
-        idx = alg.start + alg.len
-        guard let octet = readTLV(), octet.tag == 0x04 else { return nil } // privateKey OCTET STRING
-        return der.subdata(in: octet.start..<(octet.start + octet.len))
-    }
-
+    /// Imports a justtype-supplied RSA public key. `SecKeyCreateWithData` for RSA expects the
+    /// PKCS#1 `RSAPublicKey` DER; justtype's user public keys round-trip through this unchanged.
     static func importPublicKey(spkiBase64: String) -> SecKey? {
         guard let data = Data(base64Encoded: spkiBase64) else { return nil }
         let attrs: [String: Any] = [
@@ -206,8 +162,8 @@ enum JustTypeCrypto {
         return SecKeyCreateWithData(data as CFData, attrs as CFDictionary, nil)
     }
 
-    static func unwrapContentKey(_ wrapped: String, privateKeyPEM: String) throws -> Data {
-        guard let privateKey = importPrivateKey(pem: privateKeyPEM) else { throw JustTypeCryptoError.badPrivateKey }
+    /// Unwrap a content key wrapped (RSA-OAEP-SHA256) to THIS install's device public key.
+    static func unwrapContentKey(_ wrapped: String, privateKey: SecKey) throws -> Data {
         guard let wrappedData = Data(base64Encoded: wrapped) else { throw JustTypeCryptoError.badBlob }
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256, wrappedData as CFData, &error) as Data? else {
@@ -229,12 +185,31 @@ enum JustTypeCrypto {
         return data.base64EncodedString()
     }
 
-    /// The app's own RSA public key, derived from its private key PEM. Used to wrap a freshly
-    /// generated content key back to ourselves in create-delegated, so we can decrypt/edit the
-    /// slate immediately without waiting for the user's browser to re-wrap it.
-    static func appPublicKey(privateKeyPEM: String) -> SecKey? {
-        guard let priv = importPrivateKey(pem: privateKeyPEM) else { return nil }
-        return SecKeyCopyPublicKey(priv)
+    /// Wrap an RSA `RSAPublicKey` (PKCS#1, as Apple's SecKey export produces) into a DER
+    /// `SubjectPublicKeyInfo` (SPKI) so justtype can register it as `device_public_key`.
+    /// SPKI = SEQUENCE { SEQUENCE { OID rsaEncryption, NULL }, BIT STRING { pkcs1 } }.
+    static func spki(fromPKCS1 pkcs1: Data) -> Data {
+        // Fixed AlgorithmIdentifier for rsaEncryption (1.2.840.113549.1.1.1) + NULL params.
+        let algId: [UInt8] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
+        var bitString: [UInt8] = [0x03]                       // BIT STRING tag
+        bitString += derLength(pkcs1.count + 1)               // length covers the unused-bits byte
+        bitString += [0x00]                                   // 0 unused bits
+        bitString += [UInt8](pkcs1)
+        var body = algId
+        body += bitString
+        var out: [UInt8] = [0x30]                             // outer SEQUENCE
+        out += derLength(body.count)
+        out += body
+        return Data(out)
+    }
+
+    /// DER definite-length encoding for a non-negative length.
+    private static func derLength(_ n: Int) -> [UInt8] {
+        if n < 0x80 { return [UInt8(n)] }
+        var bytes: [UInt8] = []
+        var v = n
+        while v > 0 { bytes.insert(UInt8(v & 0xff), at: 0); v >>= 8 }
+        return [UInt8(0x80 | bytes.count)] + bytes
     }
 
     static func aesGcmDecrypt(_ blob: String, key: Data) throws -> String {
@@ -264,6 +239,65 @@ enum JustTypeCrypto {
     }
 }
 
+/// This installation's own RSA key for E2E. The private half is generated once on first use,
+/// kept permanently in the keychain (never serialized off-device, never embedded in the binary),
+/// and used to unwrap content keys justtype wraps to us. The public half (SPKI) is what we
+/// register with justtype as `device_public_key`. Replaces the old single shared app key.
+enum JustTypeDeviceKey {
+    static let tag = "com.oxine.justtype.devicekey".data(using: .utf8)!
+    static let keyScheme = "rsa-oaep-sha256"
+
+    /// The persistent device private key, generating + storing it on first call.
+    static func privateKey() throws -> SecKey {
+        if let existing = load() { return existing }
+        return try generate()
+    }
+
+    private static func load() -> SecKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: tag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecReturnRef as String: true,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let item else { return nil }
+        return (item as! SecKey)
+    }
+
+    private static func generate() throws -> SecKey {
+        let attrs: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeySizeInBits as String: 2048,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrApplicationTag as String: tag,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            ],
+        ]
+        var error: Unmanaged<CFError>?
+        guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &error) else {
+            throw error?.takeRetainedValue() as Error? ?? JustTypeCryptoError.badPrivateKey
+        }
+        return key
+    }
+
+    /// The device public key as a `SecKey`, for wrapping our own content keys in create-delegated.
+    static func publicKey() throws -> SecKey {
+        guard let pub = SecKeyCopyPublicKey(try privateKey()) else { throw JustTypeCryptoError.badPublicKey }
+        return pub
+    }
+
+    /// base64 DER SPKI of the device public key — the `device_public_key` justtype registers.
+    static func publicKeySPKIBase64() throws -> String {
+        var error: Unmanaged<CFError>?
+        guard let pkcs1 = SecKeyCopyExternalRepresentation(try publicKey(), &error) as Data? else {
+            throw error?.takeRetainedValue() as Error? ?? JustTypeCryptoError.badPublicKey
+        }
+        return JustTypeCrypto.spki(fromPKCS1: pkcs1).base64EncodedString()
+    }
+}
+
 final class JustTypePresentationContext: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
@@ -275,11 +309,16 @@ enum JustTypeOAuth {
     static let redirectURI = "com.oxine.app://oauth/justtype"
     static let callbackScheme = "com.oxine.app"
     static let scope = "identity slates:read:meta slates:read:private slates:create slates:delete slates:publish"
+    /// Oxine's public OAuth client id. Safe to embed: a public client uses PKCE, no secret.
+    static let clientId = "jt_8db03c81171f1fcc8a9130c3426b6dff"
 
-    static func authorizeURL(clientId: String, state: String, verifier: String) -> URL? {
+    /// Registering this install's device public key at authorize time binds it to the issued
+    /// token, so private reads work immediately after the code exchange (no separate call,
+    /// no `409 needs_device`). `device_name` is optional metadata (≤120 chars).
+    static func authorizeURL(state: String, verifier: String, devicePublicKey: String, deviceName: String?) -> URL? {
         guard let authorize = URL(string: "/oauth/authorize", relativeTo: baseURL)?.absoluteURL else { return nil }
         var comps = URLComponents(url: authorize, resolvingAgainstBaseURL: false)
-        comps?.queryItems = [
+        var items = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
@@ -287,7 +326,12 @@ enum JustTypeOAuth {
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge", value: JustTypeCrypto.pkceChallenge(verifier: verifier)),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "device_public_key", value: devicePublicKey),
         ]
+        if let deviceName, !deviceName.isEmpty {
+            items.append(URLQueryItem(name: "device_name", value: String(deviceName.prefix(120))))
+        }
+        comps?.queryItems = items
         return comps?.url
     }
 
@@ -337,9 +381,13 @@ enum JustTypeOAuth {
 final class JustTypeAPI: @unchecked Sendable {
     let baseURL = URL(string: "https://justtype.io")!
     let credentials: JustTypeCredentials
+    /// This install's device public key (base64 SPKI), so a `409 needs_device` can self-heal
+    /// by registering before retrying.
+    let devicePublicKeySPKI: String
 
-    init(credentials: JustTypeCredentials) {
+    init(credentials: JustTypeCredentials, devicePublicKeySPKI: String) {
         self.credentials = credentials
+        self.devicePublicKeySPKI = devicePublicKeySPKI
     }
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) -> URLRequest {
@@ -352,20 +400,48 @@ final class JustTypeAPI: @unchecked Sendable {
     }
 
     /// Runs a request, honouring the server's JSON 429 + Retry-After by backing off and retrying
-    /// (capped, twice). Everything goes through here so rate limits never surface as a hard error.
-    private func perform(_ req: URLRequest, label: String) async throws -> (Data, URLResponse) {
+    /// (capped, twice). Also self-heals `409 needs_device` (an install whose token isn't bound to
+    /// a device key yet — e.g. a session created before this build) by registering the device key
+    /// and retrying once. Everything goes through here so neither surfaces as a hard error.
+    private func perform(_ req: URLRequest, label: String, allowDeviceRetry: Bool = true) async throws -> (Data, URLResponse) {
         var attempt = 0
         while true {
             let (data, response) = try await URLSession.shared.data(for: req)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 429, attempt < 2 else {
-                return (data, response)
+            guard let http = response as? HTTPURLResponse else { return (data, response) }
+            if http.statusCode == 429, attempt < 2 {
+                let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap { Double($0) } ?? 1
+                let backoff = min(max(retryAfter, 1), 10)
+                log("[JustType] \(label) 429 rate-limited; backing off \(backoff)s (attempt \(attempt + 1))")
+                try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
+                attempt += 1
+                continue
             }
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap { Double($0) } ?? 1
-            let backoff = min(max(retryAfter, 1), 10)
-            log("[JustType] \(label) 429 rate-limited; backing off \(backoff)s (attempt \(attempt + 1))")
-            try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-            attempt += 1
+            if http.statusCode == 409, allowDeviceRetry, Self.isNeedsDevice(data) {
+                log("[JustType] \(label) 409 needs_device; registering device key then retrying")
+                _ = try await registerDevice()
+                return try await perform(req, label: label, allowDeviceRetry: false)
+            }
+            return (data, response)
         }
+    }
+
+    private static func isNeedsDevice(_ data: Data) -> Bool {
+        (String(data: data, encoding: .utf8) ?? "").contains("needs_device")
+    }
+
+    /// Register this install's device public key against the current token. Idempotent on the
+    /// public key (same key → same device_id), so this is safe to call on reinstall or retry.
+    /// Sent directly (not via `perform`) to avoid recursing through the 409 self-heal.
+    @discardableResult
+    func registerDevice() async throws -> JustTypeDeviceRegistration {
+        let payload: [String: String] = [
+            "public_key": devicePublicKeySPKI,
+            "key_scheme": JustTypeDeviceKey.keyScheme,
+            "name": "Oxine on \(Host.current().localizedName ?? "Mac")",
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, response) = try await URLSession.shared.data(for: request("/api/oauth/devices", method: "POST", body: body))
+        return try decode(JustTypeDeviceRegistration.self, from: data, response: response, label: "POST /devices")
     }
 
     private func decode<T: Decodable>(_ type: T.Type, from data: Data, response: URLResponse, label: String = "") throws -> T {
@@ -437,10 +513,8 @@ final class JustTypeAPI: @unchecked Sendable {
 final class JustTypeSyncManager: ObservableObject {
     static let service = "JustTypeSync"
     static let credentialsAccount = "credentials"
-    static let appConfigAccount = "app-config"
     static let cacheFileName = "justtype-tracked.json"
 
-    @Published var isAppConfigured = false
     @Published var isConfigured = false
     @Published var isSyncing = false
     @Published var isSigningIn = false
@@ -452,38 +526,8 @@ final class JustTypeSyncManager: ObservableObject {
     private let presentationContext = JustTypePresentationContext()
 
     init() {
-        isAppConfigured = Self.loadAppConfig() != nil
         isConfigured = Self.loadCredentials() != nil
-        status = isConfigured ? "Ready to sync" : (isAppConfigured ? "Sign in with justtype" : "Configure justtype app")
-    }
-
-    static func loadAppConfig() -> JustTypeAppConfig? {
-        if let data = Keychain.get(service: service, account: appConfigAccount),
-           let decoded = try? JSONDecoder().decode(JustTypeAppConfig.self, from: data) {
-            return decoded
-        }
-        guard let clientId = Bundle.main.object(forInfoDictionaryKey: "JustTypeClientID") as? String,
-              let privateKeyPEM = Bundle.main.object(forInfoDictionaryKey: "JustTypePrivateKeyPEM") as? String,
-              !clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !privateKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return JustTypeAppConfig(clientId: clientId, privateKeyPEM: privateKeyPEM)
-    }
-
-    func saveAppConfig(clientId: String, privateKeyPEM: String) {
-        let config = JustTypeAppConfig(
-            clientId: clientId.trimmingCharacters(in: .whitespacesAndNewlines),
-            privateKeyPEM: privateKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-        guard !config.clientId.isEmpty, !config.privateKeyPEM.isEmpty,
-              let data = try? JSONEncoder().encode(config) else {
-            status = "Enter the justtype client ID and app private key"
-            return
-        }
-        Keychain.set(data, service: Self.service, account: Self.appConfigAccount)
-        isAppConfigured = true
-        status = isConfigured ? "Ready to sync" : "Sign in with justtype"
+        status = isConfigured ? "Ready to sync" : "Connect justtype"
     }
 
     static func loadCredentials() -> JustTypeCredentials? {
@@ -501,15 +545,21 @@ final class JustTypeSyncManager: ObservableObject {
             status = "justtype sign in is already open"
             return
         }
-        guard let appConfig = Self.loadAppConfig() else {
-            isAppConfigured = false
-            status = "Configure justtype app"
+
+        // This install's device public key, registered at authorize time so private reads work
+        // immediately after the token exchange. The private half stays in the keychain.
+        let devicePublicKey: String
+        do {
+            devicePublicKey = try JustTypeDeviceKey.publicKeySPKIBase64()
+        } catch {
+            status = "Could not prepare this device's key"
             return
         }
 
         let state = JustTypeCrypto.randomURLSafeString()
         let verifier = JustTypeCrypto.randomURLSafeString(byteCount: 64)
-        guard let url = JustTypeOAuth.authorizeURL(clientId: appConfig.clientId, state: state, verifier: verifier) else {
+        let deviceName = "Oxine on \(Host.current().localizedName ?? "Mac")"
+        guard let url = JustTypeOAuth.authorizeURL(state: state, verifier: verifier, devicePublicKey: devicePublicKey, deviceName: deviceName) else {
             status = "Could not build justtype sign-in URL"
             return
         }
@@ -540,14 +590,14 @@ final class JustTypeSyncManager: ObservableObject {
                 }
 
                 do {
-                    let token = try await JustTypeOAuth.exchangeCode(clientId: appConfig.clientId, code: code, verifier: verifier)
+                    let token = try await JustTypeOAuth.exchangeCode(clientId: JustTypeOAuth.clientId, code: code, verifier: verifier)
                     let creds = JustTypeCredentials(
-                        clientId: appConfig.clientId,
+                        clientId: JustTypeOAuth.clientId,
                         refreshToken: token.refresh_token,
                         accessToken: token.access_token,
                         expiresAt: Date().addingTimeInterval(TimeInterval(token.expires_in)),
                         scope: token.scope,
-                        privateKeyPEM: appConfig.privateKeyPEM
+                        deviceId: nil
                     )
                     Self.saveCredentials(creds)
                     self.isConfigured = true
@@ -605,7 +655,13 @@ final class JustTypeSyncManager: ObservableObject {
     func disconnect() {
         Keychain.delete(service: Self.service, account: Self.credentialsAccount)
         isConfigured = false
-        status = isAppConfigured ? "Sign in with justtype" : "Configure justtype app"
+        status = "Connect justtype"
+    }
+
+    /// Build an API client carrying this install's device public key (for `409 needs_device`
+    /// self-heal). Throws if the device key can't be materialized.
+    private func makeAPI(_ credentials: JustTypeCredentials) throws -> JustTypeAPI {
+        JustTypeAPI(credentials: credentials, devicePublicKeySPKI: try JustTypeDeviceKey.publicKeySPKIBase64())
     }
 
     /// Attach the notes manager (call from the view). Loads the persisted cache once.
@@ -641,13 +697,13 @@ final class JustTypeSyncManager: ObservableObject {
 
         do {
             let credentials = try await currentCredentials()
-            let api = JustTypeAPI(credentials: credentials)
+            let api = try makeAPI(credentials)
             let summaries = try await api.sharedSlates()
             let remoteNumbers = Set(summaries.map { $0.slate_number })
             var cache = loadCache()
 
             for summary in summaries {
-                let title = decryptTitle(summary, credentials: credentials)
+                let title = decryptTitle(summary)
                 if let idx = cache.firstIndex(where: { $0.slateNumber == summary.slate_number }) {
                     if let title, !title.isEmpty { cache[idx].title = title }
                     // Pull remote content only for notes we've opened locally, and only when changed.
@@ -655,7 +711,7 @@ final class JustTypeSyncManager: ObservableObject {
                     cache[idx].lastRemoteUpdatedAt = summary.updated_at
                     if remoteChanged, let noteId = cache[idx].localNoteId,
                        let existing = notesManager.note(idString: noteId),
-                       let decrypted = try? await fetchAndDecrypt(summary.slate_number, api: api, credentials: credentials) {
+                       let decrypted = try? await fetchAndDecrypt(summary.slate_number, api: api) {
                         let remoteHash = JustTypeCrypto.sha256Hex(decrypted.content)
                         let localHash = JustTypeCrypto.sha256Hex(cleanedContent(existing.content))
                         if localHash == cache[idx].lastSyncedHash, remoteHash != localHash {
@@ -694,10 +750,12 @@ final class JustTypeSyncManager: ObservableObject {
     }
 
     /// Decrypt a slate's title straight from its `/shared` list entry (wrapped_key + enc_title),
-    /// no network. Returns nil if the entry lacks keys or anything fails to decrypt.
-    private func decryptTitle(_ summary: JustTypeSlateSummary, credentials: JustTypeCredentials) -> String? {
+    /// no network. Returns nil if the entry lacks keys or anything fails to decrypt (e.g. it's
+    /// still wrapped to a different install / not yet wrapped to this device).
+    private func decryptTitle(_ summary: JustTypeSlateSummary) -> String? {
         guard let wrapped = summary.wrapped_key, let encTitle = summary.enc_title,
-              let key = try? JustTypeCrypto.unwrapContentKey(wrapped, privateKeyPEM: credentials.privateKeyPEM) else { return nil }
+              let privateKey = try? JustTypeDeviceKey.privateKey(),
+              let key = try? JustTypeCrypto.unwrapContentKey(wrapped, privateKey: privateKey) else { return nil }
         return try? JustTypeCrypto.aesGcmDecrypt(encTitle, key: key)
     }
 
@@ -711,7 +769,7 @@ final class JustTypeSyncManager: ObservableObject {
         defer { isSyncing = false }
         do {
             let credentials = try await currentCredentials()
-            let api = JustTypeAPI(credentials: credentials)
+            let api = try makeAPI(credentials)
             var cache = loadCache()
             var pushedCount = 0
             for idx in cache.indices {
@@ -722,7 +780,7 @@ final class JustTypeSyncManager: ObservableObject {
                 let hash = JustTypeCrypto.sha256Hex(body)
                 guard hash != cache[idx].lastSyncedHash else { continue }
                 let slate = try await api.slate(slateNumber)
-                let key = try currentContentKey(slate, credentials: credentials)
+                let key = try currentContentKey(slate)
                 let encContent = try encryptContent(body, key: key)
                 let titleText = title(for: note)
                 let encTitle = try JustTypeCrypto.aesGcmEncrypt(titleText, key: key)
@@ -749,22 +807,21 @@ final class JustTypeSyncManager: ObservableObject {
         defer { isSyncing = false }
         do {
             let credentials = try await currentCredentials()
-            let api = JustTypeAPI(credentials: credentials)
+            let api = try makeAPI(credentials)
             guard let userPublicKey = try await api.publicKey().public_key else {
                 status = "justtype keypair unavailable; open justtype once, then retry"
                 return
             }
-            guard let appPublicKey = JustTypeCrypto.appPublicKey(privateKeyPEM: credentials.privateKeyPEM) else {
-                status = JustTypeCryptoError.badPrivateKey.errorDescription ?? "Could not load the app key"
-                return
-            }
+            // Wrap the content key to THIS install's device key (not a shared app key), so we
+            // can decrypt/edit the slate we just created without waiting for a browser re-wrap.
+            let devicePublicKey = try JustTypeDeviceKey.publicKey()
             let body = cleanedContent(note.content)
             let key = try JustTypeCrypto.randomContentKey()
             let encContent = try encryptContent(body, key: key)
             let titleText = title(for: note)
             let encTitle = try JustTypeCrypto.aesGcmEncrypt(titleText, key: key)
             let wrappedUser = try JustTypeCrypto.wrapContentKey(key, publicKeyBase64: userPublicKey)
-            let wrappedApp = try JustTypeCrypto.wrapContentKey(key, publicKey: appPublicKey)
+            let wrappedApp = try JustTypeCrypto.wrapContentKey(key, publicKey: devicePublicKey)
             let resp = try await api.createDelegated(
                 wrappedKeyUser: wrappedUser, wrappedKeyApp: wrappedApp,
                 encContent: encContent, encTitle: encTitle,
@@ -808,9 +865,9 @@ final class JustTypeSyncManager: ObservableObject {
         defer { isSyncing = false }
         do {
             let credentials = try await currentCredentials()
-            let api = JustTypeAPI(credentials: credentials)
+            let api = try makeAPI(credentials)
             let slate = try await api.slate(slateNumber)
-            let decrypted = try decryptSlate(slate, credentials: credentials)
+            let decrypted = try decryptSlate(slate)
             let note = notesManager.createSyncedNote(title: decrypted.title, content: decrypted.content, slateNumber: slateNumber)
             var cache = loadCache()
             if let idx = cache.firstIndex(where: { $0.id == item.id }) {
@@ -832,7 +889,7 @@ final class JustTypeSyncManager: ObservableObject {
         do {
             if let slateNumber = item.slateNumber, Self.loadCredentials() != nil {
                 let credentials = try await currentCredentials()
-                let api = JustTypeAPI(credentials: credentials)
+                let api = try makeAPI(credentials)
                 try await api.deleteSlate(slateNumber)
             }
             var cache = loadCache()
@@ -844,9 +901,9 @@ final class JustTypeSyncManager: ObservableObject {
         }
     }
 
-    private func fetchAndDecrypt(_ number: Int, api: JustTypeAPI, credentials: JustTypeCredentials) async throws -> (content: String, title: String?) {
+    private func fetchAndDecrypt(_ number: Int, api: JustTypeAPI) async throws -> (content: String, title: String?) {
         let slate = try await api.slate(number)
-        return try decryptSlate(slate, credentials: credentials)
+        return try decryptSlate(slate)
     }
 
     /// Strip our YAML frontmatter (the `--- id/tags ---` block) so justtype slates hold only
@@ -860,13 +917,16 @@ final class JustTypeSyncManager: ObservableObject {
         return lines[(end + 1)...].joined(separator: "\n").trimmingCharacters(in: .newlines)
     }
 
-    private func currentContentKey(_ slate: JustTypeDelegatedSlate, credentials: JustTypeCredentials) throws -> Data {
+    private func currentContentKey(_ slate: JustTypeDelegatedSlate) throws -> Data {
+        // pending_device means the user's client hasn't wrapped this slate's key to our install
+        // yet (inherent E2E timing). Surface it as "not available yet", never as a hard error.
+        if slate.pending_device == true { throw JustTypeCryptoError.invalidSlate }
         guard slate.delegated, let wrapped = slate.wrapped_key else { throw JustTypeCryptoError.invalidSlate }
-        return try JustTypeCrypto.unwrapContentKey(wrapped, privateKeyPEM: credentials.privateKeyPEM)
+        return try JustTypeCrypto.unwrapContentKey(wrapped, privateKey: JustTypeDeviceKey.privateKey())
     }
 
-    private func decryptSlate(_ slate: JustTypeDelegatedSlate, credentials: JustTypeCredentials) throws -> (content: String, title: String?) {
-        let key = try currentContentKey(slate, credentials: credentials)
+    private func decryptSlate(_ slate: JustTypeDelegatedSlate) throws -> (content: String, title: String?) {
+        let key = try currentContentKey(slate)
         guard let encContent = slate.enc_content else { throw JustTypeCryptoError.invalidSlate }
         let rawContent = try JustTypeCrypto.aesGcmDecrypt(encContent, key: key)
         let content = (try? JSONDecoder().decode(JustTypeEncryptedContent.self, from: Data(rawContent.utf8)).content) ?? rawContent

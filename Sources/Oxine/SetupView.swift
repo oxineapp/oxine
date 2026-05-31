@@ -245,8 +245,6 @@ struct Step2Obsidian: View {
 
 struct Step3JustType: View {
     @StateObject var sync = JustTypeSyncManager()
-    @State var clientId = ""
-    @State var privateKey = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -280,51 +278,17 @@ struct Step3JustType: View {
             .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
 
             VStack(spacing: 7) {
-                if !sync.isAppConfigured {
-                    TextField("Client ID", text: $clientId)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.85))
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.05)))
-
-                    Text("Developer setup: paste the app private key PEM shown once during justtype app registration.")
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.32))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    TextEditor(text: $privateKey)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.85))
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 58)
-                        .padding(6)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.05)))
-
-                    Button("Save app config") {
-                        sync.saveAppConfig(clientId: clientId, privateKeyPEM: privateKey)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                    .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
-                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                    .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || privateKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                } else {
-                    Button(sync.isSigningIn ? "Signing in..." : (sync.isConfigured ? "Signed in" : "Sign in with justtype")) {
-                        sync.signIn()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                    .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
-                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                    .disabled(sync.isSigningIn)
+                Button(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Connected" : "Connect justtype")) {
+                    sync.signIn()
                 }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
+                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                .disabled(sync.isSigningIn || sync.isConfigured)
 
                 Text(sync.status)
                     .font(.system(size: 9))
