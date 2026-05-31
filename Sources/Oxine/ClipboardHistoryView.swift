@@ -4,6 +4,7 @@ struct ClipboardHistoryView: View {
     @Binding var items: [ClipboardItem]
     @ObservedObject var clipboardManager: ClipboardManager
     @ObservedObject var notesManager: QuickNotesManager
+    var onSwitchToNotes: (() -> Void)? = nil
     @State var searchText = ""
 
     var filteredItems: [ClipboardItem] {
@@ -66,10 +67,14 @@ struct ClipboardHistoryView: View {
                         clipboardManager.copyToClipboard(item)
                     }, onSaveAsNote: {
                         notesManager.addNote(item.content)
+                        onSwitchToNotes?()
                     })
                         .contextMenu {
                             Button("Copy", action: { clipboardManager.copyToClipboard(item) })
-                            Button("Save as Note", action: { notesManager.addNote(item.content) })
+                            Button("Save as Note", action: {
+                                notesManager.addNote(item.content)
+                                onSwitchToNotes?()
+                            })
                             Button("Delete", action: { clipboardManager.deleteItem(item) })
                                 .tint(.red)
                         }
