@@ -14,6 +14,8 @@ struct SettingsView: View {
     @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomHeight = 560.0
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
 
+    @StateObject private var justType = JustTypeSyncManager()
+
     @State var showClearConfirm = false
     @State var focusDimLevel = FocusModeManager.shared.overlayOpacity
     @State var focusBlurIntensity = FocusModeManager.shared.blurIntensity
@@ -250,6 +252,44 @@ SettingSection(title: "Clipboard") {
                             Spacer()
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                        }
+
+                        Divider().opacity(0.1)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("justtype")
+                                    .foregroundColor(.white.opacity(0.9))
+                                Text(justType.isConfigured ? "Connected" : "Not connected")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            Spacer()
+                            Image(systemName: justType.isConfigured ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(justType.isConfigured
+                                                 ? Color(red: 0.4, green: 0.85, blue: 1.0)
+                                                 : .white.opacity(0.25))
+                        }
+
+                        if justType.isConfigured {
+                            Button(action: { justType.disconnect() }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    Text("Log out of justtype")
+                                        .fontWeight(.medium)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .foregroundColor(.red.opacity(0.85))
+                                .font(.system(size: 12))
+                                .background(Color.red.opacity(0.08))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.red.opacity(0.15), lineWidth: 0.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     

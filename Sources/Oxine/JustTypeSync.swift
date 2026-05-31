@@ -5,6 +5,9 @@ import AuthenticationServices
 
 extension Notification.Name {
     static let notesDidChange = Notification.Name("notesDidChange")
+    /// Posted when justtype is connected or disconnected, so every JustTypeSyncManager
+    /// instance (Notes tab, Settings tab) re-reads its connection state from the keychain.
+    static let justTypeConnectionChanged = Notification.Name("justTypeConnectionChanged")
 }
 
 struct JustTypeCredentials: Codable {
@@ -525,9 +528,30 @@ final class JustTypeSyncManager: ObservableObject {
     private var authSession: ASWebAuthenticationSession?
     private let presentationContext = JustTypePresentationContext()
 
+    nonisolated(unsafe) private var connectionObserver: NSObjectProtocol?
+
     init() {
         isConfigured = Self.loadCredentials() != nil
         status = isConfigured ? "Ready to sync" : "Connect justtype"
+        // Keep this instance's connection state in sync with any other instance (e.g. logging
+        // out from Settings updates the Notes tab, and vice versa).
+        connectionObserver = NotificationCenter.default.addObserver(
+            forName: .justTypeConnectionChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.reloadConnectionState() }
+        }
+    }
+
+    deinit {
+        if let connectionObserver { NotificationCenter.default.removeObserver(connectionObserver) }
+    }
+
+    /// Re-derive connection state from the keychain (after a connect/disconnect elsewhere).
+    private func reloadConnectionState() {
+        let configured = Self.loadCredentials() != nil
+        guard configured != isConfigured else { return }
+        isConfigured = configured
+        status = configured ? "Ready to sync" : "Connect justtype"
     }
 
     static func loadCredentials() -> JustTypeCredentials? {
@@ -602,6 +626,7 @@ final class JustTypeSyncManager: ObservableObject {
                     Self.saveCredentials(creds)
                     self.isConfigured = true
                     self.status = "Signed in with justtype"
+                    NotificationCenter.default.post(name: .justTypeConnectionChanged, object: nil)
                 } catch {
                     self.status = error.localizedDescription
                 }
@@ -656,6 +681,7 @@ final class JustTypeSyncManager: ObservableObject {
         Keychain.delete(service: Self.service, account: Self.credentialsAccount)
         isConfigured = false
         status = "Connect justtype"
+        NotificationCenter.default.post(name: .justTypeConnectionChanged, object: nil)
     }
 
     /// Build an API client carrying this install's device public key (for `409 needs_device`

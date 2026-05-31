@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MainView: View {
     @StateObject var clipboardManager = ClipboardManager()
@@ -8,6 +9,11 @@ struct MainView: View {
     @State var isPinned: Bool = false
     @State var didStart = false
     @State private var slideForward = true
+    /// The panel owns the window size; the SwiftUI root is pinned to it with a *definite*
+    /// frame. Without this, `.frame(maxWidth:.infinity)` lets SwiftUI's NSHostingView resolve
+    /// an unbounded width against the screen and animate the window to a degenerate size,
+    /// which trips AppKit's Update-Constraints loop guard and crashes.
+    @State private var panelSize: CGSize = OxinePanelLayout.current
     var appDelegate: AppDelegate?
 
     /// Slide direction follows tab order: higher index enters from the right.
@@ -48,7 +54,7 @@ struct MainView: View {
                     .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.95)), removal: .opacity))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: panelSize.width, height: panelSize.height)
         .background(OxineGlassShell(tint: glassOpacity))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
@@ -76,6 +82,15 @@ struct MainView: View {
             if oldTab != 2 && newTab == 2 {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
+            panelSize = OxinePanelLayout.current
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
+            // Follow live custom drag-resizes so the content keeps filling the panel.
+            guard OxinePanelLayout.isResizable,
+                  let window = note.object as? NSWindow, window == appDelegate?.panel else { return }
+            panelSize = window.frame.size
         }
     }
 
