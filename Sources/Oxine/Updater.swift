@@ -20,7 +20,8 @@ import Sparkle
 final class UpdaterManager: ObservableObject {
     static let shared = UpdaterManager()
 
-    private let controller: SPUStandardUpdaterController
+    private let driver: OxineUpdaterDriver
+    private let updater: SPUUpdater
 
     /// Mirrors Sparkle's "can a check start right now" so the button disables
     /// itself while a check/download is already in flight.
@@ -28,14 +29,22 @@ final class UpdaterManager: ObservableObject {
 
     /// User-facing toggle for scheduled background checks (Sparkle persists it).
     @Published var automaticallyChecks: Bool {
-        didSet { controller.updater.automaticallyChecksForUpdates = automaticallyChecks }
+        didSet { updater.automaticallyChecksForUpdates = automaticallyChecks }
     }
 
     private init() {
-        controller = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-        automaticallyChecks = controller.updater.automaticallyChecksForUpdates
-        controller.updater.publisher(for: \.canCheckForUpdates)
+        // Custom user driver → Oxine's own dark update UI (see UpdaterUI.swift)
+        // instead of Sparkle's stock AppKit windows.
+        driver = OxineUpdaterDriver()
+        updater = SPUUpdater(hostBundle: .main, applicationBundle: .main,
+                             userDriver: driver, delegate: nil)
+        automaticallyChecks = updater.automaticallyChecksForUpdates
+        do {
+            try updater.start()
+        } catch {
+            log("updater failed to start: \(error.localizedDescription)")
+        }
+        updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
             .assign(to: &$canCheckForUpdates)
     }
@@ -44,6 +53,6 @@ final class UpdaterManager: ObservableObject {
     /// dialogs would otherwise open behind whatever's frontmost.
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
-        controller.updater.checkForUpdates()
+        updater.checkForUpdates()
     }
 }
