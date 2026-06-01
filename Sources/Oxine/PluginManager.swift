@@ -74,13 +74,13 @@ final class PluginManager: ObservableObject {
         } catch {
             return "Couldn't write plugin: \(error.localizedDescription)"
         }
-        reload()
+        scheduleReload()
         return nil
     }
 
     func delete(_ plugin: Plugin) {
         try? FileManager.default.removeItem(at: plugin.directory)
-        reload()
+        scheduleReload()
     }
 
     /// Import an existing plugin folder (must contain a manifest.json) by
@@ -106,7 +106,7 @@ final class PluginManager: ObservableObject {
         } catch {
             return "Couldn't import: \(error.localizedDescription)"
         }
-        reload()
+        scheduleReload()
         return nil
     }
 
@@ -142,6 +142,19 @@ final class PluginManager: ObservableObject {
     }
 
     // MARK: - Discovery
+
+    /// Coalesce reloads onto a later runloop tick. A single file operation (and
+    /// especially dragging a folder in) emits a *burst* of FS events; running
+    /// `reload()` synchronously for each — swapping the `@Published` array while
+    /// the grid is mid-render — re-enters SwiftUI's update and crashes. Debouncing
+    /// turns the burst into one clean update that lands between render passes.
+    private var reloadWork: DispatchWorkItem?
+    func scheduleReload() {
+        reloadWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.reload() }
+        reloadWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
 
     func reload() {
         let fm = FileManager.default
@@ -206,7 +219,7 @@ final class PluginManager: ObservableObject {
             queue: DispatchQueue.global(qos: .utility)
         )
         source.setEventHandler { [weak self] in
-            Task { @MainActor in self?.reload() }
+            Task { @MainActor in self?.scheduleReload() }
         }
         source.setCancelHandler { close(fd) }
         source.resume()

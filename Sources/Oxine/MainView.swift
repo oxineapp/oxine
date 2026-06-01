@@ -4,6 +4,7 @@ import AppKit
 struct MainView: View {
     @StateObject var clipboardManager = ClipboardManager()
     @StateObject var notesManager = QuickNotesManager()
+    @ObservedObject private var sous = SousManager.shared
     /// Observed so a tint change in Settings re-renders the whole tree and every
     /// computed `accent` picks up the new colour.
     @ObservedObject private var theme = ThemeManager.shared
@@ -99,9 +100,9 @@ struct MainView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            if activeTab != 4 {
+            if activeTab != settingsTab {
                 preSettingsTab = activeTab
-                switchTab(to: 4)
+                switchTab(to: settingsTab)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
@@ -123,12 +124,16 @@ struct MainView: View {
         }
     }
 
+    /// Settings lives after the content tabs (Notes 0, History 1, Auth 2,
+    /// Plugins 3, Sous 4) and is opened from the footer gear, not the tab bar.
+    private let settingsTab = 5
+
     func toggleSettings() {
-        if activeTab == 4 {
+        if activeTab == settingsTab {
             switchTab(to: preSettingsTab)
         } else {
             preSettingsTab = activeTab
-            switchTab(to: 4)
+            switchTab(to: settingsTab)
         }
     }
 
@@ -165,6 +170,8 @@ struct MainView: View {
                 case 3:
                     PluginsView(clipboardManager: clipboardManager, notesManager: notesManager)
                 case 4:
+                    SousView(sous: sous)
+                case 5:
                     VStack(spacing: 0) {
                         SettingsBackBar(onBack: { switchTab(to: preSettingsTab) })
                         SettingsView(showSetup: Binding(
@@ -183,7 +190,7 @@ struct MainView: View {
 
             FooterView(
                 isPinned: $isPinned,
-                isSettingsOpen: activeTab == 4,
+                isSettingsOpen: activeTab == settingsTab,
                 appDelegate: appDelegate,
                 onToggleSettings: toggleSettings
             )
@@ -251,7 +258,7 @@ struct OxineGlassShell: View {
     let tint: Double
     var body: some View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.28 + tint * 0.42))
+            .fill(Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.06 + tint * 0.46))
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
@@ -287,6 +294,7 @@ struct TabBar: View {
         ("clock.arrow.circlepath", "History", 1),
         ("lock.shield", "Auth", 2),
         ("puzzlepiece.extension", "Plugins", 3),
+        ("battery.100.bolt", "Sous", 4),
     ]
 
     var body: some View {

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- SMAppService daemon descriptor. Bundled at
+	     Oxine.app/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist
+	     and registered with SMAppService.daemon(plistName:). -->
+	<key>Label</key>
+	<string>com.oxine.soushelper</string>
+	<!-- Path to the daemon binary, relative to the app bundle. -->
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/com.oxine.soushelper</string>
+	<!-- Advertise the Mach service the app connects to. -->
+	<key>MachServices</key>
+	<dict>
+		<key>com.oxine.soushelper</key>
+		<true/>
+	</dict>
+	<!-- Run continuously so the charge limit is held even when the app is
+	     closed; relaunch if it ever exits. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.oxine.app</string>
+	</array>
+</dict>
+</plist>

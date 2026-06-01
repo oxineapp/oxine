@@ -26,6 +26,7 @@ DerivedData/
 !Oxine.app/Contents/Resources/**
 Oxine.app/Contents/MacOS/
 Oxine.app/Contents/Frameworks/
+Oxine.app/Contents/Library/
 Oxine.app/Contents/_CodeSignature/
 
 # Release output

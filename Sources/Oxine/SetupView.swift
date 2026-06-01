@@ -7,6 +7,10 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
+    /// Welcome, Editor, justtype, Sous. Last index = stepCount − 1.
+    static let stepCount = 4
+    private var lastStep: Int { SetupView.stepCount - 1 }
+
     /// Steps slide along the nav direction: Next enters from the right, Back from the left.
     private var stepTransition: AnyTransition {
         goingForward
@@ -20,7 +24,7 @@ struct SetupView: View {
         VStack(spacing: 0) {
             HStack {
                 HStack(spacing: 6) {
-                    ForEach(0..<3, id: \.self) { step in
+                    ForEach(0..<SetupView.stepCount, id: \.self) { step in
                         Capsule()
                             .fill(step <= currentStep ? Color.oxineAccent : Color.white.opacity(0.12))
                             .frame(height: 3)
@@ -50,8 +54,11 @@ struct SetupView: View {
                 } else if currentStep == 1 {
                     Step2Obsidian(isLoading: $isLoading)
                         .transition(stepTransition)
-                } else {
+                } else if currentStep == 2 {
                     Step3JustType()
+                        .transition(stepTransition)
+                } else {
+                    Step4Sous()
                         .transition(stepTransition)
                 }
             }
@@ -81,7 +88,7 @@ struct SetupView: View {
                 }
 
                 Button(action: {
-                    if currentStep < 2 {
+                    if currentStep < lastStep {
                         goingForward = true
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                             currentStep += 1
@@ -99,7 +106,7 @@ struct SetupView: View {
                                 .scaleEffect(0.7)
                                 .transition(.scale.combined(with: .opacity))
                         }
-                        Text(currentStep < 2 ? "Next" : "Finish")
+                        Text(currentStep < lastStep ? "Next" : "Finish")
                             .font(.system(size: 13, weight: .bold))
                             .transition(.opacity)
                     }
@@ -354,6 +361,108 @@ struct Step3JustType: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
+    }
+}
+
+/// Battery health setup — installs the privileged Sous helper (one admin
+/// prompt) so charging can be capped. Mirrors the setup flow in `SousView`, and
+/// degrades gracefully on Intel / battery-less Macs where Sous can't run.
+struct Step4Sous: View {
+    @ObservedObject private var sous = SousManager.shared
+    private var accent: Color { .oxineAccent }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bolt.heart.fill")
+                .font(.system(size: 36))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("Sous · Battery Health")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Cap how far your battery charges to slow long-term wear and keep it healthy.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                Text("OPTIONAL")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(.white.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .padding(.top, 2)
+            }
+
+            switch sous.helper.installState {
+            case .unsupported:
+                infoCard(text: BatteryReader.isAppleSilicon
+                         ? "No battery detected — Sous needs a MacBook battery to manage. You can skip this."
+                         : "Sous controls charging through Apple Silicon hardware and isn’t available on Intel Macs. You can skip this.")
+
+            case .installed:
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                    Text("Battery helper ready!")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Color.green.opacity(0.08))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
+                infoCard(text: "Open the Sous tab any time to set your charge limit, sailing range and heat protection.")
+
+            case .installing:
+                VStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Enter your Mac password in the prompt to install the helper. This happens once.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(11)
+                .background(Color.white.opacity(0.035))
+                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+
+            case .notInstalled, .failed:
+                infoCard(text: "Sous installs a small background helper that controls charging — macOS will ask for your password once to allow it.")
+                if case .failed(let msg) = sous.helper.installState {
+                    Text(msg)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(.orange.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
+                Button(action: { Task { await sous.helper.install(); sous.refreshNow() } }) {
+                    Text("Install battery helper")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .foregroundColor(accent)
+                        .background(accent.opacity(0.12))
+                        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+        .onAppear { sous.refreshNow() }
+    }
+
+    private func infoCard(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(0.65))
+            .lineSpacing(4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(11)
+            .background(Color.white.opacity(0.035))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

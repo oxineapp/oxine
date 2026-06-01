@@ -113,13 +113,22 @@ final class OrbitStatusView: NSView {
 
     // MARK: Colour (custom layers don't get the template auto-invert)
 
+    /// Sous tints the *bead* to signal charge state (green held, orange working)
+    /// while the ring keeps following the menu-bar appearance. nil = no tint.
+    private var sousTint: NSColor?
+
+    func setSousTint(_ color: NSColor?) {
+        sousTint = color
+        applyColor()
+    }
+
     override func viewDidChangeEffectiveAppearance() { applyColor() }
     private func applyColor() {
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let c = (dark ? NSColor.white : NSColor.black).cgColor
+        let base = (dark ? NSColor.white : NSColor.black).cgColor
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        ring.strokeColor = c
-        bead.fillColor = c
+        ring.strokeColor = base
+        bead.fillColor = (sousTint ?? (dark ? .white : .black)).cgColor
         CATransaction.commit()
     }
 

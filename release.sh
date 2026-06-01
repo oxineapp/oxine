@@ -7,13 +7,16 @@
 #   ./release.sh --universal  …as a universal (arm64+x86_64) binary (needs Xcode)
 #   ./release.sh --publish   …then create the GitHub release + push the appcast
 #
-# SIGNING — distribution is DIFFERENT from deploy.sh's local "Oxine Dev" cert:
-# we ad-hoc sign (`codesign -s -`). Ad-hoc has no cert and no Team ID, so the
-# binary's cdhash is identical for every user who downloads the same build —
-# which is exactly what makes the one-time keychain "Always Allow" stick (the
-# grant pins to cdhash). No Apple Developer ID / notarization (the author won't
-# pay / attach a name), so the FIRST download is quarantined → Gatekeeper blocks
-# launch once (right-click → Open, or `xattr -dr com.apple.quarantine`).
+# SIGNING — release builds are signed with the neutral self-signed "Oxine"
+# identity (CN=Oxine — no personal name, no Apple Developer ID). A *stable*
+# identity (vs the old ad-hoc `codesign -s -`) is what makes a one-time keychain
+# "Always Allow" stick across updates — the grant pins to the signing cert, not
+# the per-build cdhash — and gives the privileged battery helper a reliable
+# app↔daemon trust anchor. Only this machine holds the cert's private key, so
+# only the author can sign releases. It is NOT a Developer ID and NOT notarized,
+# so the FIRST download is quarantined → Gatekeeper blocks launch once
+# (right-click → Open, or `xattr -dr com.apple.quarantine`). To (re)create the
+# cert on a fresh machine see deploy.sh's trust step / the project README.
 #
 # AUTO-UPDATE — after that first launch the pain is over: Sparkle delivers every
 # later update from the .zip in the appcast, verifies it with our EdDSA key
@@ -50,10 +53,12 @@ if [ "$UNIVERSAL" = "1" ]; then
   echo "▸ building universal release (arm64 + x86_64)…"
   swift build -c release --arch arm64 --arch x86_64
   PRODUCT=".build/apple/Products/Release/Oxine"
+  HELPER=".build/apple/Products/Release/com.oxine.soushelper"
 else
   echo "▸ building native release ($(uname -m))…  (pass --universal with full Xcode for Intel too)"
   swift build -c release
   PRODUCT=".build/release/Oxine"
+  HELPER=".build/release/com.oxine.soushelper"
 fi
 
 # ── Assemble the .app ─────────────────────────────────────────────────────────
@@ -63,6 +68,12 @@ mkdir -p "$DIST"
 cp -R "$APP" "$DIST/$APP"
 cp "$PRODUCT" "$DIST/$APP/Contents/MacOS/Oxine"
 rm -rf "$DIST/$APP/Contents/_CodeSignature"   # drop the old local-dev signature
+
+# Sous battery daemon + its SMAppService LaunchDaemon descriptor.
+echo "▸ bundling Sous helper…"
+mkdir -p "$DIST/$APP/Contents/Library/LaunchDaemons"
+cp "$HELPER" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
+cp daemon/com.oxine.soushelper.plist "$DIST/$APP/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist"
 
 # Embed Sparkle.framework (a dynamic framework) and point the loader at
 # ../Frameworks. The SPM build's binary already carries an @loader_path rpath;
@@ -78,9 +89,23 @@ mkdir -p "$DIST/$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FW" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$DIST/$APP/Contents/MacOS/Oxine" 2>/dev/null || true
 
-echo "▸ ad-hoc signing…"
-codesign --force --sign - "$DIST/$APP/Contents/MacOS/Oxine"
-codesign --force --sign - "$DIST/$APP"
+SIGN_ID="Oxine"   # neutral self-signed identity (CN=Oxine); see SIGNING note above
+if ! security find-identity -v -p codesigning | grep -q "\"$SIGN_ID\""; then
+  echo "✗ '$SIGN_ID' is not a valid/trusted code-signing identity." >&2
+  echo "  Create it once (no personal name) with:" >&2
+  echo "    openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -keyout k.pem -out c.pem -subj '/CN=Oxine' \\" >&2
+  echo "      -addext 'extendedKeyUsage=critical,codeSigning' -addext 'keyUsage=critical,digitalSignature'" >&2
+  echo "    openssl pkcs12 -export -legacy -macalg sha1 -inkey k.pem -in c.pem -out o.p12 -passout pass:oxine -name Oxine" >&2
+  echo "    security import o.p12 -k ~/Library/Keychains/login.keychain-db -P oxine -T /usr/bin/codesign" >&2
+  echo "    security add-trusted-cert -r trustRoot -p codeSign -k ~/Library/Keychains/login.keychain-db c.pem" >&2
+  exit 1
+fi
+echo "▸ signing with '$SIGN_ID'…"
+# Inside-out: helper first (own identifier), then the main binary, then seal the
+# whole bundle.
+codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
+codesign --force --sign "$SIGN_ID" "$DIST/$APP/Contents/MacOS/Oxine"
+codesign --force --sign "$SIGN_ID" "$DIST/$APP"
 codesign --verify --deep --strict "$DIST/$APP" && echo "  ✓ signature valid"
 echo "  binary: $(lipo -archs "$DIST/$APP/Contents/MacOS/Oxine")"
 

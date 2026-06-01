@@ -40,6 +40,14 @@ swift build
 echo "▸ deploying binary…"
 cp .build/debug/Oxine Oxine.app/Contents/MacOS/Oxine
 
+# Sous battery daemon: the privileged helper + its SMAppService LaunchDaemon
+# descriptor. The helper lives in Contents/MacOS; the plist in
+# Contents/Library/LaunchDaemons (where SMAppService.daemon expects it).
+echo "▸ deploying Sous helper…"
+mkdir -p Oxine.app/Contents/Library/LaunchDaemons
+cp .build/debug/com.oxine.soushelper Oxine.app/Contents/MacOS/com.oxine.soushelper
+cp daemon/com.oxine.soushelper.plist Oxine.app/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist
+
 # Embed Sparkle.framework so the bundle can load it (the binary links it as
 # @rpath/Sparkle.framework). Copy only if missing; always (re)add the rpath
 # since the fresh binary ships with only @loader_path.
@@ -50,6 +58,8 @@ mkdir -p Oxine.app/Contents/Frameworks
 install_name_tool -add_rpath "@executable_path/../Frameworks" Oxine.app/Contents/MacOS/Oxine 2>/dev/null || true
 
 echo "▸ signing with '$SIGN_ID'…"
+# Inside-out: sign the helper first (its own identifier), then seal the app.
+codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" Oxine.app/Contents/MacOS/com.oxine.soushelper
 codesign --force --sign "$SIGN_ID" --identifier "$BUNDLE_ID" Oxine.app
 
 echo "▸ signature:"

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 func log(_ msg: String) {
     try? FileHandle.standardError.write(contentsOf: Data((msg + "\n").utf8))
@@ -56,6 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var closeReason = ""
     var isAuthVisible = false
     var isProgrammaticResize = false
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Carry settings/clipboard/setup state from the legacy com.menubar.*
@@ -73,6 +75,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         _ = UpdaterManager.shared
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
+        observeSous()
+    }
+
+    /// Tint the menu-bar bead from the live Sous charge state.
+    private func observeSous() {
+        SousManager.shared.$menuTint
+            .receive(on: RunLoop.main)
+            .sink { [weak self] tint in
+                let color: NSColor?
+                switch tint {
+                case .none:    color = nil
+                case .holding: color = .systemGreen
+                case .working: color = .systemOrange
+                }
+                self?.orbitView?.setSousTint(color)
+            }
+            .store(in: &cancellables)
     }
 
     private func setupMenuBar() {

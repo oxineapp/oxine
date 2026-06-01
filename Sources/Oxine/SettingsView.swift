@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
     @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
+    @ObservedObject private var sous = SousManager.shared
 
     @StateObject private var justType = JustTypeSyncManager()
     @ObservedObject private var theme = ThemeManager.shared
@@ -512,6 +513,10 @@ appearanceSection
                         
                     }
                     
+                    SettingSection(title: "Sous · Battery") {
+                        sousSettings
+                    }
+
                     SettingSection(title: "Software Update") {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle(isOn: $updater.automaticallyChecks) {
@@ -611,6 +616,85 @@ appearanceSection
             }
         } message: {
             Text("This cannot be undone. You'll confirm with Touch ID.")
+        }
+    }
+
+    @ViewBuilder private var sousSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if sous.helper.installState == .installed {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sailing range").foregroundColor(.white.opacity(0.85))
+                        Text("Let the charge drop this far below the limit before recharging — avoids constant micro-charging.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Stepper(value: Binding(get: { sous.config.sailingRange },
+                                           set: { sous.setSailing($0) }), in: 0...15) {
+                        Text("\(sous.config.sailingRange)%")
+                            .foregroundColor(.white.opacity(0.7)).font(.caption).monospacedDigit()
+                    }.fixedSize()
+                }
+                Divider().overlay(Color.white.opacity(0.06))
+                Toggle(isOn: Binding(get: { sous.config.heatProtectEnabled },
+                                     set: { sous.setHeatProtect($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Heat protection").foregroundColor(.white.opacity(0.85))
+                        Text("Pause charging when the battery runs hot.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                }.toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                if sous.config.heatProtectEnabled {
+                    HStack {
+                        Text("Max temperature").foregroundColor(.white.opacity(0.8))
+                        Spacer()
+                        Stepper(value: Binding(get: { sous.config.maxTempC },
+                                               set: { sous.setMaxTemp($0) }), in: 25...45, step: 1) {
+                            Text(String(format: "%.0f°C", sous.config.maxTempC))
+                                .foregroundColor(.white.opacity(0.7)).font(.caption).monospacedDigit()
+                        }.fixedSize()
+                    }
+                }
+                if sous.canControlLED {
+                    Divider().overlay(Color.white.opacity(0.06))
+                    Toggle(isOn: Binding(get: { sous.config.controlLED },
+                                         set: { sous.setControlLED($0) })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Control MagSafe LED").foregroundColor(.white.opacity(0.85))
+                            Text("Green when held at your limit, amber while charging toward it.")
+                                .font(.caption2).foregroundColor(.white.opacity(0.5))
+                        }
+                    }.toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                }
+                Divider().overlay(Color.white.opacity(0.06))
+                Button {
+                    Task { await sous.helper.install(); sous.refreshNow() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Reinstall / repair helper").fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .foregroundColor(Color.oxineAccent).font(.system(size: 12))
+                    .background(Color.oxineAccent.opacity(0.10)).cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.oxineAccent.opacity(0.2), lineWidth: 0.5))
+                }.buttonStyle(.plain)
+                Button {
+                    Task { await sous.helper.uninstall() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash")
+                        Text("Remove battery helper").fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .foregroundColor(.red.opacity(0.85)).font(.system(size: 12))
+                    .background(Color.red.opacity(0.08)).cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.red.opacity(0.18), lineWidth: 0.5))
+                }.buttonStyle(.plain)
+            } else {
+                Text("Open the Sous tab to set up battery charge control.")
+                    .font(.caption).foregroundColor(.white.opacity(0.5))
+            }
         }
     }
 }
