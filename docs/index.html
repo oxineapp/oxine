@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oxine — notes, clipboard & 2FA in your menu bar</title>
+<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, and scriptable plugins.">
+<style>
+  :root { --accent: #66D9FF; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #000;
+    color: #fff;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100%;
+    -webkit-font-smoothing: antialiased;
+    text-align: center;
+    padding: 48px 24px;
+  }
+  .wrap { max-width: 560px; }
+  .mark { width: 96px; height: 96px; margin: 0 auto 28px; display: block; opacity: 0.96; }
+  h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+  .tag { margin-top: 14px; font-size: 18px; color: rgba(255,255,255,0.55); }
+  .features { margin: 30px auto 36px; color: rgba(255,255,255,0.7); font-size: 15px; }
+  .features span { color: var(--accent); }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  a.btn {
+    text-decoration: none; font-weight: 600; font-size: 15px;
+    padding: 13px 26px; border-radius: 12px; transition: transform .12s ease, background .2s ease;
+    display: inline-block;
+  }
+  a.primary { background: var(--accent); color: #001018; }
+  a.primary:hover { transform: translateY(-2px); }
+  a.ghost { background: rgba(255,255,255,0.06); color: #fff; border: 1px solid rgba(255,255,255,0.12); }
+  a.ghost:hover { background: rgba(255,255,255,0.1); }
+  .note { margin-top: 26px; font-size: 13px; color: rgba(255,255,255,0.38); line-height: 1.7; }
+  .note code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 5px; font-size: 12px; }
+  footer { margin-top: 40px; font-size: 12px; color: rgba(255,255,255,0.3); }
+  footer a { color: rgba(255,255,255,0.5); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <svg class="mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Oxine">
+      <path d="M 47.037 16.129 A 34.0 34.0 0 1 1 22.149 30.498" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="33" cy="20.555" r="12" fill="#fff"/>
+    </svg>
+    <h1>Oxine</h1>
+    <p class="tag">Notes, clipboard history, and 2FA codes — one keystroke from your menu bar.</p>
+    <p class="features">
+      <span>Quick notes</span> &middot; <span>Clipboard history</span> &middot;
+      <span>Local TOTP</span> &middot; <span>Scriptable plugins</span> &middot; <span>Touch&nbsp;ID</span>
+    </p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/Sha-Dox/oxine/releases/latest">Download for macOS</a>
+      <a class="btn ghost" href="https://github.com/Sha-Dox/oxine">View source</a>
+    </div>
+    <p class="note">
+      First launch: right-click the app &rarr; <strong>Open</strong> (it's signed but not notarized by an
+      Apple Developer ID). After that, Oxine updates itself silently.<br>
+      Requires macOS&nbsp;26. Free &amp; open source under the GPL-3.0.
+    </p>
+    <footer>
+      Built with <a href="https://claude.com/claude-code">Claude Code</a> &middot;
+      Auto-updates via <a href="https://sparkle-project.org">Sparkle</a>
+    </footer>
+  </div>
+</body>
+</html>

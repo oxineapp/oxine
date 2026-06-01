@@ -19,9 +19,9 @@ enum OxinePanelSize: String, CaseIterable, Identifiable {
     /// Fixed dimensions for the preset, or nil for `.custom` (user-resized).
     var presetSize: CGSize? {
         switch self {
-        case .compact:  return CGSize(width: 360, height: 460)
-        case .standard: return CGSize(width: 380, height: 560)
-        case .tall:     return CGSize(width: 400, height: 660)
+        case .compact:  return CGSize(width: 380, height: 500)
+        case .standard: return CGSize(width: 440, height: 560)
+        case .tall:     return CGSize(width: 440, height: 660)
         case .custom:   return nil
         }
     }
@@ -36,6 +36,10 @@ enum OxinePanelLayout {
     static let minSize = CGSize(width: 300, height: 340)
     static let maxSize = CGSize(width: 560, height: 920)
     static let defaultCustom = CGSize(width: 380, height: 560)
+
+    /// Shared duration for preset resizes so the window (AppKit) and the content
+    /// (SwiftUI) animate in lockstep — otherwise the content snaps and looks jagged.
+    static let resizeDuration: TimeInterval = 0.34
 
     static let presetKey = "panelSizePreset"
     static let customWidthKey = "panelCustomWidth"

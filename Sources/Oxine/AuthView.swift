@@ -5,6 +5,8 @@ struct AuthView: View {
     @StateObject private var auth = AuthManager()
     @State private var message: String?
     @State private var showAddSecret = false
+    @State private var authing = false
+    private var accent: Color { .oxineAccent }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,16 +39,19 @@ struct AuthView: View {
     }
 
     private var lockedView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
+        VStack(spacing: 14) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 22))
-                .foregroundColor(.white.opacity(0.2))
-
-            Text("Authenticator Locked")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .font(.system(size: 34))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("Authenticator Locked")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Authenticate to view your codes.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
 
             if let err = auth.lastError {
                 Text(err)
@@ -57,27 +62,31 @@ struct AuthView: View {
             }
 
             Button(action: { auth.unlock() }) {
-                Label("Unlock with Touch ID", systemImage: "touchid")
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .foregroundColor(.white.opacity(0.7))
+                HStack(spacing: 6) {
+                    if authing {
+                        ProgressView().scaleEffect(0.6).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "touchid")
+                    }
+                    Text(authing ? "Authenticating…" : (auth.lastError != nil ? "Try Again" : "Unlock with Touch ID"))
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .foregroundColor(accent)
+                .background(Capsule().fill(accent.opacity(0.12)))
+                .overlay(Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5))
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(.white.opacity(0.12), lineWidth: 0.5)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(.white.opacity(0.04))
-                    )
-            )
-
-            Spacer()
+            .disabled(authing)
         }
-        .onAppear {
-            log("AuthView.lockedView.onAppear")
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .onReceive(NotificationCenter.default.publisher(for: .biometricWillBegin)) { _ in authing = true }
+        .onReceive(NotificationCenter.default.publisher(for: .biometricDidEnd)) { _ in authing = false }
+        .onAppear { log("AuthView.lockedView.onAppear") }
     }
 
     private var contentView: some View {
@@ -317,7 +326,7 @@ struct CountdownRing: View {
                 .stroke(.white.opacity(0.1), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: 1 - progress)
-                .stroke(remaining <= 5 ? Color.red.opacity(0.7) : Color(red: 0.4, green: 0.85, blue: 1.0),
+                .stroke(remaining <= 5 ? Color.red.opacity(0.7) : Color.oxineAccent,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(remaining)")
@@ -418,7 +427,7 @@ struct AddSecretView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .foregroundColor(Color.oxineAccent)
                 .disabled(!Base32.isValid(secretInput.trimmingCharacters(in: .whitespaces)))
             }
             .padding(.bottom, 12)

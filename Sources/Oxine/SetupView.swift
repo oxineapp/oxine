@@ -3,7 +3,18 @@ import SwiftUI
 struct SetupView: View {
     @State var currentStep = 0
     @State var isLoading = false
+    /// Tracks nav direction so Back slides opposite to Next.
+    @State private var goingForward = true
     var onComplete: () -> Void
+
+    /// Steps slide along the nav direction: Next enters from the right, Back from the left.
+    private var stepTransition: AnyTransition {
+        goingForward
+            ? .asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)),
+                          removal: .opacity.combined(with: .move(edge: .leading)))
+            : .asymmetric(insertion: .opacity.combined(with: .move(edge: .leading)),
+                          removal: .opacity.combined(with: .move(edge: .trailing)))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -11,9 +22,9 @@ struct SetupView: View {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { step in
                         Capsule()
-                            .fill(step <= currentStep ? Color(red: 0.4, green: 0.85, blue: 1.0) : Color.white.opacity(0.12))
+                            .fill(step <= currentStep ? Color.oxineAccent : Color.white.opacity(0.12))
                             .frame(height: 3)
-                            .shadow(color: Color(red: 0.4, green: 0.85, blue: 1.0).opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
+                            .shadow(color: Color.oxineAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
                             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
                     }
                 }
@@ -35,13 +46,13 @@ struct SetupView: View {
             VStack {
                 if currentStep == 0 {
                     Step1Welcome()
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
+                        .transition(stepTransition)
                 } else if currentStep == 1 {
                     Step2Obsidian(isLoading: $isLoading)
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
+                        .transition(stepTransition)
                 } else {
                     Step3JustType()
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity.combined(with: .move(edge: .leading))))
+                        .transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -49,6 +60,7 @@ struct SetupView: View {
             HStack(spacing: 12) {
                 if currentStep > 0 {
                     Button(action: {
+                        goingForward = false
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                             currentStep -= 1
                         }
@@ -58,6 +70,7 @@ struct SetupView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .foregroundColor(.white.opacity(0.8))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .background(
@@ -69,6 +82,7 @@ struct SetupView: View {
 
                 Button(action: {
                     if currentStep < 2 {
+                        goingForward = true
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                             currentStep += 1
                         }
@@ -91,11 +105,12 @@ struct SetupView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.15))
+                        .fill(Color.oxineAccent.opacity(0.15))
                 )
                 .disabled(isLoading)
                 .scaleEffect(isLoading ? 0.98 : 1.0)
@@ -114,7 +129,7 @@ struct Step1Welcome: View {
         VStack(spacing: 14) {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 38))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .foregroundColor(Color.oxineAccent)
             VStack(spacing: 6) {
                 Text("Welcome to MenuBar")
                     .font(.system(size: 20, weight: .bold))
@@ -128,7 +143,7 @@ struct Step1Welcome: View {
             VStack(alignment: .leading, spacing: 9) {
                 FeatureRow(icon: "clipboard", title: "Clipboard History", desc: "Save up to 200 items")
                 FeatureRow(icon: "note.text", title: "Quick Notes", desc: "Capture ideas instantly")
-                FeatureRow(icon: "brain.fill", title: "Obsidian Sync", desc: "Auto-sync to your vault")
+                FeatureRow(icon: "doc.text", title: "Markdown Notes", desc: "Open in any editor you like")
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.03)))
@@ -146,22 +161,39 @@ struct Step2Obsidian: View {
     @Binding var isLoading: Bool
     @State var isSetup = false
     @State var errorMessage: String?
+    /// Re-read NotesEditor when the choice changes (Obsidian section appears/disappears).
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) private var editorBundleID = ""
+    private var accent: Color { .oxineAccent }
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "brain.fill")
-                .font(.system(size: 38))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+            Group {
+                if let icon = NotesEditor.appIcon() {
+                    Image(nsImage: icon).resizable().frame(width: 40, height: 40)
+                } else {
+                    Image(systemName: "doc.text").font(.system(size: 36)).foregroundColor(accent)
+                }
+            }
             VStack(spacing: 6) {
-                Text("Obsidian Integration")
+                Text("Your Editor")
                     .font(.system(size: 19, weight: .bold))
-                    .fontWeight(.bold)
                     .foregroundColor(.white)
-                Text("Sync your notes to Obsidian automatically")
+                Text("Notes are plain Markdown — open them in any app you like.")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
+
+            EditorChip()
+
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles").font(.system(size: 9))
+                Text("Obsidian has extended support — vault, tags & deep links.")
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(accent.opacity(0.85))
+            .multilineTextAlignment(.center)
+
             if let error = errorMessage {
                 Text(error)
                     .font(.system(size: 11, weight: .medium))
@@ -173,43 +205,51 @@ struct Step2Obsidian: View {
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.15), lineWidth: 0.5))
             }
-            if isSetup {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                    Text("Obsidian vault ready!")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(Color.green.opacity(0.08))
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
-            } else {
-                Button(action: setupObsidian) {
+
+            // Obsidian gets the extra vault treatment; other editors need nothing.
+            if NotesEditor.isObsidian {
+                if isSetup {
                     HStack {
-                        if isLoading { ProgressView().scaleEffect(0.7) }
-                        else { Image(systemName: "checkmark.circle") }
-                        Text("Auto-Setup Obsidian").fontWeight(.semibold)
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                        Text("Obsidian vault ready!")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
                     }
-                    .font(.system(size: 12, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 9)
-                    .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                    .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.12))
+                    .background(Color.green.opacity(0.08))
                     .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.25), lineWidth: 0.5))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
+                } else {
+                    Button(action: setupObsidian) {
+                        HStack {
+                            if isLoading { ProgressView().scaleEffect(0.7) }
+                            else { Image(systemName: "checkmark.circle") }
+                            Text("Auto-Setup Obsidian Vault").fontWeight(.semibold)
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .foregroundColor(accent)
+                        .background(accent.opacity(0.12))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent.opacity(0.25), lineWidth: 0.5))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoading)
                 }
-                .buttonStyle(.plain)
-                .disabled(isLoading)
             }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("What happens:")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
                     .textCase(.uppercase).tracking(0.5)
-                Text("Creates ~/Documents/MenuBar Notes and opens it as an Obsidian vault.")
+                Text(NotesEditor.isObsidian
+                     ? "Notes live in ~/Documents/MenuBar Notes, opened as an Obsidian vault with tags and metadata."
+                     : "Notes live in ~/Documents/MenuBar Notes as clean .md files, opened in \(NotesEditor.displayName).")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.65))
                     .lineSpacing(4)
@@ -250,7 +290,7 @@ struct Step3JustType: View {
         VStack(spacing: 12) {
             Image(systemName: "cloud.fill")
                 .font(.system(size: 36))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .foregroundColor(Color.oxineAccent)
             VStack(spacing: 6) {
                 Text("justtype Sync")
                     .font(.system(size: 19, weight: .bold))
@@ -260,6 +300,14 @@ struct Step3JustType: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
+                Text("RECOMMENDED")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(Color.oxineAccent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.oxineAccent.opacity(0.15)))
+                    .padding(.top, 2)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -278,16 +326,17 @@ struct Step3JustType: View {
             .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
 
             VStack(spacing: 7) {
-                Button(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Connected" : "Connect justtype")) {
-                    sync.signIn()
+                Button(action: { sync.signIn() }) {
+                    Text(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Connected" : "Connect justtype"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .foregroundColor(Color.oxineAccent)
+                        .background(Color.oxineAccent.opacity(0.1))
+                        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
-                .background(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.1))
-                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
                 .disabled(sync.isSigningIn || sync.isConfigured)
 
                 Text(sync.status)
@@ -310,7 +359,7 @@ struct FeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .foregroundColor(Color.oxineAccent)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)

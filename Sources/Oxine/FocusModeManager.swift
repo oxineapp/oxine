@@ -11,7 +11,8 @@ class FocusModeManager: ObservableObject {
     private var visualEffectViews: [NSVisualEffectView] = []
     private var dimViews: [NSView] = []
     private var observers: [Any] = []
-    private var mouseMonitor: Any?
+    private var pollTimer: Timer?
+    private var lastFrontNumber: Int?
 
     var overlayOpacity: CGFloat {
         get { CGFloat(UserDefaults.standard.object(forKey: "focusOverlayOpacity") as? Double ?? 0.3) }
@@ -71,7 +72,10 @@ class FocusModeManager: ObservableObject {
             window.isOpaque = false
             window.backgroundColor = .clear
             window.ignoresMouseEvents = true
-            window.collectionBehavior = [.transient, .fullScreenNone, .ignoresCycle]
+            // Must persist across Spaces and stay put regardless of which app is
+            // active — this is a background dimmer, not a helper panel. `.transient`
+            // would hide it when Oxine deactivates, which is exactly when we need it.
+            window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenNone, .ignoresCycle]
             window.level = .normal
             window.title = ""
 
@@ -125,14 +129,24 @@ class FocusModeManager: ObservableObject {
         dimViews.removeAll()
     }
 
+    /// Re-stack the existing overlays just beneath whatever window is now
+    /// frontmost, but only when that window actually changed. Cheap reorder — no
+    /// teardown/rebuild — so the live dim/blur views (and their slider
+    /// animations) survive, there's no flicker, and we never thrash the z-order
+    /// when focus hasn't moved. The overlays stay visible no matter which app is
+    /// active.
     private func refreshOverlays() {
-        guard NSApp.isActive else {
-            for w in overlayWindows { w.alphaValue = 0 }
+        guard !overlayWindows.isEmpty else { return }
+        let frontNumber = frontmostWindowNumber()
+        guard frontNumber != lastFrontNumber else { return }
+        lastFrontNumber = frontNumber
+        guard let frontNumber else {
+            for window in overlayWindows { window.orderFront(nil) }
             return
         }
-        for w in overlayWindows { w.alphaValue = 1 }
-        removeOverlays()
-        createOverlays()
+        for window in overlayWindows {
+            window.order(.below, relativeTo: frontNumber)
+        }
     }
 
     private func adjustBlur() {
@@ -157,9 +171,14 @@ class FocusModeManager: ObservableObject {
     }
 
     private func frontmostWindowNumber() -> Int? {
+        // Exclude our own process — the overlay windows are also layer-0 and would
+        // otherwise be picked as "frontmost", stacking the dimmer against itself.
+        let myPID = Int(ProcessInfo.processInfo.processIdentifier)
         let options = CGWindowListOption([.excludeDesktopElements, .optionOnScreenOnly])
         guard let info = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: Any]] else { return nil }
-        let normalWindows = info.filter { ($0["kCGWindowLayer"] as? Int) == 0 }
+        let normalWindows = info.filter {
+            ($0["kCGWindowLayer"] as? Int) == 0 && ($0["kCGWindowOwnerPID"] as? Int) != myPID
+        }
         guard let front = normalWindows.first else { return nil }
         return front["kCGWindowNumber"] as? Int
     }
@@ -170,13 +189,20 @@ class FocusModeManager: ObservableObject {
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(
             nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.refreshOverlays()
+                MainActor.assumeIsolated { self?.refreshOverlays() }
             }
         )
 
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] _ in
-            self?.refreshOverlays()
+        // The activation notification can arrive a beat after the new window is
+        // already on screen — long enough to flash the previous, un-dimmed app
+        // during Cmd-Tab / Dock switches. Poll the frontmost window frequently and
+        // re-stack only on change to close that gap. Runs in `.common` mode so it
+        // keeps firing during scroll/resize tracking.
+        let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshOverlays() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     private func stopMonitoring() {
@@ -184,9 +210,8 @@ class FocusModeManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         observers.removeAll()
-        if let monitor = mouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseMonitor = nil
-        }
+        pollTimer?.invalidate()
+        pollTimer = nil
+        lastFrontNumber = nil
     }
 }

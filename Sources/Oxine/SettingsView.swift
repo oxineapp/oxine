@@ -13,12 +13,26 @@ struct SettingsView: View {
     @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomWidth = 380.0
     @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomHeight = 560.0
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
+    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.menubar.settings")) var requireClipboardAuth = false
+    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.menubar.settings")) var requireNotesAuth = false
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) var notesEditorBundleID = ""
 
     @StateObject private var justType = JustTypeSyncManager()
+    @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var updater = UpdaterManager.shared
+
+    /// Single source of truth for the displayed version — reads the bundle so it
+    /// can never drift from what ships (and what Sparkle compares against).
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
 
     @State var showClearConfirm = false
     @State var focusDimLevel = FocusModeManager.shared.overlayOpacity
     @State var focusBlurIntensity = FocusModeManager.shared.blurIntensity
+    @State private var obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured
+    @State private var obsidianIntegrating = false
+    @State private var obsidianError: String?
 
     /// Selecting a preset switches to it. Re-clicking the already-active Custom
     /// toggles its lock (lock icon shown); a fresh switch to Custom starts unlocked.
@@ -35,7 +49,93 @@ struct SettingsView: View {
         }
         NotificationCenter.default.post(name: .panelSizeChanged, object: nil)
     }
-    
+
+    /// One-click Obsidian integration from the Integrations pill — same auto-setup
+    /// the onboarding tour runs.
+    private func integrateObsidian() {
+        guard !obsidianIntegrating else { return }
+        obsidianError = nil
+        obsidianIntegrating = true
+        ObsidianVaultManager.shared.createVaultInObsidian { success, message in
+            DispatchQueue.main.async {
+                obsidianIntegrating = false
+                if success {
+                    obsidianConfigured = true
+                } else {
+                    obsidianError = message
+                }
+            }
+        }
+    }
+
+    /// A toggle binding that requires Touch ID before changing — in *either*
+    /// direction, so a lock can't be turned off (or on) without authenticating.
+    /// On Macs without biometrics, `confirmWithBiometrics` passes through.
+    private func biometricGate(_ stored: Binding<Bool>, feature: String) -> Binding<Bool> {
+        Binding(
+            get: { stored.wrappedValue },
+            set: { newValue in
+                guard newValue != stored.wrappedValue else { return }
+                confirmWithBiometrics(reason: "\(newValue ? "Enable" : "Disable") the Touch ID lock for \(feature)") { ok in
+                    if ok { stored.wrappedValue = newValue }
+                }
+            }
+        )
+    }
+
+    private var appearanceSection: some View {
+        SettingSection(title: "Appearance") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Accent tint")
+                    .foregroundColor(.white.opacity(0.85))
+                Text("Colors buttons, highlights, and the default for new plugins.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.5))
+
+                HStack(spacing: 10) {
+                    // Auto chip — follows the macOS system accent, live.
+                    Button(action: { theme.setMode(ThemeManager.systemSentinel) }) {
+                        ZStack {
+                            Circle().fill(Color(nsColor: .controlAccentColor))
+                            Image(systemName: "a.circle")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        .frame(width: 24, height: 24)
+                        .overlay(Circle().stroke(.white, lineWidth: theme.isSystem ? 2 : 0))
+                        .help("Match macOS accent color")
+                    }
+                    .buttonStyle(.plain)
+
+                    Rectangle().fill(.white.opacity(0.1)).frame(width: 1, height: 20)
+
+                    ForEach(PluginPalette.swatches, id: \.self) { hex in
+                        Button(action: { theme.setMode(hex) }) {
+                            Circle().fill(Color(hex: hex)).frame(width: 24, height: 24)
+                                .overlay(Circle().stroke(.white, lineWidth: (!theme.isSystem && theme.mode == hex) ? 2 : 0))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var notesSection: some View {
+        SettingSection(title: "Notes") {
+            Toggle(isOn: biometricGate($requireNotesAuth, feature: "notes")) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Require Touch ID")
+                        .foregroundColor(.white.opacity(0.85))
+                    Text("Lock notes behind biometrics")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
+            .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             ScrollView {
@@ -43,7 +143,7 @@ struct SettingsView: View {
                     Button(action: { showSetup = true }) {
                         HStack {
                             Image(systemName: "wand.and.stars")
-                                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                                .foregroundColor(Color.oxineAccent)
                             Text("Re-run Setup")
                                 .font(.system(size: 13, weight: .medium))
                             Spacer()
@@ -88,7 +188,7 @@ struct SettingsView: View {
                                     .font(.caption)
                             }
                             Slider(value: $glassOpacity, in: 0.0...1.0, step: 0.02)
-                                .tint(Color(red: 0.4, green: 0.85, blue: 1.0))
+                                .tint(Color.oxineAccent)
                         }
                     }
 
@@ -115,7 +215,7 @@ struct SettingsView: View {
                                         .background(
                                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                                 .fill(isActive
-                                                      ? Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.14)
+                                                      ? Color.oxineAccent.opacity(0.14)
                                                       : Color.white.opacity(0.04))
                                         )
                                         .overlay(
@@ -148,7 +248,11 @@ struct SettingsView: View {
                         }
                     }
 
-SettingSection(title: "Clipboard") {
+appearanceSection
+
+                    notesSection
+
+                    SettingSection(title: "Clipboard") {
                         HStack {
                             Text("Max items to store")
                                 .foregroundColor(.white.opacity(0.8))
@@ -161,10 +265,24 @@ SettingSection(title: "Clipboard") {
                             }
                             .frame(width: 80)
                         }
-                        
+
                         Divider()
                             .opacity(0.1)
-                        
+
+                        Toggle(isOn: biometricGate($requireClipboardAuth, feature: "clipboard history")) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Require Touch ID")
+                                    .foregroundColor(.white.opacity(0.85))
+                                Text("Lock clipboard history behind biometrics")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+
+                        Divider()
+                            .opacity(0.1)
+
                         Button(action: { showClearConfirm = true }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "trash.fill")
@@ -215,7 +333,7 @@ SettingSection(title: "Clipboard") {
                                     .font(.caption)
                             }
                             Slider(value: $focusDimLevel, in: 0.0...0.8, step: 0.05)
-                                .tint(Color(red: 0.4, green: 0.85, blue: 1.0))
+                                .tint(Color.oxineAccent)
                                 .onChange(of: focusDimLevel) { _, newValue in
                                     FocusModeManager.shared.overlayOpacity = newValue
                                 }
@@ -233,7 +351,7 @@ SettingSection(title: "Clipboard") {
                                     .font(.caption)
                             }
                             Slider(value: $focusBlurIntensity, in: 0.0...1.0, step: 0.05)
-                                .tint(Color(red: 0.4, green: 0.85, blue: 1.0))
+                                .tint(Color.oxineAccent)
                                 .onChange(of: focusBlurIntensity) { _, newValue in
                                     FocusModeManager.shared.blurIntensity = newValue
                                 }
@@ -241,17 +359,43 @@ SettingSection(title: "Clipboard") {
                     }
 
                     SettingSection(title: "Integrations") {
-                        HStack {
+                        VStack(alignment: .leading, spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Obsidian")
+                                Text("Text editor")
                                     .foregroundColor(.white.opacity(0.9))
-                                Text("~/Documents/MenuBar Notes")
+                                Text("Opens your .md notes")
                                     .font(.caption2)
                                     .foregroundColor(.white.opacity(0.5))
                             }
-                            Spacer()
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                            EditorChip()
+
+                            // Obsidian-only: vault registration for the full experience.
+                            if NotesEditor.isObsidian {
+                                if obsidianConfigured {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(Color.oxineAccent)
+                                            .font(.system(size: 12))
+                                        Text("Obsidian vault ready")
+                                            .font(.caption2)
+                                            .foregroundColor(.white.opacity(0.6))
+                                    }
+                                } else {
+                                    HStack {
+                                        Text("Set up the Obsidian vault")
+                                            .font(.caption2)
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Spacer()
+                                        IntegrateButton(isLoading: obsidianIntegrating, action: integrateObsidian)
+                                    }
+                                }
+                                if let obsidianError {
+                                    Text(obsidianError)
+                                        .font(.caption2)
+                                        .foregroundColor(.orange.opacity(0.9))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
                         }
 
                         Divider().opacity(0.1)
@@ -260,15 +404,17 @@ SettingSection(title: "Clipboard") {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("justtype")
                                     .foregroundColor(.white.opacity(0.9))
-                                Text(justType.isConfigured ? "Connected" : "Not connected")
+                                Text(justType.isConfigured ? "Connected" : "Recommended · not connected")
                                     .font(.caption2)
                                     .foregroundColor(.white.opacity(0.5))
                             }
                             Spacer()
-                            Image(systemName: justType.isConfigured ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(justType.isConfigured
-                                                 ? Color(red: 0.4, green: 0.85, blue: 1.0)
-                                                 : .white.opacity(0.25))
+                            if justType.isConfigured {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(Color.oxineAccent)
+                            } else {
+                                IntegrateButton(isLoading: justType.isSigningIn) { justType.signIn() }
+                            }
                         }
 
                         if justType.isConfigured {
@@ -307,13 +453,49 @@ SettingSection(title: "Clipboard") {
                         
                     }
                     
+                    SettingSection(title: "Software Update") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle(isOn: $updater.automaticallyChecks) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Check for updates automatically")
+                                        .foregroundColor(.white.opacity(0.85))
+                                    Text("Updates are signed and verified, then installed in place.")
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.5))
+                                }
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+
+                            Button(action: { updater.checkForUpdates() }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                    Text("Check for Updates")
+                                        .fontWeight(.medium)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .foregroundColor(Color.oxineAccent)
+                                .font(.system(size: 12))
+                                .background(Color.oxineAccent.opacity(0.10))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.oxineAccent.opacity(0.22), lineWidth: 0.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!updater.canCheckForUpdates)
+                            .opacity(updater.canCheckForUpdates ? 1 : 0.5)
+                        }
+                    }
+
                     SettingSection(title: "About") {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("Version")
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
-                                Text("2.2.0")
+                                Text(appVersion)
                                     .foregroundColor(.white.opacity(0.5))
                                     .font(.caption)
                             }
@@ -322,7 +504,7 @@ SettingSection(title: "Clipboard") {
                                 Text("App Name")
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
-                                Text("MenuBar")
+                                Text("Oxine")
                                     .foregroundColor(.white.opacity(0.5))
                                     .font(.caption)
                             }
@@ -344,14 +526,115 @@ SettingSection(title: "Clipboard") {
                 .padding(8)
             }
         }
+        .onAppear { obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured }
         .alert("Clear all history?", isPresented: $showClearConfirm) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                clipboardManager.clearHistory()
+                confirmWithBiometrics(reason: "Confirm clearing all clipboard history") { ok in
+                    if ok { clipboardManager.clearHistory() }
+                }
             }
         } message: {
-            Text("This cannot be undone.")
+            Text("This cannot be undone. You'll confirm with Touch ID.")
         }
+    }
+}
+
+/// Shows the app that opens the user's `.md` notes (its icon + name) with a
+/// Change button to pick any other app. Shared by onboarding and Settings.
+struct EditorChip: View {
+    /// Bound to the same key NotesEditor stores under, so a pick re-renders us.
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) private var editorBundleID = ""
+    private var accent: Color { .oxineAccent }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Group {
+                if let icon = NotesEditor.appIcon() {
+                    Image(nsImage: icon).resizable().frame(width: 22, height: 22)
+                } else {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.6))
+                        .frame(width: 22, height: 22)
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(NotesEditor.displayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                Text(NotesEditor.selectedBundleID == nil ? "System default for .md" : "Your choice")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.45))
+            }
+            Spacer()
+            if NotesEditor.selectedBundleID != nil {
+                Button(action: {
+                    NotesEditor.resetToDefault()
+                    editorBundleID = ""
+                }) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Use the system default")
+            }
+            Button("Change") {
+                // Pin the panel open while the (modal) app chooser is up, else
+                // resignActive/global-click dismisses it mid-selection.
+                let delegate = AppDelegate.instance
+                delegate?.isAuthenticating = true
+                _ = NotesEditor.pickApp()
+                editorBundleID = NotesEditor.selectedBundleID ?? ""
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    delegate?.isAuthenticating = false
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(accent.opacity(0.12)))
+            .overlay(Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.06), lineWidth: 0.5))
+    }
+}
+
+/// Compact one-click "Integrate" pill shown on an integration row that isn't set
+/// up yet. Whole pill is tappable (explicit content shape).
+struct IntegrateButton: View {
+    var isLoading: Bool
+    let action: () -> Void
+    private var accent: Color { .oxineAccent }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if isLoading {
+                    ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
+                } else {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 11, weight: .semibold))
+                }
+                Text(isLoading ? "Integrating…" : "Integrate")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(accent.opacity(0.12)))
+            .overlay(Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
     }
 }
 
@@ -371,6 +654,7 @@ struct SettingSection<Content: View>: View {
             VStack(alignment: .leading, spacing: 12) {
                 content()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

@@ -11,6 +11,7 @@ extension Notification.Name {
     static let biometricWillBegin = Notification.Name("biometricWillBegin")
     static let biometricDidEnd = Notification.Name("biometricDidEnd")
     static let authTabActivated = Notification.Name("authTabActivated")
+    static let clipboardCaptured = Notification.Name("clipboardCaptured")
 }
 
 @main
@@ -34,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     static weak var instance: AppDelegate?
 
     var statusItem: NSStatusItem?
+    var orbitView: OrbitStatusView?
     var panel: KeyablePanel?
     var monitor: Any?
     var globalMonitor: Any?
@@ -51,18 +53,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         setupEventMonitoring()
         setupBiometricObservers()
         setupSizeObserver()
+        // Start Sparkle (background update checks on its own schedule). The
+        // singleton must be touched once so it stays alive for the app's life.
+        _ = UpdaterManager.shared
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
     }
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: 28)
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "Clipboard")
-            button.image?.size = NSSize(width: 16, height: 16)
+            // The animated orbit mark, hosted as a layer-backed subview. It
+            // ignores hit-testing so the button still handles the click.
+            button.image = nil
+            button.title = ""
+            let orbit = OrbitStatusView(frame: button.bounds)
+            orbit.autoresizingMask = [.width, .height]
+            button.addSubview(orbit)
+            orbitView = orbit
             button.action = #selector(togglePanel)
             button.target = self
+
+            // A genuine external copy → the bead does a quick spin.
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(clipboardCaptured),
+                name: .clipboardCaptured, object: nil)
         }
 
         let initial = OxinePanelLayout.current
@@ -140,8 +156,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let top = frame.maxY
         frame.size = size
         frame.origin.y = top - size.height
-        panel.setFrame(frame, display: true, animate: true)
-        isProgrammaticResize = false
+        // Eased, fixed-duration resize that matches the SwiftUI content's
+        // animation (OxinePanelLayout.resizeDuration) so they move together
+        // instead of the AppKit default fighting the content's snap.
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = OxinePanelLayout.resizeDuration
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            ctx.allowsImplicitAnimation = true
+            panel.animator().setFrame(frame, display: true)
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.isProgrammaticResize = false }
+        }
     }
 
     /// Persist user drag-resizes when the Custom preset is active.
@@ -238,6 +263,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    @objc private func clipboardCaptured() { orbitView?.playCopy() }
+
     @objc func togglePanel() {
         guard let panel else { return }
         log("togglePanel isVisible=\(panel.isVisible) pinned=\(isPinned)")
@@ -265,6 +292,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
         panel.makeKeyAndOrderFront(nil)
+        orbitView?.setPanelOpen(true)
 
         panelJustOpened = true
         panelJustOpenedTimer?.cancel()
@@ -282,6 +310,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panelJustOpened = false
         NotificationCenter.default.post(name: .popoverWillClose, object: nil)
         panel?.orderOut(nil as Any?)
+        orbitView?.setPanelOpen(false)
     }
 
     func setPinned(_ pinned: Bool) {

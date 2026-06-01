@@ -264,13 +264,66 @@ enum JustTypeDeviceKey {
     static let tag = "com.oxine.justtype.devicekey".data(using: .utf8)!
     static let keyScheme = "rsa-oaep-sha256"
 
-    /// The persistent device private key, generating + storing it on first call.
+    // The key bytes now live INSIDE the consolidated vault (one keychain item,
+    // one grant) rather than as a standalone `kSecClassKey` with its own ACL.
+    // At runtime we rebuild an *in-memory* SecKey from those bytes — an ephemeral
+    // key has no keychain ACL, so it never triggers a per-use access prompt. This
+    // is what stopped the "Oxine wants to access key" storm (the slate sync signs
+    // ~19 times; the standalone key prompted on every one). See the keychain
+    // no-prompt strategy memo.
+    private static let vaultService = "JustTypeDeviceKey"
+    private static let vaultAccount = "private_key_pkcs1"
+
+    // Reconstructed key cached for the process so repeated sync ops don't re-read
+    // the vault. Guarded like the other mutable statics under Swift 6.
+    nonisolated(unsafe) private static var cached: SecKey?
+    private static let lock = NSLock()
+
+    /// The persistent device private key. Order of resolution:
+    /// 1. cached in memory · 2. bytes in the vault · 3. one-time migration of the
+    /// legacy standalone keychain key · 4. generate fresh and store the bytes.
     static func privateKey() throws -> SecKey {
-        if let existing = load() { return existing }
-        return try generate()
+        lock.lock(); defer { lock.unlock() }
+        if let cached { return cached }
+
+        // 2. From the vault — the silent, no-prompt path.
+        if let data = Keychain.get(service: vaultService, account: vaultAccount),
+           let key = makeKey(fromPKCS1: data) {
+            cached = key
+            return key
+        }
+
+        // 3. Migrate the legacy standalone key: export its bytes once (this is the
+        // last prompt the user should ever see for it), stash them in the vault,
+        // then delete the standalone item so it can't prompt again.
+        if let legacy = loadLegacy() {
+            if let data = SecKeyCopyExternalRepresentation(legacy, nil) as Data? {
+                Keychain.set(data, service: vaultService, account: vaultAccount)
+                deleteLegacy()
+                let key = makeKey(fromPKCS1: data) ?? legacy
+                cached = key
+                return key
+            }
+            cached = legacy
+            return legacy
+        }
+
+        // 4. First run ever: generate, persist the bytes (NOT as a permanent
+        // keychain key), and reconstruct in memory.
+        return try generateAndStore()
     }
 
-    private static func load() -> SecKey? {
+    /// Rebuild a SecKey from PKCS#1 RSA private-key bytes, in memory only.
+    private static func makeKey(fromPKCS1 data: Data) -> SecKey? {
+        let attrs: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+        ]
+        return SecKeyCreateWithData(data as CFData, attrs as CFDictionary, nil)
+    }
+
+    /// The pre-consolidation key, if it still exists as a standalone item.
+    private static func loadLegacy() -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: tag,
@@ -282,20 +335,30 @@ enum JustTypeDeviceKey {
         return (item as! SecKey)
     }
 
-    private static func generate() throws -> SecKey {
+    private static func deleteLegacy() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: tag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+    private static func generateAndStore() throws -> SecKey {
+        // No kSecAttrIsPermanent → the key is NOT written to the keychain; we own
+        // its lifetime and persist the bytes in the vault ourselves.
         let attrs: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecAttrKeySizeInBits as String: 2048,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: tag,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-            ],
         ]
         var error: Unmanaged<CFError>?
         guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &error) else {
             throw error?.takeRetainedValue() as Error? ?? JustTypeCryptoError.badPrivateKey
         }
+        if let data = SecKeyCopyExternalRepresentation(key, &error) as Data? {
+            Keychain.set(data, service: vaultService, account: vaultAccount)
+        }
+        cached = key
         return key
     }
 
@@ -566,7 +629,7 @@ final class JustTypeSyncManager: ObservableObject {
     nonisolated(unsafe) private var connectionObserver: NSObjectProtocol?
 
     init() {
-        isConfigured = Self.loadCredentials() != nil
+        isConfigured = Self.hasCredentials()
         status = isConfigured ? "Ready to sync" : "Connect justtype"
         // Keep this instance's connection state in sync with any other instance (e.g. logging
         // out from Settings updates the Notes tab, and vice versa).
@@ -583,10 +646,17 @@ final class JustTypeSyncManager: ObservableObject {
 
     /// Re-derive connection state from the keychain (after a connect/disconnect elsewhere).
     private func reloadConnectionState() {
-        let configured = Self.loadCredentials() != nil
+        let configured = Self.hasCredentials()
         guard configured != isConfigured else { return }
         isConfigured = configured
         status = configured ? "Ready to sync" : "Connect justtype"
+    }
+
+    /// Prompt-free "is justtype connected?" — checks the keychain item exists
+    /// without decrypting it, so it never triggers the access prompt and never
+    /// reports false just because the user dismissed a prompt.
+    static func hasCredentials() -> Bool {
+        Keychain.exists(service: service, account: credentialsAccount)
     }
 
     static func loadCredentials() -> JustTypeCredentials? {
@@ -717,7 +787,20 @@ final class JustTypeSyncManager: ObservableObject {
     }
 
     private func currentCredentials() async throws -> JustTypeCredentials {
-        guard var creds = Self.loadCredentials() else {
+        var creds: JustTypeCredentials
+        switch Keychain.read(service: Self.service, account: Self.credentialsAccount) {
+        case .success(let data):
+            guard let decoded = try? JSONDecoder().decode(JustTypeCredentials.self, from: data) else {
+                throw NSError(domain: "JustType", code: 0, userInfo: [NSLocalizedDescriptionKey: "Connect justtype"])
+            }
+            creds = decoded
+        case .denied, .failure:
+            // The item is there but access was blocked (denied prompt / locked
+            // keychain). Stay connected — don't masquerade as signed out — and
+            // tell the user how to recover.
+            throw NSError(domain: "JustType", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Keychain access needed — tap Sync and choose Allow"])
+        case .notFound:
             throw NSError(domain: "JustType", code: 0, userInfo: [NSLocalizedDescriptionKey: "Connect justtype"])
         }
         if creds.expiresAt.timeIntervalSinceNow > 60 { return creds }
@@ -767,8 +850,8 @@ final class JustTypeSyncManager: ObservableObject {
     /// `wrapped_key` + `enc_title`, so we decrypt real titles inline with zero extra requests — no
     /// per-slate fetch, no rate-limit storm. Content is still pulled lazily, only for opened notes.
     func refresh() async {
-        guard let notesManager, Self.loadCredentials() != nil else {
-            if Self.loadCredentials() == nil { status = "Connect justtype" }
+        guard let notesManager, Self.hasCredentials() else {
+            if !Self.hasCredentials() { status = "Connect justtype" }
             return
         }
         guard !isSyncing else { return }
@@ -881,8 +964,8 @@ final class JustTypeSyncManager: ObservableObject {
 
     /// Push local edits for tracked notes that are delegated to us (have a slate number).
     func pushEdits() async {
-        guard let notesManager, Self.loadCredentials() != nil, !isSyncing else {
-            log("[JustType] pushEdits skipped (bound=\(notesManager != nil) creds=\(Self.loadCredentials() != nil) syncing=\(isSyncing))")
+        guard let notesManager, Self.hasCredentials(), !isSyncing else {
+            log("[JustType] pushEdits skipped (bound=\(notesManager != nil) creds=\(Self.hasCredentials()) syncing=\(isSyncing))")
             return
         }
         isSyncing = true
@@ -923,7 +1006,7 @@ final class JustTypeSyncManager: ObservableObject {
     /// from the moment it exists. The content key is wrapped to both the user and the app, so the
     /// note is immediately editable here — no drop / pending-adoption / browser-rewrap detour.
     func addToJustType(note: QuickNote) async {
-        guard Self.loadCredentials() != nil else { status = "Connect justtype"; return }
+        guard Self.hasCredentials() else { status = "Connect justtype"; return }
         guard !isTracked(note.id) else { return }
         isSyncing = true
         defer { isSyncing = false }
@@ -979,8 +1062,8 @@ final class JustTypeSyncManager: ObservableObject {
             NoteOpener.open(note, notesManager: notesManager)
             return
         }
-        guard let slateNumber = item.slateNumber, Self.loadCredentials() != nil else {
-            status = Self.loadCredentials() == nil ? "Connect justtype" : "This note isn\u{2019}t available yet"
+        guard let slateNumber = item.slateNumber, Self.hasCredentials() else {
+            status = !Self.hasCredentials() ? "Connect justtype" : "This note isn\u{2019}t available yet"
             return
         }
         // Published slates are public plaintext — materialize directly, no decryption.
@@ -1045,7 +1128,7 @@ final class JustTypeSyncManager: ObservableObject {
     /// stop tracking, and let the note fall back into the normal notes section.
     func unsync(_ item: JustTypeTrackedSlate) async {
         do {
-            if let slateNumber = item.slateNumber, Self.loadCredentials() != nil {
+            if let slateNumber = item.slateNumber, Self.hasCredentials() {
                 let credentials = try await currentCredentials()
                 let api = try makeAPI(credentials)
                 try await api.deleteSlate(slateNumber)

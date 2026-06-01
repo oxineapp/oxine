@@ -166,16 +166,21 @@ struct ClipboardItemRow: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white.opacity(0.4))
                 }
-                if isHovered, let onSaveAsNote {
+                // Always reserve the button's slot (constant row height) and just
+                // fade it in on hover — inserting/removing it changed the row's
+                // height and made hovering jitter.
+                if let onSaveAsNote {
                     Button(action: onSaveAsNote) {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 11))
                             .foregroundColor(.white.opacity(0.35))
-                            .frame(width: 28, height: 28)
+                            .frame(width: 22, height: 18)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("Save as note")
+                    .opacity(isHovered ? 1 : 0)
+                    .allowsHitTesting(isHovered)
                 }
             }
             .padding(8)
@@ -192,7 +197,9 @@ struct ClipboardItemRow: View {
             .opacity(isDeleting ? 0 : 1)
             .scaleEffect(isDeleting ? 0.85 : 1)
         }
-        .onHover { hovering in isHovered = hovering }
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
+        }
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in

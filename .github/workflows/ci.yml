@@ -1,0 +1,27 @@
+name: CI
+
+# Compile-checks every push and PR. This is the "CI" half only — it does NOT
+# build the signed .app, DMG, or appcast. Releases are cut locally with
+# `./release.sh --publish` so the Sparkle EdDSA private key never leaves the
+# maintainer's Keychain (no signing secret in CI by design).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Oxine targets the macOS 26 SDK (Liquid Glass APIs), so it needs a runner
+    # image that ships that SDK.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version && xcodebuild -version
+      - name: Build
+        run: swift build

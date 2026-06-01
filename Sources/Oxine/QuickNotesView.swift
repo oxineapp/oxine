@@ -5,6 +5,10 @@ struct NotesView: View {
     @StateObject var justTypeSync = JustTypeSyncManager()
     @State var noteText = ""
     @FocusState var isFocused: Bool
+    /// Single force-click handler shared across rows — opens the hovered note.
+    @State private var forceOpen = NoteForceOpen()
+    /// Drag-a-note-onto-justtype state, shared between rows and the justtype pane.
+    @StateObject private var dragUpload = DragUploadState()
 
     var sortedNotes: [QuickNote] {
         notesManager.notes.sorted { a, b in
@@ -24,11 +28,16 @@ struct NotesView: View {
             VStack(spacing: 10) {
                 writingCard
                 savedNotesList
-                JustTypeNotesSection(sync: justTypeSync, notesManager: notesManager)
+                JustTypeNotesSection(sync: justTypeSync, notesManager: notesManager, dragUpload: dragUpload)
             }
             .padding(10)
         }
-        .onAppear { justTypeSync.bind(notesManager: notesManager) }
+        .onAppear {
+            justTypeSync.bind(notesManager: notesManager)
+            forceOpen.notesManager = notesManager
+            forceOpen.start()
+        }
+        .onDisappear { forceOpen.stop() }
         .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
             isFocused = true
         }
@@ -107,7 +116,12 @@ struct NotesView: View {
                         notesManager.pinNote(note)
                     }, onOpenInObsidian: {
                         NoteOpener.open(note, notesManager: notesManager)
-                    })
+                    }, onHoverChanged: { hovering in
+                        if hovering { forceOpen.hoveredId = note.id }
+                        else if forceOpen.hoveredId == note.id { forceOpen.hoveredId = nil }
+                    }, onUploadToJustType: {
+                        Task { await justTypeSync.addToJustType(note: note) }
+                    }, dragUpload: dragUpload)
                     .contextMenu {
                         Button("Open") { NoteOpener.open(note, notesManager: notesManager) }
                         if justTypeSync.isConfigured {
@@ -127,22 +141,23 @@ struct NotesView: View {
 struct JustTypeNotesSection: View {
     @ObservedObject var sync: JustTypeSyncManager
     @ObservedObject var notesManager: QuickNotesManager
+    @ObservedObject var dragUpload: DragUploadState
     @State private var showConnect = false
+    /// Brief confirmation tick shown when a sync finishes (dots collapse into it).
+    @State private var showSyncedCheck = false
+    private let syncAccent = Color.oxineAccent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "cloud")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.35))
                 Text("justtype")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white.opacity(0.45))
                 Spacer()
-                if sync.isSyncing {
-                    ProgressView()
-                        .scaleEffect(0.55)
-                        .frame(width: 14, height: 14)
+                if sync.isSyncing || showSyncedCheck {
+                    SyncMatrix(color: syncAccent, isDone: !sync.isSyncing && showSyncedCheck)
+                        .padding(.trailing, 10)
+                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
                 }
                 Button(sync.isConfigured ? "Sync" : "Connect") {
                     if sync.isConfigured {
@@ -153,9 +168,11 @@ struct JustTypeNotesSection: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.9))
+                .foregroundColor(Color.oxineAccent.opacity(0.9))
                 .disabled(sync.isSyncing)
             }
+            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: sync.isSyncing)
+            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: showSyncedCheck)
 
             if !sync.status.isEmpty {
                 Text(sync.status)
@@ -185,6 +202,40 @@ struct JustTypeNotesSection: View {
                 .fill(Color.white.opacity(0.035))
         )
         .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+        // Track this pane's global frame so rows can hit-test the drag location.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { dragUpload.dropZoneFrame = geo.frame(in: .global) }
+                    .onChange(of: geo.frame(in: .global)) { _, frame in dragUpload.dropZoneFrame = frame }
+            }
+        )
+        // Drop affordance shown while a note is being dragged toward this pane.
+        .overlay {
+            if dragUpload.draggingNoteId != nil {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(syncAccent.opacity(dragUpload.isOverDrop ? 0.16 : 0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                            .foregroundColor(syncAccent.opacity(dragUpload.isOverDrop ? 0.95 : 0.5))
+                    )
+                    .overlay(
+                        VStack(spacing: 5) {
+                            Image(systemName: "arrow.down.doc.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(dragUpload.isOverDrop ? "Release to upload" : "Drop here to upload to justtype")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(syncAccent)
+                        .scaleEffect(dragUpload.isOverDrop ? 1.05 : 1.0)
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: dragUpload.draggingNoteId)
+        .animation(.easeInOut(duration: 0.15), value: dragUpload.isOverDrop)
         .sheet(isPresented: $showConnect) {
             JustTypeConnectView(sync: sync, isPresented: $showConnect)
         }
@@ -193,6 +244,14 @@ struct JustTypeNotesSection: View {
         // network + decode work on the slide's first frames (the tab-switch stutter). Auto-sync
         // happens on panel open (popoverDidShow) instead, which is bind-safe below.
         .onAppear { sync.bind(notesManager: notesManager) }
+        .onChange(of: sync.isSyncing) { wasSyncing, nowSyncing in
+            // Dots collapse into a checkmark when a sync completes, then it fades.
+            guard wasSyncing, !nowSyncing else { return }
+            showSyncedCheck = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                if !sync.isSyncing { showSyncedCheck = false }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
             // A local edit landed; push tracked notes (don't re-pull the whole list).
             guard sync.isConfigured, !sync.isSyncing else { return }
@@ -266,23 +325,28 @@ struct JustTypeItemRow: View {
     }
 }
 
-/// Opens a note in Obsidian when it's installed, otherwise falls back to TextEdit on the .md file.
+/// Opens a note in the user's chosen editor (see `NotesEditor`). Obsidian gets
+/// the `obsidian://` deep link so it opens inside the vault; any other app just
+/// opens the `.md` file directly.
 enum NoteOpener {
     static func open(_ note: QuickNote, notesManager: QuickNotesManager) {
-        let vaultName = "MenuBar Notes"
         let fileName = note.filename.isEmpty ? note.id.uuidString : note.filename
-        if obsidianInstalled,
-           let encodedVault = vaultName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let encodedFile = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let url = URL(string: "obsidian://open?vault=\(encodedVault)&file=\(encodedFile)") {
+        guard let fileURL = notesManager.noteFileURL(filename: fileName) else { return }
+        // Obsidian: open by absolute path. The `path` form lets Obsidian resolve
+        // which registered vault owns the file, avoiding the "Vault not found"
+        // failure you get when the vault name in the URL isn't registered.
+        if NotesEditor.isObsidian, obsidianInstalled,
+           let encodedPath = fileURL.path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: "obsidian://open?path=\(encodedPath)") {
+            // Make sure the vault is registered so Obsidian can resolve the path.
+            ObsidianVaultManager.shared.registerVaultInConfig()
             NSWorkspace.shared.open(url)
             return
         }
-        guard let fileURL = notesManager.noteFileURL(filename: note.filename) else { return }
-        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
-        if FileManager.default.fileExists(atPath: textEdit.path) {
-            NSWorkspace.shared.open([fileURL], withApplicationAt: textEdit, configuration: NSWorkspace.OpenConfiguration())
+        if let appURL = NotesEditor.resolvedAppURL() {
+            NSWorkspace.shared.open([fileURL], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
         } else {
+            // No resolvable app — let macOS open it with whatever handles .md.
             NSWorkspace.shared.open(fileURL)
         }
     }
@@ -326,7 +390,7 @@ struct JustTypeConnectView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(red: 0.4, green: 0.85, blue: 1.0))
+                .foregroundColor(Color.oxineAccent)
                 .disabled(sync.isSigningIn)
             }
 
@@ -347,13 +411,17 @@ struct NoteItemRow: View {
     let onDelete: () -> Void
     let onPin: () -> Void
     let onOpenInObsidian: () -> Void
+    var onHoverChanged: (Bool) -> Void = { _ in }
+    var onUploadToJustType: () -> Void = { }
+    @ObservedObject var dragUpload: DragUploadState
     @State var offsetX: CGFloat = 0
+    @State var offsetY: CGFloat = 0
+    var isDraggingUpload: Bool { dragUpload.draggingNoteId == note.id }
     @State var isHovered = false
     @State var copied = false
     @State var isDeleting = false
     @State var holdProgress: Double = 0
     @State var holdTimer: Timer?
-    @State var forceTouchMonitor: Any?
     @State var forceTouchFlag = ForceTouchFlag()
 
     var swipeThreshold: CGFloat { 70 }
@@ -390,7 +458,7 @@ struct NoteItemRow: View {
                 if holdTimer != nil {
                     Circle()
                         .trim(from: 0, to: holdProgress)
-                        .stroke(Color(red: 0.4, green: 0.85, blue: 1.0), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .stroke(Color.oxineAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .frame(width: 16, height: 16)
                         .transition(.opacity)
@@ -423,35 +491,35 @@ struct NoteItemRow: View {
                         Color.white.opacity(isHovered ? 0.08 : 0.03)
                     )
             )
-            .offset(x: offsetX)
-            .opacity(isDeleting ? 0 : 1)
-            .scaleEffect(isDeleting ? 0.85 : 1)
+            .offset(x: offsetX, y: offsetY)
+            .scaleEffect(isDeleting ? 0.85 : (isDraggingUpload ? 1.04 : 1))
+            .shadow(color: .black.opacity(isDraggingUpload ? 0.35 : 0), radius: isDraggingUpload ? 10 : 0, y: isDraggingUpload ? 5 : 0)
+            .opacity(isDeleting ? 0 : (isDraggingUpload ? 0.92 : 1))
         }
-        .onHover { hovering in isHovered = hovering }
-        .onAppear {
-            let flag = forceTouchFlag
-            let action = onOpenInObsidian
-            forceTouchMonitor = NSEvent.addLocalMonitorForEvents(matching: [.pressure]) { event in
-                if event.stage == 2 {
-                    flag.wasForceTouched = true
-                    Task { @MainActor in action() }
-                }
-                return event
-            }
-        }
-        .onDisappear {
-            if let monitor = forceTouchMonitor {
-                NSEvent.removeMonitor(monitor)
-            }
+        .onHover { hovering in
+            isHovered = hovering
+            onHoverChanged(hovering)
         }
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
                     let t = value.translation
                     let dist = hypot(t.width, t.height)
 
                     if forceTouchFlag.wasForceTouched {
                         cancelHold()
+                        return
+                    }
+
+                    // Vertical drag → "drag to justtype" mode. Sticky once started
+                    // so wiggling toward the pane doesn't drop back into a swipe.
+                    if dragUpload.draggingNoteId == note.id || (abs(t.height) > abs(t.width) && abs(t.height) > 22) {
+                        cancelHold()
+                        // Lift the row and let it follow the cursor for real feedback.
+                        offsetX = t.width
+                        offsetY = t.height
+                        dragUpload.draggingNoteId = note.id
+                        dragUpload.isOverDrop = dragUpload.dropZoneFrame.contains(value.location)
                         return
                     }
 
@@ -478,6 +546,21 @@ struct NoteItemRow: View {
                     if forceTouchFlag.wasForceTouched {
                         forceTouchFlag.wasForceTouched = false
                         cancelHold()
+                        return
+                    }
+
+                    // Finish a drag-to-justtype: upload if released over the pane.
+                    if dragUpload.draggingNoteId == note.id {
+                        let didDrop = dragUpload.isOverDrop
+                        dragUpload.draggingNoteId = nil
+                        dragUpload.isOverDrop = false
+                        cancelHold()
+                        if didDrop { onUploadToJustType() }
+                        // Spring the lifted row back into place.
+                        withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15)) {
+                            offsetX = 0
+                            offsetY = 0
+                        }
                         return
                     }
 
@@ -541,6 +624,51 @@ struct NoteItemRow: View {
 
 class ForceTouchFlag {
     var wasForceTouched = false
+}
+
+/// Shared state for dragging a local note onto the justtype pane to upload it.
+/// `dropZoneFrame` is the justtype section's global frame (captured via a
+/// GeometryReader); rows compare the drag's global location against it.
+@MainActor
+final class DragUploadState: ObservableObject {
+    @Published var draggingNoteId: UUID?
+    @Published var isOverDrop = false
+    var dropZoneFrame: CGRect = .zero
+}
+
+/// One app-level Force Touch (deep-press) monitor for the whole notes list.
+/// Opens whichever note is currently hovered — so a force-click opens exactly
+/// that note, not all of them (the old per-row monitors all fired at once).
+final class NoteForceOpen: @unchecked Sendable {
+    var hoveredId: UUID?
+    weak var notesManager: QuickNotesManager?
+    private var monitor: Any?
+    private var armed = true   // one open per deep-press
+
+    func start() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.pressure]) { [weak self] event in
+            guard let self else { return event }
+            if event.stage >= 2 {
+                if self.armed {
+                    self.armed = false
+                    if let id = self.hoveredId,
+                       let nm = self.notesManager,
+                       let note = nm.notes.first(where: { $0.id == id }) {
+                        NoteOpener.open(note, notesManager: nm)
+                    }
+                }
+            } else {
+                self.armed = true
+            }
+            return event
+        }
+    }
+
+    func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
 }
 
 class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
@@ -668,12 +796,24 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func formatNoteFile(_ note: QuickNote) -> String {
+        // Obsidian gets its flavored frontmatter (tags etc.); every other editor
+        // gets clean Markdown with only the minimal `id` we need to keep note
+        // identity stable across rescans (pins + justtype tracking key on it).
+        if NotesEditor.isObsidian {
+            return """
+            ---
+            id: \(note.id.uuidString)
+            tags:
+              - menubar
+              - quick-note
+            ---
+
+            \(note.content)
+            """
+        }
         return """
         ---
         id: \(note.id.uuidString)
-        tags:
-          - menubar
-          - quick-note
         ---
 
         \(note.content)
@@ -812,5 +952,101 @@ struct QuickNote: Identifiable {
         self.content = content
         self.timestamp = timestamp
         self.isPinned = isPinned
+    }
+}
+
+/// justtype "syncing" indicator: a 5×4 grid of cyan cells whose sizes flicker
+/// fluidly-but-abruptly at semi-random — reads like work is happening. When the
+/// sync finishes the cells collapse and a bare checkmark strokes itself in (no
+/// circular outline).
+struct SyncMatrix: View {
+    var color: Color
+    var isDone: Bool
+
+    private let cols = 5
+    private let rows = 4
+    private let cell: CGFloat = 2.2     // dot size at full scale
+    private let gap: CGFloat = 1.8
+
+    @State private var scales: [CGFloat]
+    @State private var checkProgress: CGFloat = 0
+    private let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+
+    init(color: Color, isDone: Bool) {
+        self.color = color
+        self.isDone = isDone
+        // Start collapsed so the grid grows in fluidly rather than popping.
+        _scales = State(initialValue: Array(repeating: 0, count: 20))
+    }
+
+    private var gridWidth: CGFloat { CGFloat(cols) * cell + CGFloat(cols - 1) * gap }
+    private var gridHeight: CGFloat { CGFloat(rows) * cell + CGFloat(rows - 1) * gap }
+
+    var body: some View {
+        ZStack {
+            // Dot matrix — fades out as the check draws in.
+            VStack(spacing: gap) {
+                ForEach(0..<rows, id: \.self) { r in
+                    HStack(spacing: gap) {
+                        ForEach(0..<cols, id: \.self) { c in
+                            let i = r * cols + c
+                            RoundedRectangle(cornerRadius: 0.7, style: .continuous)
+                                .fill(color)
+                                .frame(width: cell, height: cell)
+                                .scaleEffect(scales[i])
+                                .opacity(0.3 + 0.7 * scales[i])
+                        }
+                    }
+                }
+            }
+            .opacity(1 - checkProgress)
+
+            // Bare checkmark, stroked in on completion.
+            Checkmark()
+                .trim(from: 0, to: checkProgress)
+                .stroke(color, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+                .frame(width: gridWidth, height: gridHeight)
+        }
+        .frame(width: gridWidth, height: gridHeight)
+        .onAppear {
+            guard !isDone else { return }
+            // Fluid grow-in from the collapsed initial state.
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                for i in scales.indices { scales[i] = CGFloat.random(in: 0.3...1.0) }
+            }
+        }
+        .onReceive(timer) { _ in
+            guard !isDone else { return }
+            // Re-roll most cells each tick; the eased spring gives the
+            // "fluid but abruptish" computing feel.
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
+                for i in scales.indices where Int.random(in: 0..<3) != 0 {
+                    scales[i] = CGFloat.random(in: 0.25...1.0)
+                }
+            }
+        }
+        .onChange(of: isDone) { _, done in
+            if done {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+                    checkProgress = 1
+                    for i in scales.indices { scales[i] = 0 }
+                }
+            } else {
+                checkProgress = 0
+                for i in scales.indices { scales[i] = CGFloat.random(in: 0.3...1.0) }
+            }
+        }
+    }
+}
+
+/// Two-segment checkmark with no enclosing circle. Drawn within its frame so it
+/// can be `.trim`-animated.
+struct Checkmark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.55))
+        p.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.minY + rect.height * 0.82))
+        p.addLine(to: CGPoint(x: rect.minX + rect.width * 0.92, y: rect.minY + rect.height * 0.18))
+        return p
     }
 }

@@ -4,6 +4,9 @@ import AppKit
 struct MainView: View {
     @StateObject var clipboardManager = ClipboardManager()
     @StateObject var notesManager = QuickNotesManager()
+    /// Observed so a tint change in Settings re-renders the whole tree and every
+    /// computed `accent` picks up the new colour.
+    @ObservedObject private var theme = ThemeManager.shared
     @State var activeTab: Int = 0
     @State var showSetup = SetupManager.shared.isFirstLaunch
     @State var isPinned: Bool = false
@@ -34,6 +37,16 @@ struct MainView: View {
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.menubar.settings")) var glassOpacity = 0.7
     @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.menubar.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
+    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.menubar.settings")) var requireClipboardAuth = false
+    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.menubar.settings")) var requireNotesAuth = false
+
+    /// Per-session unlock for tabs that require Touch ID. Reset whenever the user
+    /// navigates away, so each visit re-authenticates.
+    @State private var clipboardUnlocked = false
+    @State private var notesUnlocked = false
+    /// The content tab to return to when leaving Settings (which is opened from
+    /// the footer gear rather than living in the tab bar).
+    @State private var preSettingsTab = 0
 
     /// The corner grip shows only when the panel is actually drag-resizable.
     var showResizeGrip: Bool { panelSizePreset == OxinePanelSize.custom.rawValue && !panelCustomLocked }
@@ -79,38 +92,80 @@ struct MainView: View {
         .onChange(of: activeTab) { oldTab, newTab in
             slideForward = newTab > oldTab
             appDelegate?.isAuthVisible = (newTab == 2)
+            if newTab != 1 { clipboardUnlocked = false }
+            if newTab != 0 { notesUnlocked = false }
             if oldTab != 2 && newTab == 2 {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
-            panelSize = OxinePanelLayout.current
+            // Match the window's eased resize (see AppDelegate.applyPanelSize) so
+            // the content frame tracks the window instead of snapping ahead of it.
+            withAnimation(.easeInOut(duration: OxinePanelLayout.resizeDuration)) {
+                panelSize = OxinePanelLayout.current
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
             // Follow live custom drag-resizes so the content keeps filling the panel.
+            // Skip while a preset change is animating the window — otherwise this
+            // snaps the content frame to each animation tick and fights the eased
+            // `panelSizeChanged` animation (the preset→custom jump).
             guard OxinePanelLayout.isResizable,
+                  appDelegate?.isProgrammaticResize == false,
                   let window = note.object as? NSWindow, window == appDelegate?.panel else { return }
             panelSize = window.frame.size
         }
     }
 
+    func toggleSettings() {
+        if activeTab == 4 {
+            switchTab(to: preSettingsTab)
+        } else {
+            preSettingsTab = activeTab
+            switchTab(to: 4)
+        }
+    }
+
     var mainContent: some View {
         VStack(spacing: 0) {
-            TabBar(activeTab: activeTab, onSelect: switchTab, isPinned: $isPinned, appDelegate: appDelegate)
+            TabBar(activeTab: activeTab, onSelect: switchTab, appDelegate: appDelegate)
 
             Group {
                 switch activeTab {
                 case 0:
-                    NotesView(notesManager: notesManager)
+                    if requireNotesAuth && !notesUnlocked {
+                        BiometricLockView(
+                            title: "Notes Locked",
+                            subtitle: "Authenticate to view your notes.",
+                            reason: "Unlock to view your notes",
+                            onUnlock: { notesUnlocked = true }
+                        )
+                    } else {
+                        NotesView(notesManager: notesManager)
+                    }
                 case 1:
-                    ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: 0) })
+                    if requireClipboardAuth && !clipboardUnlocked {
+                        BiometricLockView(
+                            title: "Clipboard Locked",
+                            subtitle: "Authenticate to view your clipboard history.",
+                            reason: "Unlock to view your clipboard history",
+                            onUnlock: { clipboardUnlocked = true }
+                        )
+                    } else {
+                        ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: 0) })
+                    }
                 case 2:
                     AuthView()
                 case 3:
-                    SettingsView(showSetup: Binding(
-                        get: { showSetup },
-                        set: { showSetup = $0 }
-                    ), clipboardManager: clipboardManager)
+                    PluginsView(clipboardManager: clipboardManager, notesManager: notesManager)
+                case 4:
+                    VStack(spacing: 0) {
+                        SettingsBackBar(onBack: { switchTab(to: preSettingsTab) })
+                        SettingsView(showSetup: Binding(
+                            get: { showSetup },
+                            set: { showSetup = $0 }
+                        ), clipboardManager: clipboardManager)
+                    }
                 default:
                     EmptyView()
                 }
@@ -120,9 +175,39 @@ struct MainView: View {
             .transition(contentTransition)
             .scrollEdgeFade()
 
-            FooterView()
+            FooterView(
+                isPinned: $isPinned,
+                isSettingsOpen: activeTab == 4,
+                appDelegate: appDelegate,
+                onToggleSettings: toggleSettings
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Thin header shown above Settings (which now opens from the footer gear, not a
+/// tab) giving an explicit way back to wherever you were.
+struct SettingsBackBar: View {
+    let onBack: () -> Void
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: onBack) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Settings")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white.opacity(0.85))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
     }
 }
 
@@ -184,66 +269,66 @@ extension View {
 struct TabBar: View {
     var activeTab: Int
     var onSelect: (Int) -> Void
-    @Binding var isPinned: Bool
     var appDelegate: AppDelegate?
     var isAuthLocked: Bool { activeTab == 2 && (appDelegate?.isAuthenticating ?? false) }
     @Namespace private var tabAnimation
-    @State private var focusEnabled = FocusModeManager.shared.isEnabled
-    /// Collapse tab labels to icons when the panel gets too narrow to fit text.
-    @State private var compact = false
+    /// Natural width of the labelled row, measured once by a hidden probe. The
+    /// only measured value; the available width comes free from the layout.
+    @State private var labeledWidth: CGFloat = 0
+
+    /// Only content tabs now — utilities (focus/pin) and Settings moved to the
+    /// footer so the top bar is pure navigation and can breathe.
+    private let tabs: [(icon: String, title: String, index: Int)] = [
+        ("square.and.pencil", "Notes", 0),
+        ("clock.arrow.circlepath", "History", 1),
+        ("lock.shield", "Auth", 2),
+        ("puzzlepiece.extension", "Plugins", 3),
+    ]
+
     var body: some View {
-        HStack(spacing: compact ? 4 : 2) {
-            TabBarItem(icon: "square.and.pencil", title: "Notes", isActive: activeTab == 0, compact: compact, namespace: tabAnimation) {
-                guard !isAuthLocked else { return }
-                onSelect(0)
-            }
-            TabBarItem(icon: "clock.arrow.circlepath", title: "History", isActive: activeTab == 1, compact: compact, namespace: tabAnimation) {
-                guard !isAuthLocked else { return }
-                onSelect(1)
-            }
-            TabBarItem(icon: "lock.shield", title: "Auth", isActive: activeTab == 2, compact: compact, namespace: tabAnimation) {
-                onSelect(2)
-            }
-            TabBarItem(icon: "gearshape", title: "Settings", isActive: activeTab == 3, compact: compact, namespace: tabAnimation) {
-                guard !isAuthLocked else { return }
-                onSelect(3)
-            }
-            Spacer(minLength: 0)
-            Button(action: {
-                FocusModeManager.shared.toggle()
-                focusEnabled = FocusModeManager.shared.isEnabled
-            }) {
-                Image(systemName: focusEnabled ? "moon.fill" : "moon")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(focusEnabled ? 0.6 : 0.25))
-                    .padding(6)
-            }
-            .buttonStyle(.plain)
-            .help(focusEnabled ? "Disable focus mode" : "Dim background windows")
-            Button(action: {
-                isPinned.toggle()
-                appDelegate?.setPinned(isPinned)
-            }) {
-                Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(isPinned ? 0.6 : 0.2))
-                    .padding(6)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 10)
-            .help(isPinned ? "Unpin" : "Pin")
+        GeometryReader { geo in
+            let available = geo.size.width
+            let compact = labeledWidth == 0 || labeledWidth > available
+            tabRow(compact: compact)
+                .frame(width: available, height: geo.size.height)
+                .animation(.spring(response: 0.36, dampingFraction: 0.72), value: compact)
         }
-        .frame(height: 44)
-        .padding(.horizontal, 8)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            let shouldCompact = width < 360
-            if shouldCompact != compact {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { compact = shouldCompact }
-            }
-        }
+        .frame(height: 46)
+        .padding(.horizontal, 10)
+        // Hidden probe: the labelled row at its natural width drives the fit
+        // decision above.
+        .background(
+            labelledProbe
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { labeledWidth = $0 }
+        )
         .animation(.spring(response: 0.4, dampingFraction: 0.65), value: activeTab)
     }
 
+    /// One row of tabs that stretches each item (`maxWidth: .infinity`) to fill
+    /// the width it's given — so the tabs use all the space they have instead of
+    /// sitting at natural size.
+    private func tabRow(compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 3) {
+            ForEach(tabs, id: \.index) { tab in
+                TabBarItem(icon: tab.icon, title: tab.title, isActive: activeTab == tab.index, compact: compact, namespace: tabAnimation) {
+                    if tab.index == 2 { onSelect(2) }          // Auth is reachable even while locked
+                    else if !isAuthLocked { onSelect(tab.index) }
+                }
+            }
+        }
+    }
+
+    /// Off-screen labelled row at natural width (drives `labeledWidth`).
+    private var labelledProbe: some View {
+        HStack(spacing: 3) {
+            ForEach(tabs, id: \.index) { tab in
+                TabBarItem(icon: tab.icon, title: tab.title, isActive: false, compact: false, namespace: tabAnimation, action: {})
+            }
+        }
+        .fixedSize()
+        .hidden()
+        .allowsHitTesting(false)
+    }
 }
 
 struct TabBarItem: View {
@@ -256,54 +341,176 @@ struct TabBarItem: View {
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if compact {
-                    Image(systemName: icon)
-                        .font(.system(size: 14))
-                        .frame(maxWidth: .infinity)
-                } else {
-                    HStack(spacing: 4) {
-                        Image(systemName: icon)
-                            .font(.system(size: 11))
-                        Text(title)
-                            .font(.system(size: 11))
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
+            HStack(spacing: compact ? 0 : 4) {
+                Image(systemName: icon)
+                    .font(.system(size: compact ? 14.5 : 12.5))
+                if !compact {
+                    Text(title)
+                        .font(.system(size: 12.5))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.4, anchor: .leading)),
+                            removal: .opacity.combined(with: .scale(scale: 0.4, anchor: .leading))
+                        ))
                 }
             }
-            .foregroundColor(.white.opacity(isActive ? 0.85 : 0.25))
-            .padding(.horizontal, compact ? 6 : 8)
-            .padding(.vertical, compact ? 7 : 5)
+            .foregroundColor(.white.opacity(isActive ? 0.9 : 0.28))
+            .padding(.horizontal, compact ? 8 : 8)
+            .padding(.vertical, compact ? 7 : 7)
+            // Compact: let the padded content fill the whole slot so the active
+            // pill becomes a slot-wide pill (not a circle round the icon).
+            .frame(maxWidth: compact ? .infinity : nil)
             .background(
                 ZStack {
                     if isActive {
                         Capsule()
-                            .fill(Color(red: 0.4, green: 0.85, blue: 1.0).opacity(0.12))
+                            .fill(Color.oxineAccent.opacity(0.12))
                             .matchedGeometryEffect(id: "tabHighlight", in: namespace)
-                            .transition(.identity)
                     }
                 }
             )
-            .contentShape(Capsule())
+            // Spread every slot evenly across the row (both modes).
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Suppress the macOS keyboard focus ring — on tabs with no focusable
+        // content (e.g. clipboard) focus defaulted to the first tab and drew a
+        // stray blue outline around "Notes".
+        .focusEffectDisabled()
         .help(compact ? title : "")
     }
 }
 
+/// The bottom chrome. Hosts the secondary utility cluster (focus, pin, settings)
+/// that used to orphan the top bar, plus the keyboard hints. Demoting these here
+/// keeps the top bar pure navigation.
 struct FooterView: View {
+    @Binding var isPinned: Bool
+    var isSettingsOpen: Bool
+    var appDelegate: AppDelegate?
+    var onToggleSettings: () -> Void
+    @State private var focusEnabled = FocusModeManager.shared.isEnabled
+    private var accent: Color { .oxineAccent }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Text("Esc to close")
-                .font(.system(size: 9))
+        HStack(spacing: 4) {
+            Text("Esc")
+                .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.white.opacity(0.2))
+                .padding(.trailing, 4)
+
+            utilityButton(
+                icon: focusEnabled ? "moon.fill" : "moon",
+                on: focusEnabled,
+                help: focusEnabled ? "Disable focus mode" : "Dim background windows"
+            ) {
+                FocusModeManager.shared.toggle()
+                focusEnabled = FocusModeManager.shared.isEnabled
+            }
+            utilityButton(
+                icon: isPinned ? "pin.fill" : "pin",
+                on: isPinned,
+                help: isPinned ? "Unpin" : "Pin"
+            ) {
+                isPinned.toggle()
+                appDelegate?.setPinned(isPinned)
+            }
+            utilityButton(
+                icon: "gearshape",
+                on: isSettingsOpen,
+                help: "Settings",
+                action: onToggleSettings
+            )
+
             Spacer()
+
             Text("\(Image(systemName: "command"))\u{21E7}V to open")
-                .font(.system(size: 9))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.white.opacity(0.15))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    private func utilityButton(icon: String, on: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(on ? 0.85 : 0.32))
+                .frame(width: 26, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(on ? accent.opacity(0.14) : .clear)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+/// Shown in place of a tab's content when "Require Touch ID" is on and the tab
+/// hasn't been unlocked this visit. Auto-prompts on appear; offers a manual
+/// retry if the user cancels. Reused by the clipboard and notes tabs so both
+/// lock screens are identical.
+struct BiometricLockView: View {
+    let title: String
+    let subtitle: String
+    let reason: String
+    let onUnlock: () -> Void
+    @State private var authing = false
+    @State private var failed = false
+    private var accent: Color { .oxineAccent }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 34))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+            Button(action: authenticate) {
+                HStack(spacing: 6) {
+                    if authing {
+                        ProgressView().scaleEffect(0.6).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "touchid")
+                    }
+                    Text(authing ? "Authenticating…" : (failed ? "Try Again" : "Unlock with Touch ID"))
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .foregroundColor(accent)
+                .background(Capsule().fill(accent.opacity(0.12)))
+                .overlay(Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(authing)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .onAppear(perform: authenticate)
+    }
+
+    private func authenticate() {
+        guard !authing else { return }
+        authing = true
+        failed = false
+        confirmWithBiometrics(reason: reason) { ok in
+            authing = false
+            if ok { onUnlock() } else { failed = true }
+        }
     }
 }

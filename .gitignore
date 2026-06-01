@@ -15,6 +15,22 @@ DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/
 
+# …but keep Oxine.app's static scaffold so release.sh/deploy.sh have a bundle
+# template to assemble into (resolved Info.plist + icon resources). The compiled
+# binary, the embedded Sparkle.framework, and the signature are all rebuilt, so
+# they stay ignored.
+!Oxine.app/
+!Oxine.app/Contents/
+!Oxine.app/Contents/Info.plist
+!Oxine.app/Contents/Resources/
+!Oxine.app/Contents/Resources/**
+Oxine.app/Contents/MacOS/
+Oxine.app/Contents/Frameworks/
+Oxine.app/Contents/_CodeSignature/
+
+# Release output
+dist/
+
 # Logs and local runtime output
 *.log
 *.crash

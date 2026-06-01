@@ -36,9 +36,11 @@ class ClipboardManager: NSObject, ObservableObject {
         
         if changeCount != lastChangeCount {
             lastChangeCount = changeCount
-            
+
             if let string = NSPasteboard.general.string(forType: .string) {
                 addItem(string)
+                // A genuine external copy — nudge the menu-bar orbit to spin.
+                NotificationCenter.default.post(name: .clipboardCaptured, object: nil)
             }
         }
     }
