@@ -23,6 +23,13 @@ struct Oxine: App {
         Settings {
             EmptyView()
         }
+        // SwiftUI's Settings scene auto-adds a "Settings…" menu item bound to ⌘,
+        // that opens this empty window — and that menu shortcut shadows our own
+        // ⌘, handler. Remove the item so ⌘, reaches us and opens the panel's
+        // Settings tab instead of a blank window.
+        .commands {
+            CommandGroup(replacing: .appSettings) { }
+        }
     }
 }
 
