@@ -70,6 +70,10 @@ rm -rf "$DIST/$APP/Contents/_CodeSignature"   # drop the old local-dev signature
 # inside the bundle. The framework keeps its own (ad-hoc, hardened) signature —
 # we don't re-sign it; signing the app just seals it by reference.
 echo "▸ embedding Sparkle.framework…"
+# Wipe any Frameworks copied in from the working app — otherwise cp -R nests the
+# framework inside the existing one (Sparkle.framework/Sparkle.framework), which
+# trips codesign's "unsealed contents in the root of an embedded framework".
+rm -rf "$DIST/$APP/Contents/Frameworks"
 mkdir -p "$DIST/$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FW" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$DIST/$APP/Contents/MacOS/Oxine" 2>/dev/null || true
