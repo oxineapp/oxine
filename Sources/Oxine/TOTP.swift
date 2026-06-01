@@ -34,6 +34,29 @@ enum Base32 {
         guard let data = decode(input), data.count >= 10 else { return false }
         return true
     }
+
+    /// Encode raw bytes to (unpadded, upper-case) Base32 — used to turn the raw
+    /// secret bytes from a Google Authenticator migration payload back into the
+    /// Base32 text the rest of the app stores.
+    static func encode(_ data: Data) -> String {
+        if data.isEmpty { return "" }
+        var output = ""
+        var value = 0
+        var bits = 0
+        for byte in data {
+            value = (value << 8) | Int(byte)
+            bits += 8
+            while bits >= 5 {
+                bits -= 5
+                output.append(alphabet[(value >> bits) & 0x1F])
+            }
+            value &= (1 << bits) - 1   // keep only leftover low bits (no overflow)
+        }
+        if bits > 0 {
+            output.append(alphabet[(value << (5 - bits)) & 0x1F])
+        }
+        return output
+    }
 }
 
 struct TOTP {

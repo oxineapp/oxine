@@ -131,7 +131,7 @@ struct Step1Welcome: View {
                 .font(.system(size: 38))
                 .foregroundColor(Color.oxineAccent)
             VStack(spacing: 6) {
-                Text("Welcome to MenuBar")
+                Text("Welcome to Oxine")
                     .font(.system(size: 20, weight: .bold))
                     .fontWeight(.bold)
                     .foregroundColor(.white)
@@ -163,6 +163,9 @@ struct Step2Obsidian: View {
     @State var errorMessage: String?
     /// Re-read NotesEditor when the choice changes (Obsidian section appears/disappears).
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
+    /// Bumped on .notesEditorChanged to force this header (icon/name/"what
+    /// happens" text, all read from NotesEditor) to re-render after a pick.
+    @State private var editorTick = 0
     private var accent: Color { .oxineAccent }
 
     var body: some View {
@@ -248,8 +251,8 @@ struct Step2Obsidian: View {
                     .foregroundColor(.white.opacity(0.4))
                     .textCase(.uppercase).tracking(0.5)
                 Text(NotesEditor.isObsidian
-                     ? "Notes live in ~/Documents/MenuBar Notes, opened as an Obsidian vault with tags and metadata."
-                     : "Notes live in ~/Documents/MenuBar Notes as clean .md files, opened in \(NotesEditor.displayName).")
+                     ? "Notes live in \(NotesLocation.displayPath), opened as an Obsidian vault with tags and metadata."
+                     : "Notes live in \(NotesLocation.displayPath) as clean .md files, opened in \(NotesEditor.displayName).")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.65))
                     .lineSpacing(4)
@@ -265,6 +268,10 @@ struct Step2Obsidian: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
+        .id(editorTick)
+        .onReceive(NotificationCenter.default.publisher(for: .notesEditorChanged)) { _ in
+            editorTick &+= 1
+        }
     }
 
     private func setupObsidian() {

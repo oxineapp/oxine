@@ -337,28 +337,36 @@ final class PluginManager: ObservableObject {
 
     private static let examplePlugins: [Example] = [
         Example(
-            folder: "yarno",
+            folder: "json-pretty",
             manifest: """
             {
-              "name": "yarno",
-              "icon": "video.fill",
-              "color": "#7CF6A0",
-              "description": "Spins up a fresh yarno meeting room, opens it, and copies the link to share.",
-              "input": "none",
+              "name": "JSON Pretty",
+              "icon": "curlybraces",
+              "color": "#C792EA",
+              "description": "Pretty-prints the JSON on your clipboard and copies it back.",
+              "input": "clipboard",
               "output": "copy",
-              "permissions": ["network"],
+              "permissions": [],
               "mode": "instant"
             }
             """,
-            script: """
-            #!/bin/bash
-            # Create a yarno room and return its shareable link.
-            resp=$(curl -sfX POST https://yarno.lol/api/create-room) || { echo "Couldn't reach yarno." >&2; exit 1; }
-            url=$(printf '%s' "$resp" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("url",""))' 2>/dev/null)
-            if [ -z "$url" ]; then echo "yarno gave no room URL." >&2; exit 1; fi
-            open "$url"          # launch the room in your browser
-            printf '%s' "$url"   # stdout → copied to clipboard to share
-            """
+            script: "#!/bin/bash\n/usr/bin/python3 -m json.tool --indent 2 2>/dev/null || { echo \"Clipboard isn't valid JSON.\" >&2; exit 1; }\n"
+        ),
+        Example(
+            folder: "base64",
+            manifest: """
+            {
+              "name": "Base64 Encode",
+              "icon": "number.square",
+              "color": "#66D9FF",
+              "description": "Base64-encodes the clipboard text and copies it back.",
+              "input": "clipboard",
+              "output": "copy",
+              "permissions": [],
+              "mode": "instant"
+            }
+            """,
+            script: "#!/bin/bash\n/usr/bin/base64 | tr -d '\\n'\n"
         ),
         Example(
             folder: "uppercase",

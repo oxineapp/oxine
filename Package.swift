@@ -10,14 +10,12 @@ let package = Package(
         .executable(name: "Oxine", targets: ["Oxine"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.0.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
     ],
     targets: [
         .executableTarget(
             name: "Oxine",
             dependencies: [
-                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []

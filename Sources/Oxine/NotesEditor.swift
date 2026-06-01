@@ -1,6 +1,14 @@
 import AppKit
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    /// Posted when the chosen notes editor changes. Views that show the editor
+    /// (the tour header, the editor chip) listen for this — `@AppStorage` alone
+    /// doesn't propagate a write made through a *different* `UserDefaults(suiteName:)`
+    /// instance, so the tour header would otherwise show the old app.
+    static let notesEditorChanged = Notification.Name("notesEditorChanged")
+}
+
 /// Which app opens the local `.md` notes. The user can pick any application
 /// (Obsidian, VS Code, iA Writer, TextEdit, …); when unset we follow the system
 /// default for Markdown files. Obsidian is treated specially — it gets vault
@@ -19,7 +27,10 @@ enum NotesEditor {
             let value = store.string(forKey: key)
             return (value?.isEmpty ?? true) ? nil : value
         }
-        set { store.set(newValue ?? "", forKey: key) }
+        set {
+            store.set(newValue ?? "", forKey: key)
+            NotificationCenter.default.post(name: .notesEditorChanged, object: nil)
+        }
     }
 
     /// The system's default application for Markdown files.

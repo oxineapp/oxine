@@ -579,7 +579,23 @@ appearanceSection
                             
                         }
                     }
-                    
+
+                    Button(action: { NSApplication.shared.terminate(nil) }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "power")
+                            Text("Quit Oxine")
+                                .fontWeight(.medium)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.system(size: 12))
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+
                     Spacer()
                 }
                 .padding(8)

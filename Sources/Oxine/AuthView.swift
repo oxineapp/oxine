@@ -232,8 +232,20 @@ struct AuthView: View {
     }
 
     private func importFromScreen() {
+        // A screenshot of another app's window is blank without Screen Recording
+        // permission. Request it (one-time), and since the grant needs a relaunch,
+        // tell the user to reopen rather than silently capturing a black frame.
+        guard QRImport.hasScreenAccess else {
+            QRImport.requestScreenAccess()
+            setMessage("Allow Screen Recording for Oxine in System Settings, then reopen Oxine to scan from the screen.")
+            return
+        }
         let strings = QRImport.captureScreenRegion()
-        addFromStrings(strings)
+        if strings.isEmpty {
+            setMessage("No QR code found in that selection.")
+        } else {
+            addFromStrings(strings)
+        }
     }
 
     private func importFromImage() {

@@ -1,8 +1,19 @@
 import Foundation
 import CoreImage
+import CoreGraphics
 import AppKit
 
 enum QRImport {
+    /// Whether Oxine already has Screen Recording permission. Without it a
+    /// screenshot of another app's window (where the QR lives) comes back blank.
+    static var hasScreenAccess: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// Prompt for Screen Recording (adds Oxine to the System Settings list). The
+    /// grant only takes effect after a relaunch, so callers should tell the user
+    /// to reopen Oxine.
+    @discardableResult
+    static func requestScreenAccess() -> Bool { CGRequestScreenCaptureAccess() }
+
     static func decode(imageURL: URL) -> [String] {
         guard let ci = CIImage(contentsOf: imageURL) else { return [] }
         return decode(ciImage: ci)
