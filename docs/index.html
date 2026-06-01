@@ -3,67 +3,421 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oxine — notes, clipboard & 2FA in your menu bar</title>
-<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, and scriptable plugins.">
+<title>Oxine — notes, clipboard, 2FA & battery health in your menu bar</title>
+<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, scriptable plugins, and Sous battery charge-limiting.">
+<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Oxine">
+<meta property="og:description" content="Notes, clipboard, 2FA, and battery health — one keystroke from your menu bar.">
+<meta property="og:type" content="website">
 <style>
-  :root { --accent: #66D9FF; }
+  :root {
+    --accent: #66D9FF;
+    --accent-soft: #8EE7FF;
+    --accent-deep: #2E7B9E;
+    --green: #4FE08A;
+    --orange: #FFB257;
+    --bg: #000005;
+    --ink: #ffffff;
+    --hairline: rgba(255,255,255,0.09);
+    --card: rgba(255,255,255,0.035);
+    --r: 18px;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
+  html { scroll-behavior: smooth; }
   body {
-    background: #000;
-    color: #fff;
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif;
-    display: flex; align-items: center; justify-content: center;
-    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    text-align: center;
-    padding: 48px 24px;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
   }
-  .wrap { max-width: 560px; }
-  .mark { width: 96px; height: 96px; margin: 0 auto 28px; display: block; opacity: 0.96; }
-  h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
-  .tag { margin-top: 14px; font-size: 18px; color: rgba(255,255,255,0.55); }
-  .features { margin: 30px auto 36px; color: rgba(255,255,255,0.7); font-size: 15px; }
-  .features span { color: var(--accent); }
-  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  a.btn {
-    text-decoration: none; font-weight: 600; font-size: 15px;
-    padding: 13px 26px; border-radius: 12px; transition: transform .12s ease, background .2s ease;
-    display: inline-block;
+  a { color: inherit; }
+
+  /* ── Atmosphere ───────────────────────────────────────────────────── */
+  .bg { position: fixed; inset: 0; z-index: -2; overflow: hidden; }
+  .bg::before {
+    content: ""; position: absolute; inset: -20%;
+    background:
+      radial-gradient(60% 50% at 50% -5%, rgba(102,217,255,0.22), transparent 70%),
+      radial-gradient(45% 40% at 85% 15%, rgba(46,123,158,0.18), transparent 70%),
+      radial-gradient(50% 45% at 12% 30%, rgba(102,217,255,0.10), transparent 70%);
+    animation: drift 22s ease-in-out infinite alternate;
   }
-  a.primary { background: var(--accent); color: #001018; }
-  a.primary:hover { transform: translateY(-2px); }
-  a.ghost { background: rgba(255,255,255,0.06); color: #fff; border: 1px solid rgba(255,255,255,0.12); }
-  a.ghost:hover { background: rgba(255,255,255,0.1); }
-  .note { margin-top: 26px; font-size: 13px; color: rgba(255,255,255,0.38); line-height: 1.7; }
-  .note code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 5px; font-size: 12px; }
-  footer { margin-top: 40px; font-size: 12px; color: rgba(255,255,255,0.3); }
-  footer a { color: rgba(255,255,255,0.5); }
+  @keyframes drift {
+    from { transform: translate3d(-2%, -1%, 0) scale(1); }
+    to   { transform: translate3d(3%, 2%, 0) scale(1.08); }
+  }
+  /* fine grain */
+  .grain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.45;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay; }
+  /* cursor spotlight */
+  .spot { position: fixed; width: 520px; height: 520px; z-index: -1; pointer-events: none;
+    left: 0; top: 0; transform: translate(-50%,-50%);
+    background: radial-gradient(circle, rgba(102,217,255,0.10), transparent 60%);
+    transition: opacity .4s ease; opacity: 0; }
+
+  .shell { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Nav ──────────────────────────────────────────────────────────── */
+  nav { position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px) saturate(150%); -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border-bottom: 1px solid transparent; transition: border-color .3s, background .3s; }
+  nav.stuck { border-color: var(--hairline); background: rgba(0,0,5,0.55); }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.01em; }
+  .brand svg { width: 26px; height: 26px; }
+  .nav-links { display: flex; align-items: center; gap: 26px; font-size: 14px; }
+  .nav-links a { color: rgba(255,255,255,0.55); text-decoration: none; transition: color .2s; }
+  .nav-links a:hover { color: #fff; }
+  .nav-cta { background: var(--accent); color: #00131c; padding: 8px 16px; border-radius: 10px;
+    font-weight: 600; text-decoration: none; transition: transform .15s, box-shadow .25s;
+    box-shadow: 0 4px 18px rgba(102,217,255,0.25); }
+  .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 26px rgba(102,217,255,0.4); }
+  @media (max-width: 720px){ .nav-links a:not(.nav-cta){ display:none; } }
+
+  /* ── Hero ─────────────────────────────────────────────────────────── */
+  .hero { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center;
+    padding: 92px 0 64px; }
+  @media (max-width: 880px){ .hero { grid-template-columns: 1fr; text-align: center; padding-top: 64px; } }
+
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
+    color: var(--accent-soft); background: rgba(102,217,255,0.08);
+    border: 1px solid rgba(102,217,255,0.22); padding: 6px 12px; border-radius: 999px;
+    letter-spacing: 0.01em; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  h1 { font-size: clamp(46px, 7vw, 78px); line-height: 0.98; font-weight: 700;
+    letter-spacing: -0.035em; margin: 22px 0 0; }
+  h1 .grad { background: linear-gradient(120deg, #fff 30%, var(--accent) 120%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .lede { margin-top: 20px; font-size: 19px; line-height: 1.55; color: rgba(255,255,255,0.62);
+    max-width: 30ch; }
+  @media (max-width: 880px){ .lede { max-width: none; margin-left:auto; margin-right:auto; } }
+
+  .cta-row { display: flex; gap: 12px; margin-top: 34px; flex-wrap: wrap; }
+  @media (max-width: 880px){ .cta-row { justify-content: center; } }
+  .btn { text-decoration: none; font-weight: 600; font-size: 15px; padding: 14px 26px;
+    border-radius: 13px; display: inline-flex; align-items: center; gap: 9px;
+    transition: transform .14s ease, background .2s ease, box-shadow .25s ease; }
+  .btn.primary { background: var(--accent); color: #00131c; box-shadow: 0 8px 30px rgba(102,217,255,0.3); }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(102,217,255,0.45); }
+  .btn.ghost { background: rgba(255,255,255,0.05); border: 1px solid var(--hairline); color: #fff; }
+  .btn.ghost:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+  .meta { margin-top: 22px; font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.8; }
+  .meta code { background: rgba(255,255,255,0.08); padding: 2px 7px; border-radius: 6px;
+    font: 12px/1 "SF Mono", ui-monospace, monospace; }
+
+  /* ── App popover mockup (hero right) ──────────────────────────────── */
+  .stage { position: relative; perspective: 1400px; }
+  .menubar { display: flex; justify-content: flex-end; align-items: center; gap: 16px;
+    height: 26px; padding: 0 14px; border-radius: 9px 9px 0 0;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--hairline); border-bottom: none;
+    color: rgba(255,255,255,0.5); font-size: 11px; margin: 0 26px; }
+  .menubar .glyphs { display: flex; gap: 13px; align-items: center; }
+  .menubar svg { width: 13px; height: 13px; opacity: 0.7; }
+  .menubar .live { color: var(--accent); opacity: 1; }
+
+  .popover { position: relative; border-radius: 22px; padding: 18px;
+    background: linear-gradient(180deg, rgba(20,22,28,0.86), rgba(8,9,13,0.92));
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 40px 90px -30px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.02) inset,
+      0 1px 0 rgba(255,255,255,0.08) inset;
+    backdrop-filter: blur(30px); transform: rotateX(6deg) rotateY(-7deg); transform-style: preserve-3d;
+    transition: transform .5s cubic-bezier(.2,.7,.2,1); }
+  .stage:hover .popover { transform: rotateX(2deg) rotateY(-2deg); }
+
+  .tabs { display: flex; gap: 6px; padding: 5px; border-radius: 13px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--hairline); margin-bottom: 16px; }
+  .tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px 0;
+    border-radius: 9px; color: rgba(255,255,255,0.38); transition: .2s; }
+  .tab svg { width: 16px; height: 16px; }
+  .tab.on { background: rgba(102,217,255,0.14); color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(102,217,255,0.18) inset; }
+
+  .sous-pct { text-align: center; font-size: 46px; font-weight: 700; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; }
+  .state-pill { display: inline-flex; gap: 6px; align-items: center; margin: 6px auto 0;
+    font-size: 12px; font-weight: 600; color: var(--green); background: rgba(79,224,138,0.14);
+    padding: 4px 11px; border-radius: 999px; }
+  .center { display: flex; justify-content: center; }
+
+  .limiter { margin-top: 16px; padding: 14px; border-radius: 14px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--hairline); }
+  .limiter .lbl { display: flex; justify-content: space-between; font-size: 12.5px;
+    color: rgba(255,255,255,0.8); font-weight: 600; }
+  .track { position: relative; height: 10px; border-radius: 999px; margin: 14px 0 6px;
+    background: rgba(255,255,255,0.1); }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 60%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+    animation: charge 3.2s cubic-bezier(.3,.8,.3,1) forwards; }
+  @keyframes charge { from { width: 8%; } to { width: 60%; } }
+  .knob { position: absolute; top: 50%; left: 60%; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; transform: translate(-50%,-50%); box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    animation: knob 3.2s cubic-bezier(.3,.8,.3,1) forwards; }
+  @keyframes knob { from { left: 8%; } to { left: 60%; } }
+  .tick { position: absolute; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: #fff;
+    transform: translate(-50%,-50%); left: 56%; }
+  .hint { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+
+  /* ── Sections ─────────────────────────────────────────────────────── */
+  section { padding: 70px 0; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent); }
+  .h2 { font-size: clamp(30px, 4.5vw, 44px); font-weight: 700; letter-spacing: -0.03em;
+    margin-top: 12px; line-height: 1.05; }
+  .sub { color: rgba(255,255,255,0.55); margin-top: 14px; font-size: 17px; max-width: 56ch; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 44px; }
+  @media (max-width: 880px){ .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px){ .grid { grid-template-columns: 1fr; } }
+  .card { position: relative; padding: 22px; border-radius: var(--r); background: var(--card);
+    border: 1px solid var(--hairline); overflow: hidden;
+    transition: transform .3s cubic-bezier(.2,.7,.2,1), border-color .3s, background .3s; }
+  .card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0;
+    background: radial-gradient(120% 80% at 0% 0%, rgba(102,217,255,0.1), transparent 60%);
+    transition: opacity .3s; }
+  .card:hover { transform: translateY(-4px); border-color: rgba(102,217,255,0.28);
+    background: rgba(255,255,255,0.05); }
+  .card:hover::after { opacity: 1; }
+  .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    background: rgba(102,217,255,0.1); border: 1px solid rgba(102,217,255,0.18); margin-bottom: 16px; }
+  .ic svg { width: 21px; height: 21px; stroke: var(--accent); }
+  .card h3 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+  .card p { color: rgba(255,255,255,0.55); font-size: 14px; margin-top: 7px; line-height: 1.55; }
+  .new { position: absolute; top: 16px; right: 16px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; color: #00131c; background: var(--accent); padding: 3px 8px;
+    border-radius: 999px; }
+  .card.feature-sous { border-color: rgba(102,217,255,0.25);
+    background: linear-gradient(180deg, rgba(102,217,255,0.06), var(--card)); }
+
+  /* Sous spotlight band */
+  .band { border-radius: 26px; padding: 48px; margin-top: 12px;
+    background: linear-gradient(135deg, rgba(102,217,255,0.07), rgba(255,255,255,0.02));
+    border: 1px solid var(--hairline); display: grid; grid-template-columns: 1fr 0.9fr;
+    gap: 40px; align-items: center; overflow: hidden; }
+  @media (max-width: 880px){ .band { grid-template-columns: 1fr; padding: 30px; } }
+  .specs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  .spec { font-size: 13px; color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.05);
+    border: 1px solid var(--hairline); padding: 8px 13px; border-radius: 10px; display:flex; gap:7px; align-items:center; }
+  .spec svg { width: 14px; height: 14px; stroke: var(--accent); }
+  .ringwrap { display: flex; justify-content: center; }
+  .ring { position: relative; width: 220px; height: 220px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .num { position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 44px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .ring .num small { display:block; font-size: 12px; font-weight:600; color: var(--green);
+    letter-spacing: 0.04em; margin-top: 4px; text-align:center; }
+
+  /* ── Reveal animations ────────────────────────────────────────────── */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  .load { opacity: 0; transform: translateY(16px); animation: rise .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .d1{animation-delay:.05s} .d2{animation-delay:.15s} .d3{animation-delay:.25s} .d4{animation-delay:.35s} .d5{animation-delay:.5s}
+
+  footer { border-top: 1px solid var(--hairline); padding: 40px 0 60px; margin-top: 40px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    color: rgba(255,255,255,0.4); font-size: 13px; }
+  footer a { color: rgba(255,255,255,0.6); text-decoration: none; }
+  footer a:hover { color: #fff; }
+  .foot-links { display: flex; gap: 22px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1; transform: none; }
+    .fill { width: 60%; } .knob { left: 60%; }
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <svg class="mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Oxine">
-      <path d="M 47.037 16.129 A 34.0 34.0 0 1 1 22.149 30.498" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
-      <circle cx="33" cy="20.555" r="12" fill="#fff"/>
-    </svg>
-    <h1>Oxine</h1>
-    <p class="tag">Notes, clipboard history, and 2FA codes — one keystroke from your menu bar.</p>
-    <p class="features">
-      <span>Quick notes</span> &middot; <span>Clipboard history</span> &middot;
-      <span>Local TOTP</span> &middot; <span>Scriptable plugins</span> &middot; <span>Touch&nbsp;ID</span>
-    </p>
-    <div class="btns">
-      <a class="btn primary" href="https://github.com/oxineapp/oxine/releases/latest">Download for macOS</a>
-      <a class="btn ghost" href="https://github.com/oxineapp/oxine">View source</a>
+  <div class="bg"></div>
+  <div class="grain"></div>
+  <div class="spot" id="spot"></div>
+
+  <nav id="nav"><div class="shell nav-in">
+    <a class="brand" href="#top" style="text-decoration:none">
+      <svg viewBox="0 0 100 100" aria-label="Oxine">
+        <path d="M 47.037 16.129 A 34 34 0 1 1 22.149 30.498" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="33" cy="20.555" r="12" fill="#66D9FF"/>
+      </svg>
+      Oxine
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#sous">Sous</a>
+      <a href="https://github.com/oxineapp/oxine">Source</a>
+      <a class="nav-cta" href="https://github.com/oxineapp/oxine/releases/latest">Download</a>
     </div>
-    <p class="note">
-      First launch: right-click the app &rarr; <strong>Open</strong>.<br>
-      Requires macOS&nbsp;26. Free and open source under the GPL-3.0.
-    </p>
-    <footer>
-      <a href="https://github.com/oxineapp/oxine">oxineapp/oxine</a> &middot; GPL-3.0
-    </footer>
-  </div>
+  </div></nav>
+
+  <header class="shell hero" id="top">
+    <div>
+      <span class="pill load d1"><span class="dot"></span> New in 1.1 — Sous battery health</span>
+      <h1 class="load d2">Your menu bar,<br><span class="grad">supercharged.</span></h1>
+      <p class="lede load d3">Notes, clipboard history, 2FA codes, scriptable plugins, and battery charge-limiting — one keystroke away. Local-first, free, and open source.</p>
+      <div class="cta-row load d4">
+        <a class="btn primary" href="https://github.com/oxineapp/oxine/releases/latest">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+          Download for macOS
+        </a>
+        <a class="btn ghost" href="https://github.com/oxineapp/oxine">View source</a>
+      </div>
+      <p class="meta load d4">First launch: right-click&nbsp;→&nbsp;<strong>Open</strong>. Requires macOS&nbsp;26. <br>Free &amp; open source under <code>GPL-3.0</code>.</p>
+    </div>
+
+    <div class="stage load d5">
+      <div class="menubar">
+        <span>100%</span>
+        <span>Wed 9:41</span>
+        <div class="glyphs">
+          <svg class="live" viewBox="0 0 100 100"><path d="M 47 16 A 34 34 0 1 1 22 30.5" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="33" cy="20.5" r="12" fill="currentColor"/></svg>
+        </div>
+      </div>
+      <div class="popover">
+        <div class="tabs">
+          <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg></div>
+          <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+          <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 4a2 2 0 114 0v2h4v4a2 2 0 100 4v4h-4a2 2 0 10-4 0H6v-4a2 2 0 100-4V6h4z"/></svg></div>
+          <div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="15" height="9" rx="2.5"/><path d="M21 11v3"/><path d="M11 9l-2 4h3l-2 4"/></svg></div>
+        </div>
+        <div class="sous-pct">80%</div>
+        <div class="center"><span class="state-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg> Held at limit</span></div>
+        <div class="limiter">
+          <div class="lbl"><span>Limit charging</span><span style="color:var(--accent)">80%</span></div>
+          <div class="track">
+            <div class="fill"></div>
+            <div class="tick"></div>
+            <div class="knob"></div>
+          </div>
+          <div class="hint">Resumes charging at 75% · sailing 5%</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="shell" id="features">
+    <span class="eyebrow reveal">Everything, in one place</span>
+    <h2 class="h2 reveal">Six tools. Zero clutter.</h2>
+    <p class="sub reveal">A single glass panel that lives in your menu bar — and stays out of your way until you press <code style="font-size:13px;background:rgba(255,255,255,.08);padding:1px 6px;border-radius:5px">⇧⌘V</code>.</p>
+
+    <div class="grid">
+      <div class="card feature-sous reveal">
+        <span class="new">NEW</span>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="15" height="9" rx="2.5"/><path d="M21 11v3"/><path d="M11 9l-2 4h3l-2 4"/></svg></div>
+        <h3>Sous · Battery</h3>
+        <p>Sous-vide for your charge — held low and slow at your limit. Sailing range, heat protection, top-up &amp; discharge, MagSafe LED.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg></div>
+        <h3>Quick Notes</h3>
+        <p>Capture markdown to a folder you choose. Open in any editor — with extended Obsidian support.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+        <h3>Clipboard History</h3>
+        <p>A searchable, pinnable history of everything you copy — up to 200 items, all on-device.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>Authenticator</h3>
+        <p>Local TOTP 2FA codes stored in the Keychain. Lock them — and your notes — behind Touch ID.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4a2 2 0 114 0v2h4v4a2 2 0 100 4v4h-4a2 2 0 10-4 0H6v-4a2 2 0 100-4V6h4z"/></svg></div>
+        <h3>Plugins</h3>
+        <p>One-shot actions you script in any language. Color, reorder, and bind them to a shortcut.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></div>
+        <h3>Focus</h3>
+        <p>Dim and blur every window behind the one you're working in. Pick your own intensity.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="shell" id="sous">
+    <div class="band reveal">
+      <div>
+        <span class="eyebrow">New in 1.1</span>
+        <h2 class="h2">Your battery, sous-vide.</h2>
+        <p class="sub">Sous-vide holds food at one precise temperature — low and slow, never overcooked. Sous does the same for your charge: it caps at the limit you set so your battery never sits boiling at 100%. One password prompt installs a tiny helper, then it simmers away in the background.</p>
+        <div class="specs">
+          <span class="spec"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 12h16"/><circle cx="16" cy="12" r="3" fill="currentColor" stroke="none"/></svg>Charge limit &amp; sailing range</span>
+          <span class="spec"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><circle cx="12" cy="16" r="4"/></svg>Heat protection</span>
+          <span class="spec"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 4v8m0 0l4-4m-4 4L8 8"/></svg>Top-up &amp; discharge</span>
+          <span class="spec"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="5"/></svg>MagSafe LED control</span>
+        </div>
+        <p class="meta">Apple Silicon. Fully local — nothing leaves your Mac.</p>
+      </div>
+      <div class="ringwrap">
+        <div class="ring">
+          <svg width="220" height="220" viewBox="0 0 220 220">
+            <circle cx="110" cy="110" r="96" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="14"/>
+            <circle id="ringArc" cx="110" cy="110" r="96" fill="none" stroke="url(#g)" stroke-width="14"
+              stroke-linecap="round" stroke-dasharray="603" stroke-dashoffset="603"/>
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#2E7B9E"/><stop offset="1" stop-color="#66D9FF"/>
+            </linearGradient></defs>
+          </svg>
+          <div class="num">80%<small>HELD AT LIMIT</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="shell">
+    <div>© 2026 Oxine · Built for macOS · GPL-3.0</div>
+    <div class="foot-links">
+      <a href="https://github.com/oxineapp/oxine">GitHub</a>
+      <a href="https://github.com/oxineapp/oxine/releases/latest">Releases</a>
+      <a href="https://github.com/oxineapp/oxine/blob/master/LICENSE">License</a>
+    </div>
+  </footer>
+
+<script>
+  // Sticky-nav border on scroll
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('stuck', window.scrollY > 12);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  // Scroll reveal
+  const io = new IntersectionObserver((es) => {
+    es.forEach((e, i) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.14 });
+  document.querySelectorAll('.reveal').forEach((el, i) => {
+    el.style.transitionDelay = (i % 3 * 0.07) + 's';
+    io.observe(el);
+  });
+
+  // Animate the Sous ring when it scrolls in (80% of full circle)
+  const arc = document.getElementById('ringArc');
+  const ringIO = new IntersectionObserver((es) => {
+    es.forEach(e => { if (e.isIntersecting) { arc.style.transition = 'stroke-dashoffset 1.6s cubic-bezier(.3,.8,.3,1)';
+      arc.style.strokeDashoffset = 603 - 603 * 0.8; ringIO.unobserve(e.target); } });
+  }, { threshold: 0.4 });
+  ringIO.observe(arc);
+
+  // Cursor spotlight (skipped for touch / reduced motion)
+  const spot = document.getElementById('spot');
+  if (matchMedia('(pointer:fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    let raf;
+    addEventListener('pointermove', (e) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        spot.style.opacity = 1;
+        spot.style.left = e.clientX + 'px';
+        spot.style.top = e.clientY + 'px';
+        raf = null;
+      });
+    });
+  }
+</script>
 </body>
 </html>
