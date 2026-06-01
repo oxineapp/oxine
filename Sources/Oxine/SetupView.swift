@@ -162,7 +162,7 @@ struct Step2Obsidian: View {
     @State var isSetup = false
     @State var errorMessage: String?
     /// Re-read NotesEditor when the choice changes (Obsidian section appears/disappears).
-    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) private var editorBundleID = ""
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
     private var accent: Color { .oxineAccent }
 
     var body: some View {

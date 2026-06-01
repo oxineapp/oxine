@@ -5,7 +5,7 @@ class ObsidianVaultManager: NSObject, @unchecked Sendable {
     static let shared = ObsidianVaultManager()
 
     private var vaultPath: String {
-        ("~/Documents/MenuBar Notes" as NSString).expandingTildeInPath
+        NotesLocation.url.path
     }
 
     private var configPaths: [String] {
@@ -78,6 +78,29 @@ class ObsidianVaultManager: NSObject, @unchecked Sendable {
         json["vaults"] = vaults
         guard let out = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]) else { return false }
         return (try? out.write(to: configURL)) != nil
+    }
+
+    /// Rewrite any registered vault whose path is `from` to `to` (used when the
+    /// notes folder is renamed/moved) so `obsidian://open` keeps working.
+    func repointVault(from: String, to: String) {
+        let configURL = URL(fileURLWithPath: configPaths[0])
+        guard let data = try? Data(contentsOf: configURL),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var vaults = json["vaults"] as? [String: Any] else { return }
+        var changed = false
+        for (id, value) in vaults {
+            if var vault = value as? [String: Any], let p = vault["path"] as? String,
+               filePathNormalized(p) == filePathNormalized(from) {
+                vault["path"] = to
+                vaults[id] = vault
+                changed = true
+            }
+        }
+        guard changed else { return }
+        json["vaults"] = vaults
+        if let out = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]) {
+            try? out.write(to: configURL)
+        }
     }
 
     /// Relaunch Obsidian so it reloads `obsidian.json` and picks up the vault we

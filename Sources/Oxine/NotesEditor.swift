@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// registration and Obsidian-flavored frontmatter — every other editor just
 /// gets clean `.md`.
 enum NotesEditor {
-    static let defaultsSuite = "com.menubar.settings"
+    static let defaultsSuite = "com.oxine.settings"
     static let key = "notesEditorBundleID"
     static let obsidianBundleID = "md.obsidian"
 

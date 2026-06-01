@@ -44,11 +44,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var isAuthenticating = false
     var panelJustOpened = false
     var panelJustOpenedTimer: DispatchWorkItem?
+    var authWatchdog: DispatchWorkItem?
     var closeReason = ""
     var isAuthVisible = false
     var isProgrammaticResize = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Carry settings/clipboard/setup state from the legacy com.menubar.*
+        // domains to com.oxine.* (must run before anything reads a setting), then
+        // rename the legacy "MenuBar Notes" folder to the new default. Both are
+        // one-time no-ops once migrated.
+        StorageMigration.runIfNeeded()
+        NotesLocation.migrateLegacyIfNeeded()
         setupMenuBar()
         setupEventMonitoring()
         setupBiometricObservers()
@@ -244,10 +251,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func biometricWillBegin() {
         log("biometricWillBegin")
         isAuthenticating = true
+        // Failsafe: if biometricDidEnd is ever missed (e.g. the panel is hidden
+        // mid-prompt), never leave isAuthenticating stuck true — that wedged the
+        // Auth tab (couldn't switch tabs, and unlock() refused to re-prompt). A
+        // real prompt resolves in seconds; force-clear after a generous timeout.
+        authWatchdog?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self, self.isAuthenticating else { return }
+            log("biometric watchdog -> clearing stuck isAuthenticating")
+            self.isAuthenticating = false
+        }
+        authWatchdog = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: w)
     }
 
     @objc private func biometricDidEnd() {
         log("biometricDidEnd")
+        authWatchdog?.cancel()
+        // ALWAYS clear the auth flag (previously skipped when the panel wasn't
+        // visible, which is what stuck the Auth tab). Short delay so the click
+        // that dismisses the system sheet doesn't immediately close the panel.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            log("biometricDidEnd reset")
+            self?.isAuthenticating = false
+        }
+        // The panelJustOpened debounce only matters while the panel is open.
         guard panel?.isVisible == true else { return }
         panelJustOpened = true
         panelJustOpenedTimer?.cancel()
@@ -257,10 +285,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         panelJustOpenedTimer = t
         DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: t)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            log("biometricDidEnd reset")
-            self.isAuthenticating = false
-        }
     }
 
     @objc private func clipboardCaptured() { orbitView?.playCopy() }

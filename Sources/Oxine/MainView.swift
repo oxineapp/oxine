@@ -34,11 +34,11 @@ struct MainView: View {
         }
     }
 
-    @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.menubar.settings")) var glassOpacity = 0.7
-    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.menubar.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
-    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
-    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.menubar.settings")) var requireClipboardAuth = false
-    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.menubar.settings")) var requireNotesAuth = false
+    @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
+    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
+    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
+    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
+    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
 
     /// Per-session unlock for tabs that require Touch ID. Reset whenever the user
     /// navigates away, so each visit re-authenticates.
@@ -128,7 +128,7 @@ struct MainView: View {
 
     var mainContent: some View {
         VStack(spacing: 0) {
-            TabBar(activeTab: activeTab, onSelect: switchTab, appDelegate: appDelegate)
+            TabBar(activeTab: activeTab, onSelect: switchTab)
 
             Group {
                 switch activeTab {
@@ -269,8 +269,6 @@ extension View {
 struct TabBar: View {
     var activeTab: Int
     var onSelect: (Int) -> Void
-    var appDelegate: AppDelegate?
-    var isAuthLocked: Bool { activeTab == 2 && (appDelegate?.isAuthenticating ?? false) }
     @Namespace private var tabAnimation
     /// Natural width of the labelled row, measured once by a hidden probe. The
     /// only measured value; the available width comes free from the layout.
@@ -311,8 +309,10 @@ struct TabBar: View {
         HStack(spacing: compact ? 6 : 3) {
             ForEach(tabs, id: \.index) { tab in
                 TabBarItem(icon: tab.icon, title: tab.title, isActive: activeTab == tab.index, compact: compact, namespace: tabAnimation) {
-                    if tab.index == 2 { onSelect(2) }          // Auth is reachable even while locked
-                    else if !isAuthLocked { onSelect(tab.index) }
+                    // Always navigable — a transient auth flag must never trap you
+                    // on a tab (the system Touch ID sheet already blocks input
+                    // while it's actually up).
+                    onSelect(tab.index)
                 }
             }
         }

@@ -25,7 +25,7 @@ cd "$(dirname "$0")"
 
 APP="Oxine.app"
 DIST="dist"
-REPO="Sha-Dox/oxine"
+REPO="oxineapp/oxine"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist 2>/dev/null || echo "1.0")
 TAG="v$VERSION"
 DOWNLOAD_PREFIX="https://github.com/$REPO/releases/download/$TAG/"

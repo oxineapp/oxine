@@ -685,15 +685,22 @@ class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
         setupVault()
         scanForNotes()
         startPolling()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(notesFolderChanged),
+            name: .notesFolderChanged, object: nil)
     }
 
     private func setupVault() {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = documentsPath.appendingPathComponent("MenuBar Notes")
-        if !FileManager.default.fileExists(atPath: path.path) {
-            try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        }
-        vaultPath = path
+        // Resolved from the configurable setting (default ~/Documents/Oxine Notes);
+        // NotesLocation creates the folder if needed.
+        vaultPath = NotesLocation.url
+    }
+
+    /// The notes folder moved (Settings change) — re-point and reload the list.
+    @objc private func notesFolderChanged() {
+        setupVault()
+        knownFileDates = [:]
+        scanForNotes()
     }
 
     private func metadataURL() -> URL? {

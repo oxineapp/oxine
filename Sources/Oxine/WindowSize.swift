@@ -30,7 +30,7 @@ enum OxinePanelSize: String, CaseIterable, Identifiable {
 /// Single source of truth for the panel's geometry, persisted in the shared
 /// settings suite so both SwiftUI (@AppStorage) and AppDelegate agree.
 enum OxinePanelLayout {
-    static var suite: UserDefaults { UserDefaults(suiteName: "com.menubar.settings") ?? .standard }
+    static var suite: UserDefaults { UserDefaults(suiteName: "com.oxine.settings") ?? .standard }
 
     /// Floor so a stray drag can't shrink the panel down to nothing.
     static let minSize = CGSize(width: 300, height: 340)

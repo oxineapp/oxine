@@ -14,7 +14,7 @@ final class ThemeManager: ObservableObject {
     private static let storeKey = "accentHex"
     private static let defaultHex = "#66D9FF"   // the original Oxine blue (== PluginPalette.swatches[0])
 
-    private let suite = UserDefaults(suiteName: "com.menubar.settings")
+    private let suite = UserDefaults(suiteName: "com.oxine.settings")
 
     /// Republished whenever the tint changes so observing views re-render.
     @Published private(set) var accent: Color = Color(hex: ThemeManager.defaultHex)

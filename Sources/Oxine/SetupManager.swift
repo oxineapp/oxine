@@ -5,7 +5,7 @@ class SetupManager: NSObject {
     static let shared = SetupManager()
     
     private let userDefaults = UserDefaults.standard
-    private let setupKey = "com.menubar.setupCompleted"
+    private let setupKey = "com.oxine.setupCompleted"
     
     var isFirstLaunch: Bool {
         let hasCompleted = userDefaults.bool(forKey: setupKey)

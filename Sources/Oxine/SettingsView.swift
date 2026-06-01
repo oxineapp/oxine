@@ -5,17 +5,18 @@ struct SettingsView: View {
     @Binding var showSetup: Bool
     @ObservedObject var clipboardManager: ClipboardManager
     
-    @AppStorage("launchAtLogin", store: UserDefaults(suiteName: "com.menubar.settings")) var launchAtLogin = true
-    @AppStorage("showPreview", store: UserDefaults(suiteName: "com.menubar.settings")) var showPreview = true
-    @AppStorage("maxItems", store: UserDefaults(suiteName: "com.menubar.settings")) var maxItems = 50
-    @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.menubar.settings")) var glassOpacity = 0.7
-    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.menubar.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
-    @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomWidth = 380.0
-    @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomHeight = 560.0
-    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.menubar.settings")) var panelCustomLocked = false
-    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.menubar.settings")) var requireClipboardAuth = false
-    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.menubar.settings")) var requireNotesAuth = false
-    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) var notesEditorBundleID = ""
+    @AppStorage("launchAtLogin", store: UserDefaults(suiteName: "com.oxine.settings")) var launchAtLogin = true
+    @AppStorage("showPreview", store: UserDefaults(suiteName: "com.oxine.settings")) var showPreview = true
+    @AppStorage("maxItems", store: UserDefaults(suiteName: "com.oxine.settings")) var maxItems = 50
+    @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
+    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
+    @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomWidth = 380.0
+    @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomHeight = 560.0
+    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
+    @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
+    @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
+    @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
 
     @StateObject private var justType = JustTypeSyncManager()
     @ObservedObject private var theme = ThemeManager.shared
@@ -121,18 +122,76 @@ struct SettingsView: View {
         }
     }
 
+    /// Pick a new notes folder (keeps the panel open during the modal, like the
+    /// editor chooser). Re-points only — existing notes stay where they are.
+    private func chooseNotesFolder() {
+        let delegate = AppDelegate.instance
+        delegate?.isAuthenticating = true
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.canCreateDirectories = true
+        openPanel.allowsMultipleSelection = false
+        openPanel.prompt = "Use Folder"
+        openPanel.message = "Choose where Oxine stores your notes"
+        openPanel.directoryURL = NotesLocation.url
+        if openPanel.runModal() == .OK, let url = openPanel.url {
+            NotesLocation.set(url)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { delegate?.isAuthenticating = false }
+    }
+
     private var notesSection: some View {
         SettingSection(title: "Notes") {
-            Toggle(isOn: biometricGate($requireNotesAuth, feature: "notes")) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Require Touch ID")
-                        .foregroundColor(.white.opacity(0.85))
-                    Text("Lock notes behind biometrics")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.5))
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Location")
+                    .foregroundColor(.white.opacity(0.85))
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.oxineAccent)
+                    Text(NotesLocation.displayPath)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 6)
+                    if !notesFolderPath.isEmpty {
+                        Button("Reset") { NotesLocation.set(nil) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.5))
+                            .help("Use the default (~/Documents/Oxine Notes)")
+                    }
+                    Button("Change") { chooseNotesFolder() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color.oxineAccent)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Capsule().fill(Color.oxineAccent.opacity(0.12)))
+                        .overlay(Capsule().stroke(Color.oxineAccent.opacity(0.25), lineWidth: 0.5))
+                        .contentShape(Capsule())
                 }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.06), lineWidth: 0.5))
+                Text("Existing notes aren't moved — Oxine just reads from the new folder.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.45))
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: biometricGate($requireNotesAuth, feature: "notes")) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Require Touch ID")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Lock notes behind biometrics")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
             }
-            .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
         }
     }
 
@@ -544,7 +603,7 @@ appearanceSection
 /// Change button to pick any other app. Shared by onboarding and Settings.
 struct EditorChip: View {
     /// Bound to the same key NotesEditor stores under, so a pick re-renders us.
-    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.menubar.settings")) private var editorBundleID = ""
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
     private var accent: Color { .oxineAccent }
 
     var body: some View {

@@ -7,8 +7,8 @@ class ClipboardManager: NSObject, ObservableObject {
     
     private var lastChangeCount: Int = 0
     private nonisolated(unsafe) var timer: Timer?
-    private let userDefaults = UserDefaults(suiteName: "com.menubar.clipboard")
-    private let settingsDefaults = UserDefaults(suiteName: "com.menubar.settings")
+    private let userDefaults = UserDefaults(suiteName: "com.oxine.clipboard")
+    private let settingsDefaults = UserDefaults(suiteName: "com.oxine.settings")
 
     private var effectiveMaxItems: Int {
         let stored = settingsDefaults?.integer(forKey: "maxItems") ?? 0

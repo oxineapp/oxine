@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.2.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -30,7 +30,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>220</string>
+	<string>100</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>LSUIElement</key>
@@ -39,12 +39,12 @@
 	<string></string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>https://sha-dox.github.io/oxine/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>YW8+aI998I8dZ+qyZbGvv95OyeER8AeI7F/2LRs3pC4=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://oxineapp.github.io/oxine/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>YW8+aI998I8dZ+qyZbGvv95OyeER8AeI7F/2LRs3pC4=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 </dict>
