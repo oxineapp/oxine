@@ -528,13 +528,16 @@ struct NoteItemRow: View {
                         cancelHold()
                     } else if holdTimer == nil {
                         holdProgress = 0
-                        holdTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak holdTimer] _ in
+                        holdTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { _ in
+                            // Don't capture the Timer into its own @Sendable block
+                            // (a non-Sendable type crossing the boundary is a data
+                            // race under strict concurrency). Drive everything off
+                            // the @State on the main actor instead.
                             Task { @MainActor in
-                                guard let holdTimer = holdTimer else { return }
                                 let progress = min(holdProgress + 0.016 / holdDuration, 1.0)
                                 holdProgress = progress
                                 if progress >= 1.0 {
-                                    holdTimer.invalidate()
+                                    self.holdTimer?.invalidate()
                                     self.holdTimer = nil
                                     onOpenInObsidian()
                                 }
