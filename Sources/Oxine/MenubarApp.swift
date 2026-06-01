@@ -12,6 +12,7 @@ extension Notification.Name {
     static let biometricDidEnd = Notification.Name("biometricDidEnd")
     static let authTabActivated = Notification.Name("authTabActivated")
     static let clipboardCaptured = Notification.Name("clipboardCaptured")
+    static let openSettings = Notification.Name("openSettings")
 }
 
 @main
@@ -79,8 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             orbit.autoresizingMask = [.width, .height]
             button.addSubview(orbit)
             orbitView = orbit
-            button.action = #selector(togglePanel)
+            button.action = #selector(statusItemClicked)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
             // A genuine external copy → the bead does a quick spin.
             NotificationCenter.default.addObserver(
@@ -196,6 +198,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.togglePanel()
                 return nil
             }
+            // ⌘, opens Settings — the standard macOS preferences shortcut.
+            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "," {
+                if self.panel?.isVisible == true {
+                    NotificationCenter.default.post(name: .openSettings, object: nil)
+                    return nil
+                }
+            }
             return event
         }
 
@@ -288,6 +297,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func clipboardCaptured() { orbitView?.playCopy() }
+
+    /// Left-click toggles the panel; right-click pops a small menu.
+    @objc private func statusItemClicked() {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showStatusMenu()
+        } else {
+            togglePanel()
+        }
+    }
+
+    private func showStatusMenu() {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open Oxine", action: #selector(menuOpen), keyEquivalent: "")
+        menu.addItem(withTitle: "Settings\u{2026}", action: #selector(menuSettings), keyEquivalent: ",")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Check for Updates\u{2026}", action: #selector(menuCheckUpdates), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Oxine", action: #selector(menuQuit), keyEquivalent: "q")
+        menu.items.forEach { $0.target = self }
+        if let button = statusItem?.button {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 5), in: button)
+        }
+    }
+
+    @objc private func menuOpen() { if panel?.isVisible != true { showPanel() } }
+    @objc private func menuSettings() { openSettings() }
+    @objc private func menuCheckUpdates() { UpdaterManager.shared.checkForUpdates() }
+    @objc private func menuQuit() { NSApp.terminate(nil) }
+
+    /// Show the panel (if needed) and switch it to the Settings pane. Bound to
+    /// ⌘, and the right-click menu — the standard macOS "preferences" gesture.
+    func openSettings() {
+        if panel?.isVisible != true { showPanel() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: .openSettings, object: nil)
+        }
+    }
 
     @objc func togglePanel() {
         guard let panel else { return }

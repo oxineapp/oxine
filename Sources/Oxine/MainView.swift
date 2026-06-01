@@ -98,6 +98,12 @@ struct MainView: View {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            if activeTab != 4 {
+                preSettingsTab = activeTab
+                switchTab(to: 4)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
             // Match the window's eased resize (see AppDelegate.applyPanelSize) so
             // the content frame tracks the window instead of snapping ahead of it.
