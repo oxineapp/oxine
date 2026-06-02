@@ -9,8 +9,12 @@ let package = Package(
     products: [
         .executable(name: "Oxine", targets: ["Oxine"]),
         .executable(name: "com.oxine.soushelper", targets: ["SousHelper"]),
-        .executable(name: "SousVide", targets: ["SousVide"]),
-        .executable(name: "com.sousvide.soushelper", targets: ["SousVideHelper"])
+        // Shared libraries consumed by the standalone sous-vide app (alfaoz/sous-vide
+        // depends on this package and builds its own app + helper on top of these).
+        .library(name: "PanelKit", targets: ["PanelKit"]),
+        .library(name: "SousKit", targets: ["SousKit"]),
+        .library(name: "SousShared", targets: ["SousShared"]),
+        .library(name: "SousHelperCore", targets: ["SousHelperCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
@@ -58,22 +62,6 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []
-        ),
-        // The standalone sous-vide app's daemon (its own brand).
-        .executableTarget(
-            name: "SousVideHelper",
-            dependencies: ["SousShared", "SousHelperCore"]
-        ),
-        // The standalone sous-vide peer app: Sous feature + shared chrome, its
-        // own branding. Reuses PanelKit + SousKit, no copy-paste.
-        .executableTarget(
-            name: "SousVide",
-            dependencies: [
-                "SousShared",
-                "PanelKit",
-                "SousKit",
-                .product(name: "Sparkle", package: "Sparkle")
-            ]
         )
     ]
 )
