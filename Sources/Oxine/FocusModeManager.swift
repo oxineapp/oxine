@@ -115,6 +115,13 @@ class FocusModeManager: ObservableObject {
             ])
 
             window.contentView = container
+            // Force the window to the screen's exact global frame. The
+            // `init(...screen:)` rect is interpreted relative to that screen, which
+            // on a mixed-size multi-monitor layout can leave the overlay sized/placed
+            // to the wrong (often smaller) display — so a big external monitor only
+            // got dimmed over a small-screen-sized patch. setFrame in global coords
+            // is unambiguous and covers the whole panel.
+            window.setFrame(screen.frame, display: false)
             window.orderFront(nil)
 
             overlayWindows.append(window)
@@ -233,20 +240,39 @@ class FocusModeManager: ObservableObject {
             }
         )
 
-        // The activation notification can arrive a beat after the new window is
-        // already on screen — long enough to flash the previous, un-dimmed app
-        // during Cmd-Tab / Dock switches. Poll the frontmost window frequently and
-        // re-stack only on change to close that gap. Runs in `.common` mode so it
-        // keeps firing during scroll/resize tracking.
-        let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
+        // Rebuild from scratch when the display layout changes — a monitor is
+        // plugged in/out, rearranged, or its resolution changes — so the overlays
+        // always match the *current* set and size of screens.
+        observers.append(
+            NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.rebuildOverlays() }
+            }
+        )
+
+        // App switches (Cmd-Tab / Dock) are handled instantly by the activation
+        // notification above. A light poll only needs to catch in-app window
+        // switches (e.g. Cmd-`), so a low rate is plenty — the old 33Hz poll ran
+        // CGWindowListCopyWindowInfo over every on-screen window and was the source
+        // of the dual-monitor lag. restack() early-outs unless focus actually moved.
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.restack() }
         }
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer
     }
 
+    /// Tear down and recreate the overlays for the current screen configuration.
+    private func rebuildOverlays() {
+        guard isEnabled else { return }
+        removeOverlays()
+        createOverlays()
+    }
+
     private func stopMonitoring() {
         for observer in observers {
+            // Observers come from two centers (NSWorkspace + default); removing from
+            // the wrong one is a harmless no-op, so clear both to be safe.
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
             NotificationCenter.default.removeObserver(observer)
         }
         observers.removeAll()
