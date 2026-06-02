@@ -31,11 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private var statusItem: NSStatusItem?
     private var iconView: PounceIconView?
-    private var panel: KeyablePanel?
+    private(set) var panel: KeyablePanel?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var justOpened = false
-    private var isProgrammaticResize = false
+    private(set) var isProgrammaticResize = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         PanelKit.configure(.sousVide)
@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         p.level = .floating
         p.isMovable = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let host = NSHostingController(rootView: SousVideRoot())
+        let host = NSHostingController(rootView: SousVideRoot(appDelegate: self))
         host.sizingOptions = []
         p.contentViewController = host
         p.contentView?.wantsLayer = true
@@ -174,6 +174,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     // MARK: Sizing (mirrors Oxine's eased resize)
+
+    /// Authoritative resize clamp. AppKit's minSize/maxSize aren't honored for
+    /// this borderless, hosting-controller-backed panel, so enforce bounds here
+    /// on every live-resize tick — and refuse resizes entirely on a fixed preset.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        if isProgrammaticResize { return frameSize }
+        guard PanelLayout.isResizable else { return sender.frame.size }
+        let lo = PanelLayout.minSize
+        let hi = PanelLayout.maxSize
+        return NSSize(width: min(max(frameSize.width, lo.width), hi.width),
+                      height: min(max(frameSize.height, lo.height), hi.height))
+    }
 
     private func setupSizeObserver() {
         NotificationCenter.default.addObserver(self, selector: #selector(sizeChanged),

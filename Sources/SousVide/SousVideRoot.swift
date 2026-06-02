@@ -6,6 +6,7 @@ import SousKit
 /// gear, and a Settings route that slides over it. Pinned to the panel size with
 /// a definite frame (see PanelKit's root-frame discipline).
 struct SousVideRoot: View {
+    var appDelegate: AppDelegate?
     @ObservedObject private var sous = SousManager.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showingSettings = false
@@ -50,11 +51,17 @@ struct SousVideRoot: View {
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { showingSettings = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
+            // Match the window's eased resize so the content tracks it instead of snapping.
             withAnimation(.easeInOut(duration: PanelLayout.resizeDuration)) { panelSize = PanelLayout.current }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
-            guard let win = note.object as? NSWindow, PanelLayout.isResizable else { return }
-            panelSize = win.frame.size
+            // Follow live custom drag-resizes; skip while a preset change is
+            // animating the window (else the content snaps each tick and fights
+            // the eased panelSizeChanged animation).
+            guard PanelLayout.isResizable,
+                  appDelegate?.isProgrammaticResize == false,
+                  let window = note.object as? NSWindow, window == appDelegate?.panel else { return }
+            panelSize = window.frame.size
         }
     }
 
