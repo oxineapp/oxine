@@ -195,15 +195,17 @@ struct Step1Welcome: View {
                     .font(.system(size: 20, weight: .bold))
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                Text("Your clipboard and notes, right in the menubar")
+                Text("Clipboard, notes, 2FA codes, and battery care, right in your menu bar")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
             VStack(alignment: .leading, spacing: 9) {
                 FeatureRow(icon: "clipboard", title: "Clipboard History", desc: "Save up to 200 items")
-                FeatureRow(icon: "note.text", title: "Quick Notes", desc: "Capture ideas instantly")
-                FeatureRow(icon: "doc.text", title: "Markdown Notes", desc: "Open in any editor you like")
+                FeatureRow(icon: "note.text", title: "Notes", desc: "Quick + Markdown, in any editor")
+                FeatureRow(icon: "lock.shield", title: "2FA Codes", desc: "Your authenticator, built in")
+                FeatureRow(icon: "terminal", title: "Scripts", desc: "One-tap actions and shortcuts")
+                FeatureRow(icon: "heart.badge.bolt", title: "Battery Care", desc: "Cap charging to extend its life")
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.03)))
