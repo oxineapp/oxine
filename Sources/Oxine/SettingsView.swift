@@ -11,10 +11,6 @@ struct SettingsView: View {
     @AppStorage("showPreview", store: UserDefaults(suiteName: "com.oxine.settings")) var showPreview = true
     @AppStorage("maxItems", store: UserDefaults(suiteName: "com.oxine.settings")) var maxItems = 50
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
-    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = PanelSize.standard.rawValue
-    @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomWidth = 380.0
-    @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomHeight = 560.0
-    @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
     @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
@@ -39,22 +35,6 @@ struct SettingsView: View {
     @State private var obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured
     @State private var obsidianIntegrating = false
     @State private var obsidianError: String?
-
-    /// Selecting a preset switches to it. Re-clicking the already-active Custom
-    /// toggles its lock (lock icon shown); a fresh switch to Custom starts unlocked.
-    private func selectPanelSize(_ size: PanelSize) {
-        if size == .custom {
-            if panelSizePreset == PanelSize.custom.rawValue {
-                panelCustomLocked.toggle()
-            } else {
-                panelSizePreset = PanelSize.custom.rawValue
-                panelCustomLocked = false
-            }
-        } else {
-            panelSizePreset = size.rawValue
-        }
-        NotificationCenter.default.post(name: .panelSizeChanged, object: nil)
-    }
 
     /// One-click Obsidian integration from the Integrations pill — same auto-setup
     /// the onboarding tour runs.
@@ -91,39 +71,7 @@ struct SettingsView: View {
 
     private var appearanceSection: some View {
         SettingSection(title: "Appearance") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Accent tint")
-                    .foregroundColor(.white.opacity(0.85))
-                Text("Colors buttons, highlights, and the default for new scripts.")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.5))
-
-                HStack(spacing: 10) {
-                    // Auto chip — follows the macOS system accent, live.
-                    Button(action: { theme.setMode(ThemeManager.systemSentinel) }) {
-                        ZStack {
-                            Circle().fill(Color(nsColor: .controlAccentColor))
-                            Image(systemName: "a.circle")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        .frame(width: 24, height: 24)
-                        .overlay(Circle().stroke(.white, lineWidth: theme.isSystem ? 2 : 0))
-                        .help("Match macOS accent color")
-                    }
-                    .buttonStyle(.plain)
-
-                    Rectangle().fill(.white.opacity(0.1)).frame(width: 1, height: 20)
-
-                    ForEach(ScriptPalette.swatches, id: \.self) { hex in
-                        Button(action: { theme.setMode(hex) }) {
-                            Circle().fill(Color(hex: hex)).frame(width: 24, height: 24)
-                                .overlay(Circle().stroke(.white, lineWidth: (!theme.isSystem && theme.mode == hex) ? 2 : 0))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            ThemeAccentPicker(subtitle: "Colors buttons, highlights, and the default for new scripts.")
         }
     }
 
@@ -281,62 +229,10 @@ struct SettingsView: View {
                     }
 
                     SettingSection(title: "Window") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Size")
-                                .foregroundColor(.white.opacity(0.8))
-
-                            HStack(spacing: 4) {
-                                ForEach(PanelSize.allCases) { size in
-                                    let isActive = panelSizePreset == size.rawValue
-                                    Button(action: { selectPanelSize(size) }) {
-                                        HStack(spacing: 4) {
-                                            Text(size.label)
-                                                .font(.system(size: 11, weight: .medium))
-                                            if size == .custom && isActive {
-                                                Image(systemName: panelCustomLocked ? "lock.fill" : "lock.open")
-                                                    .font(.system(size: 9))
-                                            }
-                                        }
-                                        .foregroundColor(.white.opacity(isActive ? 0.9 : 0.4))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .fill(isActive
-                                                      ? Color.panelAccent.opacity(0.14)
-                                                      : Color.white.opacity(0.04))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .stroke(.white.opacity(isActive ? 0.10 : 0.05), lineWidth: 0.5)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-
-                            if panelSizePreset == PanelSize.custom.rawValue {
-                                HStack(spacing: 6) {
-                                    Image(systemName: panelCustomLocked ? "lock.fill" : "arrow.up.left.and.arrow.down.right")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.white.opacity(0.45))
-                                    Text(panelCustomLocked
-                                         ? "Locked. Click Custom again to unlock and resize."
-                                         : "Drag the panel edges to resize, then click Custom to lock it.")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.white.opacity(0.4))
-                                    Spacer()
-                                    Text("\(Int(panelCustomWidth))×\(Int(panelCustomHeight))")
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(.white.opacity(0.35))
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                                .transition(.opacity)
-                            }
-                        }
+                        PanelSizeEditor()
                     }
 
-appearanceSection
+                    appearanceSection
 
                     tabsSection
 
@@ -847,33 +743,3 @@ struct IntegrateButton: View {
     }
 }
 
-struct SettingSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: () -> Content
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.4))
-                .textCase(.uppercase)
-                .tracking(1.0)
-                .padding(.leading, 4)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                content()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                    )
-            )
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-    }
-}
