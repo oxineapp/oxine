@@ -203,7 +203,7 @@ if [ "$PUBLISH" = "1" ]; then
   else
     gh release create "$TAG" "$DMG" "$UPDATES/Oxine-$VERSION.zip" \
       --title "Oxine $VERSION" \
-      --notes "See the in-app updater or download the DMG. First launch: right-click → Open (unsigned by an Apple Developer ID)."
+      --notes "See the in-app updater or download the DMG. First launch: open System Settings → Privacy & Security and click \"Open Anyway\" to allow Oxine."
   fi
   echo "✓ published $TAG"
 fi
