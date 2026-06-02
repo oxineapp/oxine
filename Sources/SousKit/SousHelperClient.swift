@@ -9,8 +9,8 @@ import SousShared
 /// daemon is *detected* by whether it answers over XPC, not by any registration
 /// database.
 @MainActor
-final class SousHelperClient: ObservableObject {
-    enum InstallState: Equatable {
+public final class SousHelperClient: ObservableObject {
+    public enum InstallState: Equatable {
         case unsupported       // not Apple Silicon
         case notInstalled
         case installing        // admin prompt up / launchd settling
@@ -18,7 +18,7 @@ final class SousHelperClient: ObservableObject {
         case failed(String)
     }
 
-    @Published private(set) var installState: InstallState = .notInstalled
+    @Published public private(set) var installState: InstallState = .notInstalled
 
     private let branding = HelperBranding.oxine
     private var label: String { branding.label }       // com.oxine.soushelper
@@ -57,7 +57,7 @@ final class SousHelperClient: ObservableObject {
     }
 
 
-    func install() async {
+    public func install() async {
         guard BatteryReader.isAppleSilicon else { installState = .unsupported; return }
         installState = .installing
         let ok = await runPrivileged(installScript())
@@ -67,7 +67,7 @@ final class SousHelperClient: ObservableObject {
         installState = (await ping()) ? .installed : .failed("The helper didn’t start.")
     }
 
-    func uninstall() async {
+    public func uninstall() async {
         if let proxy = connection?.remoteObjectProxyWithErrorHandler({ _ in }) as? SousXPCProtocol {
             proxy.uninstall { _ in }       // release charging control first
         }

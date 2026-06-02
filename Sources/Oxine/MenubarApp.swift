@@ -1,5 +1,6 @@
 import SwiftUI
 import PanelKit
+import SousKit
 import AppKit
 import Combine
 

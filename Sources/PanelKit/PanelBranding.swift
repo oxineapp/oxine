@@ -33,7 +33,8 @@ public enum PanelKit {
     }
 
     /// The configured settings suite (or `.standard` if it can't be opened).
-    static var settingsDefaults: UserDefaults {
+    /// Public so feature modules (e.g. SousKit) persist into the same store.
+    public static var settingsDefaults: UserDefaults {
         UserDefaults(suiteName: branding.settingsSuite) ?? .standard
     }
 }

@@ -6,14 +6,16 @@ import UniformTypeIdentifiers
 /// The Sous tab: battery charge-health control. Adapts between "needs setup"
 /// (install / approve the helper), "unsupported" (Intel / no battery), and the
 /// live control surface.
-struct SousView: View {
+public struct SousView: View {
     @ObservedObject var sous: SousManager
     @State private var alert: String?
     @State private var draggingWidget: SousManager.SousWidget?
     @State private var showCalibInfo = false
     private var accent: Color { .panelAccent }
 
-    var body: some View {
+    public init(sous: SousManager) { self.sous = sous }
+
+    public var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 header

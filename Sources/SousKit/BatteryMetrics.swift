@@ -6,54 +6,54 @@ import IOKit.ps
 /// privileges from `IOPowerSources` (the macOS-shown %, AC state) and the
 /// `AppleSmartBattery` IORegistry node (voltage/current/temperature and, on
 /// Apple Silicon, the `PowerTelemetryData` that drives Power Flow).
-struct BatteryMetrics: Sendable, Equatable {
-    var hasBattery = false
-    var macOSPercent = -1
-    var externalConnected = false
-    var isCharging = false
-    var fullyCharged = false
-    var tempC: Double = 0
-    var voltageV: Double = 0
-    var amperageA: Double = 0          // signed: positive = into the battery
-    var batteryPowerW: Double = 0      // signed: positive = charging the battery
-    var adapterMaxWatts: Double = 0    // rated ceiling from AdapterDetails
-    var adapterInputW: Double?         // instantaneous draw from the wall
-    var systemLoadW: Double?           // instantaneous Mac consumption
-    var adapterDescription: String?
-    var currentCapacitymAh: Double = 0 // charge left in the cell (AppleRawCurrentCapacity)
-    var maxCapacitymAh: Double = 0     // full-charge capacity now (AppleRawMaxCapacity)
-    var designCapacitymAh: Double = 0  // factory capacity (DesignCapacity)
-    var cycleCount = 0
+public struct BatteryMetrics: Sendable, Equatable {
+    public var hasBattery = false
+    public var macOSPercent = -1
+    public var externalConnected = false
+    public var isCharging = false
+    public var fullyCharged = false
+    public var tempC: Double = 0
+    public var voltageV: Double = 0
+    public var amperageA: Double = 0          // signed: positive = into the battery
+    public var batteryPowerW: Double = 0      // signed: positive = charging the battery
+    public var adapterMaxWatts: Double = 0    // rated ceiling from AdapterDetails
+    public var adapterInputW: Double?         // instantaneous draw from the wall
+    public var systemLoadW: Double?           // instantaneous Mac consumption
+    public var adapterDescription: String?
+    public var currentCapacitymAh: Double = 0 // charge left in the cell (AppleRawCurrentCapacity)
+    public var maxCapacitymAh: Double = 0     // full-charge capacity now (AppleRawMaxCapacity)
+    public var designCapacitymAh: Double = 0  // factory capacity (DesignCapacity)
+    public var cycleCount = 0
     // Detailed hardware readout (Stats widget).
-    var batterySerial: String?
-    var lowPowerMode = false
-    var adapterName: String?
-    var adapterManufacturer: String?
-    var adapterSerial: String?
-    var adapterVoltageV: Double = 0    // wall-side voltage (AdapterDetails)
-    var adapterCurrentA: Double = 0    // wall-side current (AdapterDetails)
+    public var batterySerial: String?
+    public var lowPowerMode = false
+    public var adapterName: String?
+    public var adapterManufacturer: String?
+    public var adapterSerial: String?
+    public var adapterVoltageV: Double = 0    // wall-side voltage (AdapterDetails)
+    public var adapterCurrentA: Double = 0    // wall-side current (AdapterDetails)
 
     /// True once we've successfully read a battery (used to gate the UI between
     /// "no battery / desktop Mac" and live data).
-    var isValid: Bool { hasBattery }
+    public var isValid: Bool { hasBattery }
 
     // MARK: Calculated battery-life detail
 
     /// Energy currently in the cell, in watt-hours (capacity × pack voltage).
-    var energyNowWh: Double { currentCapacitymAh / 1000 * voltageV }
+    public var energyNowWh: Double { currentCapacitymAh / 1000 * voltageV }
     /// Energy at a full charge, in watt-hours.
-    var energyFullWh: Double { maxCapacitymAh / 1000 * voltageV }
+    public var energyFullWh: Double { maxCapacitymAh / 1000 * voltageV }
 
     /// State-of-health: full-charge capacity as a fraction of the design
     /// capacity, 0–1. Nil when we don't have both numbers.
-    var healthFraction: Double? {
+    public var healthFraction: Double? {
         guard maxCapacitymAh > 0, designCapacitymAh > 0 else { return nil }
         return min(maxCapacitymAh / designCapacitymAh, 1)
     }
 
     /// Estimated seconds of runtime left on battery, from live power draw. Nil
     /// when plugged in or the draw is too small/noisy to project.
-    var secondsToEmpty: Double? {
+    public var secondsToEmpty: Double? {
         guard !externalConnected, voltageV > 0, energyNowWh > 0 else { return nil }
         let drawW = abs(batteryPowerW)
         guard drawW > 0.5 else { return nil }
@@ -62,7 +62,7 @@ struct BatteryMetrics: Sendable, Equatable {
 
     /// Estimated seconds until the cell is full while charging, from live power.
     /// Nil when not actively charging or the inflow is negligible.
-    var secondsToFull: Double? {
+    public var secondsToFull: Double? {
         guard externalConnected, isCharging, voltageV > 0, energyFullWh > energyNowWh else { return nil }
         let inW = batteryPowerW
         guard inW > 0.5 else { return nil }
@@ -70,9 +70,9 @@ struct BatteryMetrics: Sendable, Equatable {
     }
 }
 
-enum BatteryReader {
+public enum BatteryReader {
     /// Apple Silicon check that survives a universal binary running on Intel.
-    static let isAppleSilicon: Bool = {
+    public static let isAppleSilicon: Bool = {
         var value: Int32 = 0
         var size = MemoryLayout<Int32>.size
         let ok = sysctlbyname("hw.optional.arm64", &value, &size, nil, 0) == 0

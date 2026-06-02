@@ -39,11 +39,20 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ]
         ),
+        // The Sous battery feature as a reusable module: manager, view, helper
+        // client, power-flow diagram, and battery metrics. Built on PanelKit
+        // chrome + the shared XPC types, so both Oxine and the standalone
+        // sous-vide app embed the same feature.
+        .target(
+            name: "SousKit",
+            dependencies: ["SousShared", "PanelKit"]
+        ),
         .executableTarget(
             name: "Oxine",
             dependencies: [
                 "SousShared",
                 "PanelKit",
+                "SousKit",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []

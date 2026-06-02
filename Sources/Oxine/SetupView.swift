@@ -1,5 +1,6 @@
 import SwiftUI
 import PanelKit
+import SousKit
 
 struct SetupView: View {
     @State var currentStep = 0

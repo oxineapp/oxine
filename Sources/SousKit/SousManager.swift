@@ -1,32 +1,33 @@
 import Foundation
 import Combine
 import SousShared
+import PanelKit
 
 /// Single source of truth for Sous in the app. Persists the user's `SousConfig`,
 /// pushes it to the daemon, and polls battery metrics + daemon status so the UI
-/// and the menu-bar icon stay live. Shared so both `MainView` and the
-/// `AppDelegate` (live icon) observe the same state.
+/// and the menu-bar icon stay live. Shared so both the host app's panel and its
+/// menu-bar icon observe the same state.
 @MainActor
-final class SousManager: ObservableObject {
-    static let shared = SousManager()
+public final class SousManager: ObservableObject {
+    public static let shared = SousManager()
 
     /// Coarse menu-bar signal: green = held at the limit, orange = actively
     /// working (charging toward / discharging / heat-paused), none = idle.
-    enum MenuTint { case none, holding, working }
+    public enum MenuTint { case none, holding, working }
 
     /// The rearrangeable cards on the Sous tab (Power Flow is fixed, not in here).
     /// Declaration order is the default layout for fresh installs; raw values
     /// persist a user's own arrangement.
-    enum SousWidget: String, Codable, CaseIterable, Identifiable {
+    public enum SousWidget: String, Codable, CaseIterable, Identifiable {
         case battery, calibration, stats
-        var id: String { rawValue }
+        public var id: String { rawValue }
     }
 
     /// How often to run an automatic calibration cycle (AlDente-style).
-    enum CalibrationSchedule: String, Codable, CaseIterable, Identifiable {
+    public enum CalibrationSchedule: String, Codable, CaseIterable, Identifiable {
         case off, biweekly, monthly, bimonthly
-        var id: String { rawValue }
-        var label: String {
+        public var id: String { rawValue }
+        public var label: String {
             switch self {
             case .off:       return "Off"
             case .biweekly:  return "Every 2 weeks"
@@ -35,7 +36,7 @@ final class SousManager: ObservableObject {
             }
         }
         /// Spacing between automatic runs, in seconds. Nil when off.
-        var interval: TimeInterval? {
+        public var interval: TimeInterval? {
             let day = 86_400.0
             switch self {
             case .off:       return nil
@@ -46,24 +47,24 @@ final class SousManager: ObservableObject {
         }
     }
 
-    @Published var config: SousConfig { didSet { if config != oldValue { commit() } } }
-    @Published private(set) var status = SousStatus()
-    @Published private(set) var metrics = BatteryMetrics() { didSet { throttleLifeMetrics() } }
+    @Published public var config: SousConfig { didSet { if config != oldValue { commit() } } }
+    @Published public private(set) var status = SousStatus()
+    @Published public private(set) var metrics = BatteryMetrics() { didSet { throttleLifeMetrics() } }
     /// A copy of `metrics` refreshed at most once every 6 s, used for the battery
     /// life/health detail so its numbers don't flicker at the Power Flow refresh
     /// rate (~3 Hz). Power Flow itself keeps using the live `metrics`.
-    @Published private(set) var lifeMetrics = BatteryMetrics()
-    @Published private(set) var menuTint: MenuTint = .none
+    @Published public private(set) var lifeMetrics = BatteryMetrics()
+    @Published public private(set) var menuTint: MenuTint = .none
     /// When the last calibration cycle completed, persisted across launches.
-    @Published private(set) var lastCalibration: Date?
+    @Published public private(set) var lastCalibration: Date?
     /// User-arranged order of the Sous tab cards; persisted on change.
-    @Published var widgetOrder: [SousWidget] { didSet { persistWidgetOrder() } }
+    @Published public var widgetOrder: [SousWidget] { didSet { persistWidgetOrder() } }
     /// Automatic calibration cadence; persisted on change.
-    @Published var calibrationSchedule: CalibrationSchedule { didSet { persistSchedule() } }
+    @Published public var calibrationSchedule: CalibrationSchedule { didSet { persistSchedule() } }
 
-    let helper = SousHelperClient()
+    public let helper = SousHelperClient()
 
-    private let defaults = UserDefaults(suiteName: "com.oxine.settings") ?? .standard
+    private let defaults = PanelKit.settingsDefaults
     private let configKey = "sousConfig"
     private let lastCalibrationKey = "sousLastCalibration"
     private let widgetOrderKey = "sousWidgetOrder"
@@ -110,11 +111,11 @@ final class SousManager: ObservableObject {
     // MARK: Display
 
     /// Sous is actually able to control charging right now.
-    var capable: Bool { helper.installState == .installed && status.capable }
+    public var capable: Bool { helper.installState == .installed && status.capable }
 
     /// The state to show. Prefer the daemon's authoritative state; fall back to
     /// an honest metrics-derived value when the daemon isn't controlling.
-    var displayState: SousState {
+    public var displayState: SousState {
         if capable && (config.enabled || config.calibrationActive) { return status.state }
         if !metrics.externalConnected { return .unplugged }
         if metrics.isCharging { return .charging }
@@ -123,29 +124,29 @@ final class SousManager: ObservableObject {
 
     /// Battery % to show — the daemon's hardware reading when available, else the
     /// macOS-reported value.
-    var displayPercent: Int {
+    public var displayPercent: Int {
         if capable, status.hardwareCharge >= 0 { return status.hardwareCharge }
         return metrics.macOSPercent
     }
 
-    var tempC: Double { capable ? status.tempC : metrics.tempC }
+    public var tempC: Double { capable ? status.tempC : metrics.tempC }
 
     // MARK: Intents
 
-    func setEnabled(_ on: Bool) { config.enabled = on }
-    func setLimit(_ pct: Int) { config.chargeLimit = min(max(pct, SafetyFloors.minChargeLimit), 100) }
-    func setSailing(_ pct: Int) { config.sailingRange = min(max(pct, 0), SafetyFloors.maxSailingRange) }
-    func setHeatProtect(_ on: Bool) { config.heatProtectEnabled = on }
-    func setMaxTemp(_ c: Double) { config.maxTempC = c }
-    func setControlLED(_ on: Bool) { config.controlLED = on }
+    public func setEnabled(_ on: Bool) { config.enabled = on }
+    public func setLimit(_ pct: Int) { config.chargeLimit = min(max(pct, SafetyFloors.minChargeLimit), 100) }
+    public func setSailing(_ pct: Int) { config.sailingRange = min(max(pct, 0), SafetyFloors.maxSailingRange) }
+    public func setHeatProtect(_ on: Bool) { config.heatProtectEnabled = on }
+    public func setMaxTemp(_ c: Double) { config.maxTempC = c }
+    public func setControlLED(_ on: Bool) { config.controlLED = on }
 
     /// This Mac exposes the MagSafe/adapter LED (daemon confirmed the SMC key).
-    var canControlLED: Bool { capable && status.canControlLED }
+    public var canControlLED: Bool { capable && status.canControlLED }
 
     /// One-shot charge to 100 %, reverting to the limit once unplugged.
     /// Returns a user-facing reason if it isn't possible, else nil.
     @discardableResult
-    func topUp() -> String? {
+    public func topUp() -> String? {
         guard capable else { return "Set up Sous before topping up." }
         guard metrics.externalConnected else { return "Top up is only possible when the charger is connected." }
         config.enabled = true
@@ -157,7 +158,7 @@ final class SousManager: ObservableObject {
     /// Actively drain to the current limit while plugged in. Returns a reason if
     /// it isn't possible, else nil.
     @discardableResult
-    func discharge() -> String? {
+    public func discharge() -> String? {
         guard capable else { return "Set up Sous before discharging." }
         guard metrics.externalConnected else { return "Discharge is only possible when the charger is connected." }
         guard displayPercent > config.chargeLimit else {
@@ -169,7 +170,7 @@ final class SousManager: ObservableObject {
         return nil
     }
 
-    func cancelTransient() {
+    public func cancelTransient() {
         config.topUpActive = false
         config.dischargeActive = false
     }
@@ -177,15 +178,15 @@ final class SousManager: ObservableObject {
     // MARK: Calibration
 
     /// True while a calibration cycle is running on the daemon.
-    var isCalibrating: Bool { config.calibrationActive }
+    public var isCalibrating: Bool { config.calibrationActive }
 
     /// The daemon's current calibration phase (`.idle` when not calibrating).
-    var calibrationPhase: CalibrationPhase { status.calibrationPhase }
+    public var calibrationPhase: CalibrationPhase { status.calibrationPhase }
 
     /// Begin a one-shot calibration cycle. Returns a user-facing reason if it
     /// can't start, else nil.
     @discardableResult
-    func startCalibration() -> String? {
+    public func startCalibration() -> String? {
         guard capable else { return "Set up Sous before calibrating." }
         guard metrics.externalConnected else { return "Calibration needs the charger connected the whole time." }
         // Clear any conflicting one-shots; the daemon ignores the limit while
@@ -198,20 +199,20 @@ final class SousManager: ObservableObject {
     }
 
     /// Abort calibration and hand charging back to the normal limit.
-    func cancelCalibration() {
+    public func cancelCalibration() {
         config.calibrationActive = false
     }
 
     /// When the next automatic calibration is due, or nil when scheduling is off.
     /// Counts from the last calibration if there is one, else from when the
     /// schedule was switched on.
-    var nextCalibrationDue: Date? {
+    public var nextCalibrationDue: Date? {
         guard let interval = calibrationSchedule.interval else { return nil }
         let base = lastCalibration ?? scheduleAnchor ?? Date()
         return base.addingTimeInterval(interval)
     }
 
-    func setCalibrationSchedule(_ s: CalibrationSchedule) { calibrationSchedule = s }
+    public func setCalibrationSchedule(_ s: CalibrationSchedule) { calibrationSchedule = s }
 
     /// Start a scheduled calibration if one is due and conditions allow. Called
     /// from the poll loop. Silently no-ops when not applicable.
@@ -265,7 +266,7 @@ final class SousManager: ObservableObject {
         }
     }
 
-    func setViewActive(_ active: Bool) {
+    public func setViewActive(_ active: Bool) {
         activeViewers = max(0, activeViewers + (active ? 1 : -1))
         if activeViewers > 0 { startFastMetrics() } else { stopFastMetrics() }
     }
@@ -327,5 +328,5 @@ final class SousManager: ObservableObject {
     }
 
     /// Force an immediate refresh (e.g. right after install/approval).
-    func refreshNow() { Task { await poll() } }
+    public func refreshNow() { Task { await poll() } }
 }
