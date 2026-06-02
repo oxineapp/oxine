@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.2.7</title>
+            <pubDate>Wed, 03 Jun 2026 01:10:46 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>127</sparkle:version>
+            <sparkle:shortVersionString>1.2.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.2.7</h2><ul><li>The in-app updater now shows the changelog for the version being installed.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.7/Oxine-1.2.7.zip" length="2703634" type="application/octet-stream" sparkle:edSignature="3wJnsPvrYr41qoI+/B801/e9FXTsqmHaBduxvAz1rvEl2QBHJnal9SLwPqpkAEjpjosUs86yH0nrZwkgp2vuAA=="/>
+        </item>
+        <item>
             <title>1.2.6</title>
             <pubDate>Wed, 03 Jun 2026 00:57:19 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -22,16 +33,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.5/Oxine-1.2.5.zip" length="2668041" type="application/octet-stream" sparkle:edSignature="rXpkJCpqwhnrHNw0BYfXj1B7BrqmcWINeeXcyRCzAdvI5pgbvXLGMBcSjCpeXw7gJwEbHh7oPlORuKC/2Vw7Cg=="/>
-        </item>
-        <item>
-            <title>1.2.4</title>
-            <pubDate>Wed, 03 Jun 2026 00:11:06 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>124</sparkle:version>
-            <sparkle:shortVersionString>1.2.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.4/Oxine-1.2.4.zip" length="2667175" type="application/octet-stream" sparkle:edSignature="fJYkEw7uudROw0Hx+L1EJ3nqv3DepiXXKXtdBvNpiJaOMCtU5MNHY8TCrzyopyKEaJQJCAtoUgktBthyKgwiBQ=="/>
         </item>
     </channel>
 </rss>
