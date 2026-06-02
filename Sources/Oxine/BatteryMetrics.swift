@@ -20,10 +20,54 @@ struct BatteryMetrics: Sendable, Equatable {
     var adapterInputW: Double?         // instantaneous draw from the wall
     var systemLoadW: Double?           // instantaneous Mac consumption
     var adapterDescription: String?
+    var currentCapacitymAh: Double = 0 // charge left in the cell (AppleRawCurrentCapacity)
+    var maxCapacitymAh: Double = 0     // full-charge capacity now (AppleRawMaxCapacity)
+    var designCapacitymAh: Double = 0  // factory capacity (DesignCapacity)
+    var cycleCount = 0
+    // Detailed hardware readout (Stats widget).
+    var batterySerial: String?
+    var lowPowerMode = false
+    var adapterName: String?
+    var adapterManufacturer: String?
+    var adapterSerial: String?
+    var adapterVoltageV: Double = 0    // wall-side voltage (AdapterDetails)
+    var adapterCurrentA: Double = 0    // wall-side current (AdapterDetails)
 
     /// True once we've successfully read a battery (used to gate the UI between
     /// "no battery / desktop Mac" and live data).
     var isValid: Bool { hasBattery }
+
+    // MARK: Calculated battery-life detail
+
+    /// Energy currently in the cell, in watt-hours (capacity × pack voltage).
+    var energyNowWh: Double { currentCapacitymAh / 1000 * voltageV }
+    /// Energy at a full charge, in watt-hours.
+    var energyFullWh: Double { maxCapacitymAh / 1000 * voltageV }
+
+    /// State-of-health: full-charge capacity as a fraction of the design
+    /// capacity, 0–1. Nil when we don't have both numbers.
+    var healthFraction: Double? {
+        guard maxCapacitymAh > 0, designCapacitymAh > 0 else { return nil }
+        return min(maxCapacitymAh / designCapacitymAh, 1)
+    }
+
+    /// Estimated seconds of runtime left on battery, from live power draw. Nil
+    /// when plugged in or the draw is too small/noisy to project.
+    var secondsToEmpty: Double? {
+        guard !externalConnected, voltageV > 0, energyNowWh > 0 else { return nil }
+        let drawW = abs(batteryPowerW)
+        guard drawW > 0.5 else { return nil }
+        return energyNowWh / drawW * 3600
+    }
+
+    /// Estimated seconds until the cell is full while charging, from live power.
+    /// Nil when not actively charging or the inflow is negligible.
+    var secondsToFull: Double? {
+        guard externalConnected, isCharging, voltageV > 0, energyFullWh > energyNowWh else { return nil }
+        let inW = batteryPowerW
+        guard inW > 0.5 else { return nil }
+        return (energyFullWh - energyNowWh) / inW * 3600
+    }
 }
 
 enum BatteryReader {
@@ -97,9 +141,31 @@ enum BatteryReader {
         if let amp { m.amperageA = Double(amp) / 1000.0 }
         m.batteryPowerW = m.voltageV * m.amperageA
 
+        // Capacity figures drive the calculated runtime + health detail. The
+        // `AppleRaw*` keys are the true mAh values on Apple Silicon (plain
+        // CurrentCapacity/MaxCapacity report a 0–100 percentage there).
+        if let cur = (d["AppleRawCurrentCapacity"] as? Int) ?? (d["CurrentCapacity"] as? Int) {
+            m.currentCapacitymAh = Double(cur)
+        }
+        if let mx = (d["AppleRawMaxCapacity"] as? Int) ?? (d["MaxCapacity"] as? Int) {
+            m.maxCapacitymAh = Double(mx)
+        }
+        if let dc = d["DesignCapacity"] as? Int { m.designCapacitymAh = Double(dc) }
+        if let cc = d["CycleCount"] as? Int { m.cycleCount = cc }
+        m.batterySerial = d["Serial"] as? String
+        m.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+
         if let adapter = d["AdapterDetails"] as? [String: Any] {
             if let w = adapter["Watts"] as? Int { m.adapterMaxWatts = Double(w) }
             m.adapterDescription = adapter["Description"] as? String
+            m.adapterName = (adapter["Name"] as? String) ?? (adapter["Description"] as? String)
+            m.adapterManufacturer = adapter["Manufacturer"] as? String
+            m.adapterSerial = (adapter["SerialString"] as? String) ?? (adapter["SerialNumber"] as? String)
+            // AdapterDetails reports millivolts / milliamps when present.
+            if let mv = (adapter["AdapterVoltage"] as? Int) ?? (adapter["Voltage"] as? Int) {
+                m.adapterVoltageV = Double(mv) / 1000.0
+            }
+            if let ma = adapter["Current"] as? Int { m.adapterCurrentA = Double(ma) / 1000.0 }
         }
         // Apple Silicon exposes instantaneous power telemetry (values in mW).
         if let tele = d["PowerTelemetryData"] as? [String: Any] {

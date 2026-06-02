@@ -667,6 +667,26 @@ appearanceSection
                     }.toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
                 }
                 Divider().overlay(Color.white.opacity(0.06))
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-calibrate").foregroundColor(.white.opacity(0.85))
+                        Text("Run a full calibration cycle on a schedule to keep the gauge accurate.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Picker("", selection: Binding(get: { sous.calibrationSchedule },
+                                                  set: { sous.setCalibrationSchedule($0) })) {
+                        ForEach(SousManager.CalibrationSchedule.allCases) { Text($0.label).tag($0) }
+                    }.frame(width: 130)
+                }
+                if sous.calibrationSchedule != .off, let next = sous.nextCalibrationDue {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar").font(.system(size: 10)).foregroundColor(.white.opacity(0.4))
+                        Text("Next calibration \(next.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption2).foregroundColor(.white.opacity(0.45))
+                    }
+                }
+                Divider().overlay(Color.white.opacity(0.06))
                 Button {
                     Task { await sous.helper.install(); sous.refreshNow() }
                 } label: {

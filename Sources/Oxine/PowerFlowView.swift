@@ -56,11 +56,26 @@ struct PowerFlowView: View {
             bands: [Band(from: 0, to: 0, watts: max(drain, 0.05), color: orange)])
     }
 
+    /// Drop cadence (seconds per pulse) bucketed by wattage, so it doesn't jitter
+    /// with every live reading and both ribbons share one stable rhythm. Faster
+    /// flow → shorter interval.
+    static func pulsePeriod(forWatts w: Double) -> Double {
+        switch w {
+        case ..<30:  return 4.2     // 0–30 W
+        case ..<60:  return 3.4     // 30–60 W
+        case ..<90:  return 2.6     // 60–90 W
+        default:     return 1.9     // 90 W+
+        }
+    }
+
     var body: some View {
         let m = model()
         let total = max(m.bands.reduce(0) { $0 + $1.watts }, 0.05)
+        let period = Self.pulsePeriod(forWatts: total)   // one shared cadence for all ribbons
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
+            let capH: CGFloat = 15          // bottom strip for the per-source watt totals
+            let hs = h - capH               // Sankey region height; ribbons live above the strip
             let cw: CGFloat = 32
             let padV: CGFloat = 6
             let gap: CGFloat = 6
@@ -72,7 +87,7 @@ struct PowerFlowView: View {
             // side needs the most gaps so it fits both.
             let gapsL = boundaryCount(m.bands, side: .from)
             let gapsR = boundaryCount(m.bands, side: .to)
-            let usableH = h - padV * 2 - gap * CGFloat(max(gapsL, gapsR))
+            let usableH = hs - padV * 2 - gap * CGFloat(max(gapsL, gapsR))
             // Clamp each flow to a minimum so a tiny ribbon never detaches from its
             // chip, then scale to fit if the minimums overflow the height. The chip
             // is sized to exactly this span (see chipFrame), so they stay flush.
@@ -81,8 +96,8 @@ struct PowerFlowView: View {
             let rawSum = raw.reduce(0, +)
             let thk = rawSum > usableH ? raw.map { $0 * usableH / rawSum } : raw
 
-            let lTop = tops(m.bands, side: .from, thk: thk, h: h, pad: padV, gap: gap)
-            let rTop = tops(m.bands, side: .to, thk: thk, h: h, pad: padV, gap: gap)
+            let lTop = tops(m.bands, side: .from, thk: thk, h: hs, pad: padV, gap: gap)
+            let rTop = tops(m.bands, side: .to, thk: thk, h: hs, pad: padV, gap: gap)
 
             ZStack {
                 ForEach(Array(m.bands.enumerated()), id: \.offset) { i, band in
@@ -91,19 +106,33 @@ struct PowerFlowView: View {
                         x0: x0, x1: x1,
                         leftTop: lTop[i] ?? padV, rightTop: rTop[i] ?? padV,
                         thickness: thk[i],
-                        color: band.color, watts: band.watts
+                        color: band.color, watts: band.watts, period: period
                     )
                 }
                 ForEach(Array(m.left.enumerated()), id: \.offset) { i, p in
-                    let (y, ch) = chipFrame(port: i, side: .from, bands: m.bands, thk: thk, tops: lTop, h: h, pad: padV)
+                    let (y, ch) = chipFrame(port: i, side: .from, bands: m.bands, thk: thk, tops: lTop, h: hs, pad: padV)
                     chip(p.symbol, roundLeading: true).frame(width: cw, height: ch).position(x: cw / 2 + 2, y: y)
                 }
                 ForEach(Array(m.right.enumerated()), id: \.offset) { i, p in
-                    let (y, ch) = chipFrame(port: i, side: .to, bands: m.bands, thk: thk, tops: rTop, h: h, pad: padV)
+                    let (y, ch) = chipFrame(port: i, side: .to, bands: m.bands, thk: thk, tops: rTop, h: hs, pad: padV)
                     chip(p.symbol, roundLeading: false).frame(width: cw, height: ch).position(x: w - cw / 2 - 2, y: y)
+                }
+                // Per-source total wattage, in the reserved strip beneath each left chip.
+                ForEach(Array(m.left.enumerated()), id: \.offset) { i, _ in
+                    Text(String(format: "%.1f W", sourceTotal(m.bands, chip: i)))
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize()
+                        .position(x: cw / 2 + 2, y: hs + capH / 2)
                 }
             }
         }
+    }
+
+    /// Total watts leaving a left (source) chip — the sum of the ribbons rooted on it.
+    private func sourceTotal(_ bands: [Band], chip: Int) -> Double {
+        bands.filter { $0.from == chip }.reduce(0) { $0 + $1.watts }
     }
 
     private enum Side { case from, to }
@@ -164,17 +193,12 @@ struct PowerFlowView: View {
             bottomTrailingRadius: roundLeading ? 0 : r,
             topTrailingRadius: roundLeading ? 0 : r,
             style: .continuous)
-        return ZStack {
-            // Same translucent glass panel as the ribbons (no blur layer).
-            shape.fill(.white.opacity(0.16))
-            shape.fill(LinearGradient(colors: [.white.opacity(0.14), .clear],
-                                      startPoint: .top, endPoint: .center))
-            shape.stroke(.white.opacity(0.22), lineWidth: 0.6)
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)          // crisp glyph on top
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        return Image(systemName: symbol)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)              // crisp glyph on top
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .glassEffect(.regular, in: shape)     // real Liquid Glass tile
+            .overlay(shape.stroke(.white.opacity(0.18), lineWidth: 0.6))
     }
 }
 
@@ -187,6 +211,7 @@ private struct RibbonLayer: View {
     let thickness: CGFloat
     let color: Color
     let watts: Double
+    let period: Double          // shared, bucketed cadence (see PowerFlowView.pulsePeriod)
 
     private var shape: RibbonShape {
         RibbonShape(x0: x0, x1: x1, leftTop: leftTop, rightTop: rightTop, thickness: thickness)
@@ -196,16 +221,14 @@ private struct RibbonLayer: View {
 
     var body: some View {
         ZStack {
-            // A translucent glassy panel sitting *on* the card's liquid glass — no
-            // extra backdrop-blur layer, so nothing frosts over the content.
-            shape.fill(.white.opacity(0.14))
-            // Top gloss for the glass sheen.
-            shape.fill(LinearGradient(colors: [.white.opacity(0.13), .clear],
-                                      startPoint: .top, endPoint: .center))
-            // A faint identity tint so green vs accent reads even at rest.
-            shape.fill(color.opacity(0.10))
-            // The colour lives in the wave, which sweeps left→right.
-            colorWave.mask(shape)
+            // Real Liquid Glass ribbon with a faint identity tint, so there's a
+            // subtle coloured glass behind the brighter glint that streams over it.
+            Color.clear
+                .frame(width: w, height: h)
+                .glassEffect(.regular.tint(color.opacity(0.12)), in: shape)
+            // The colour lives in the flow, which streams left→right. A soft blur
+            // makes it hazy/liquid; the mask keeps it inside the ribbon.
+            flow.blur(radius: 5).mask(shape)
             // Crisp edge.
             shape.stroke(.white.opacity(0.22), lineWidth: 0.6)
             // Wattage, riding the ribbon's centre — drawn last, fully crisp.
@@ -221,35 +244,45 @@ private struct RibbonLayer: View {
         .frame(width: w, height: h)
     }
 
-    /// A soft pulse of `color` that sweeps the ribbon left→right, then rests.
-    /// The rest shrinks with wattage, so heavier flow pulses more often; near
-    /// zero it's a rare, slow shimmer.
-    private var colorWave: some View {
+    /// One soft `color` drop per cycle that glides the full ribbon left→right,
+    /// then rests until the next — the AlDente power-flow feel. The cycle length
+    /// is set by *this line's* wattage: ~3 s when barely flowing, down to ~1 s at
+    /// high power. The drop fades in at the left edge and out at the right, so it
+    /// never pops in mid-ribbon or cuts off.
+    private var flow: some View {
         TimelineView(.animation) { ctx in
             Canvas { gc, _ in
-                let t = ctx.date.timeIntervalSinceReferenceDate
                 let span = x1 - x0
-                let sweep = 1.1                                   // seconds to cross
-                let rest = min(max(7.0 - Double(min(watts, 90)) * 0.075, 0.5), 7.0)
-                let cycle = sweep + rest
-                let phase = t.truncatingRemainder(dividingBy: cycle)
-                guard phase < sweep else { return }               // resting → just the panel
+                guard span > 1 else { return }
+                let t = ctx.date.timeIntervalSinceReferenceDate
 
-                // Eased position of the wave's centre.
-                let raw = phase / sweep
-                let p = raw * raw * (3 - 2 * raw)                 // smoothstep
-                let cx = x0 + CGFloat(p) * span
-                let cy = leftMid + (rightMid - leftMid) * CGFloat(p)
-                let half = max(span * 0.22, 40)
-                // Brighter at mid-sweep, fading in at the start and out at the end.
-                let envelope = sin(Double(raw) * .pi)
-                let peak = 0.7 * envelope
+                // `period` is bucketed upstream, so it stays constant frame-to-frame
+                // (no phase jumps from a value that wobbles with every live reading).
+                let sweep = min(1.8, period * 0.78)        // travel time; rest is the remainder
+                let phase = t.truncatingRemainder(dividingBy: period)
+                guard phase < sweep else { return }         // between drops → just the glass
 
-                let band = CGRect(x: cx - half, y: cy - thickness, width: half * 2, height: thickness * 2)
+                let raw = CGFloat(phase / sweep)                 // 0→1 over the sweep
+                let p = raw * raw * (3 - 2 * raw)                 // smoothstep → eases in & out
+                let cx = x0 + p * span                            // bright leading tip
+                let cy = centerY(at: p)
+                // The trailing tail grows as the swoosh travels — short at the
+                // start, long by the time the tip reaches the end.
+                let tail = (0.12 + 0.55 * raw) * span
+                let trailX = cx - tail
+                // Ease the whole thing in at the start and out at the end.
+                let edge: CGFloat = 0.18
+                let env = raw < edge ? raw / edge : (raw > 1 - edge ? (1 - raw) / edge : 1)
+                let peak = 0.62 * Double(env)
+
+                // One-sided swoosh: faded tail behind, brightest at the leading tip.
+                let band = CGRect(x: trailX, y: cy - thickness,
+                                  width: max(tail, 1), height: thickness * 2)
                 let grad = Gradient(stops: [
-                    .init(color: color.opacity(0), location: 0),
-                    .init(color: color.opacity(peak), location: 0.5),
-                    .init(color: color.opacity(0), location: 1),
+                    .init(color: color.opacity(0), location: 0),          // faded tail end
+                    .init(color: color.opacity(peak * 0.25), location: 0.55),
+                    .init(color: color.opacity(peak * 0.7), location: 0.85),
+                    .init(color: color.opacity(peak), location: 1),       // bright leading tip
                 ])
                 gc.fill(Path(band),
                         with: .linearGradient(grad,
@@ -258,6 +291,13 @@ private struct RibbonLayer: View {
             }
             .frame(width: w, height: h)
         }
+    }
+
+    /// Y of the ribbon centreline at horizontal fraction `p` (0…1), easing the
+    /// same way the ribbon curve does so pulses track the bend.
+    private func centerY(at p: CGFloat) -> CGFloat {
+        let s = p * p * (3 - 2 * p)                                 // smoothstep
+        return leftMid + (rightMid - leftMid) * s
     }
 }
 

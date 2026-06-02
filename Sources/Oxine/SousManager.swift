@@ -14,15 +14,68 @@ final class SousManager: ObservableObject {
     /// working (charging toward / discharging / heat-paused), none = idle.
     enum MenuTint { case none, holding, working }
 
+    /// The rearrangeable cards on the Sous tab (Power Flow is fixed, not in here).
+    /// Declaration order is the default layout for fresh installs; raw values
+    /// persist a user's own arrangement.
+    enum SousWidget: String, Codable, CaseIterable, Identifiable {
+        case battery, calibration, stats
+        var id: String { rawValue }
+    }
+
+    /// How often to run an automatic calibration cycle (AlDente-style).
+    enum CalibrationSchedule: String, Codable, CaseIterable, Identifiable {
+        case off, biweekly, monthly, bimonthly
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .off:       return "Off"
+            case .biweekly:  return "Every 2 weeks"
+            case .monthly:   return "Monthly"
+            case .bimonthly: return "Every 2 months"
+            }
+        }
+        /// Spacing between automatic runs, in seconds. Nil when off.
+        var interval: TimeInterval? {
+            let day = 86_400.0
+            switch self {
+            case .off:       return nil
+            case .biweekly:  return 14 * day
+            case .monthly:   return 30 * day
+            case .bimonthly: return 60 * day
+            }
+        }
+    }
+
     @Published var config: SousConfig { didSet { if config != oldValue { commit() } } }
     @Published private(set) var status = SousStatus()
-    @Published private(set) var metrics = BatteryMetrics()
+    @Published private(set) var metrics = BatteryMetrics() { didSet { throttleLifeMetrics() } }
+    /// A copy of `metrics` refreshed at most once every 6 s, used for the battery
+    /// life/health detail so its numbers don't flicker at the Power Flow refresh
+    /// rate (~3 Hz). Power Flow itself keeps using the live `metrics`.
+    @Published private(set) var lifeMetrics = BatteryMetrics()
     @Published private(set) var menuTint: MenuTint = .none
+    /// When the last calibration cycle completed, persisted across launches.
+    @Published private(set) var lastCalibration: Date?
+    /// User-arranged order of the Sous tab cards; persisted on change.
+    @Published var widgetOrder: [SousWidget] { didSet { persistWidgetOrder() } }
+    /// Automatic calibration cadence; persisted on change.
+    @Published var calibrationSchedule: CalibrationSchedule { didSet { persistSchedule() } }
 
     let helper = SousHelperClient()
 
     private let defaults = UserDefaults(suiteName: "com.oxine.settings") ?? .standard
     private let configKey = "sousConfig"
+    private let lastCalibrationKey = "sousLastCalibration"
+    private let widgetOrderKey = "sousWidgetOrder"
+    private let scheduleKey = "sousCalibrationSchedule"
+    private let scheduleAnchorKey = "sousScheduleAnchor"
+    /// Baseline for the schedule when there's no prior calibration to count from.
+    private var scheduleAnchor: Date?
+    private var lastLifeUpdate = Date.distantPast
+    private static let lifeRefreshInterval: TimeInterval = 6
+    /// Tracks whether we've seen the daemon actually running a cycle, so we can
+    /// detect the finished edge and clear our own one-shot flag.
+    private var sawCalibrationRunning = false
     private var pollTask: Task<Void, Never>?
     /// Faster polling while the panel is on screen.
     private var activeViewers = 0
@@ -33,6 +86,22 @@ final class SousManager: ObservableObject {
             config = SafetyFloors.clamp(saved)
         } else {
             config = SousConfig()
+        }
+        lastCalibration = defaults.object(forKey: lastCalibrationKey) as? Date
+        scheduleAnchor = defaults.object(forKey: scheduleAnchorKey) as? Date
+        if let raw = defaults.string(forKey: scheduleKey), let s = CalibrationSchedule(rawValue: raw) {
+            calibrationSchedule = s
+        } else {
+            calibrationSchedule = .off
+        }
+        if let data = defaults.data(forKey: widgetOrderKey),
+           let order = try? JSONDecoder().decode([SousWidget].self, from: data) {
+            // Tolerate added/removed widgets across versions: keep saved order,
+            // append any that are new, drop any that no longer exist.
+            let known = Set(SousWidget.allCases)
+            widgetOrder = order.filter(known.contains) + SousWidget.allCases.filter { !order.contains($0) }
+        } else {
+            widgetOrder = SousWidget.allCases
         }
         // The poll loop pings the daemon, re-asserts config, and refreshes status.
         startPolling()
@@ -46,7 +115,7 @@ final class SousManager: ObservableObject {
     /// The state to show. Prefer the daemon's authoritative state; fall back to
     /// an honest metrics-derived value when the daemon isn't controlling.
     var displayState: SousState {
-        if capable && config.enabled { return status.state }
+        if capable && (config.enabled || config.calibrationActive) { return status.state }
         if !metrics.externalConnected { return .unplugged }
         if metrics.isCharging { return .charging }
         return .off          // plugged, not charging, Sous not controlling
@@ -105,6 +174,80 @@ final class SousManager: ObservableObject {
         config.dischargeActive = false
     }
 
+    // MARK: Calibration
+
+    /// True while a calibration cycle is running on the daemon.
+    var isCalibrating: Bool { config.calibrationActive }
+
+    /// The daemon's current calibration phase (`.idle` when not calibrating).
+    var calibrationPhase: CalibrationPhase { status.calibrationPhase }
+
+    /// Begin a one-shot calibration cycle. Returns a user-facing reason if it
+    /// can't start, else nil.
+    @discardableResult
+    func startCalibration() -> String? {
+        guard capable else { return "Set up Sous before calibrating." }
+        guard metrics.externalConnected else { return "Calibration needs the charger connected the whole time." }
+        // Clear any conflicting one-shots; the daemon ignores the limit while
+        // calibrating, so the toggle state doesn't matter.
+        config.topUpActive = false
+        config.dischargeActive = false
+        config.calibrationActive = true
+        refreshNow()
+        return nil
+    }
+
+    /// Abort calibration and hand charging back to the normal limit.
+    func cancelCalibration() {
+        config.calibrationActive = false
+    }
+
+    /// When the next automatic calibration is due, or nil when scheduling is off.
+    /// Counts from the last calibration if there is one, else from when the
+    /// schedule was switched on.
+    var nextCalibrationDue: Date? {
+        guard let interval = calibrationSchedule.interval else { return nil }
+        let base = lastCalibration ?? scheduleAnchor ?? Date()
+        return base.addingTimeInterval(interval)
+    }
+
+    func setCalibrationSchedule(_ s: CalibrationSchedule) { calibrationSchedule = s }
+
+    /// Start a scheduled calibration if one is due and conditions allow. Called
+    /// from the poll loop. Silently no-ops when not applicable.
+    private func maybeAutoCalibrate() {
+        guard calibrationSchedule != .off, !isCalibrating, capable, metrics.externalConnected else { return }
+        guard let due = nextCalibrationDue, Date() >= due else { return }
+        startCalibration()
+    }
+
+    /// Mirror `metrics` into `lifeMetrics` no more than once per refresh window,
+    /// so the battery detail updates on a calm cadence. The first reading always
+    /// lands immediately (distantPast baseline).
+    private func throttleLifeMetrics() {
+        let now = Date()
+        guard now.timeIntervalSince(lastLifeUpdate) >= Self.lifeRefreshInterval else { return }
+        lastLifeUpdate = now
+        lifeMetrics = metrics
+    }
+
+    private func persistWidgetOrder() {
+        if let data = try? JSONEncoder().encode(widgetOrder) { defaults.set(data, forKey: widgetOrderKey) }
+    }
+
+    private func persistSchedule() {
+        defaults.set(calibrationSchedule.rawValue, forKey: scheduleKey)
+        // Anchor the countdown when scheduling is first switched on without a
+        // prior calibration to measure from; clear it when turned off.
+        if calibrationSchedule == .off {
+            scheduleAnchor = nil
+            defaults.removeObject(forKey: scheduleAnchorKey)
+        } else if scheduleAnchor == nil && lastCalibration == nil {
+            scheduleAnchor = Date()
+            defaults.set(scheduleAnchor, forKey: scheduleAnchorKey)
+        }
+    }
+
     // MARK: Plumbing
 
     private func commit() {
@@ -114,10 +257,10 @@ final class SousManager: ObservableObject {
     }
 
     private func updateMenuTint() {
-        guard capable && config.enabled else { menuTint = .none; return }
+        guard capable && (config.enabled || config.calibrationActive) else { menuTint = .none; return }
         switch displayState {
         case .holding, .sailing:                       menuTint = .holding
-        case .charging, .toppingUp, .discharging, .heatProtect: menuTint = .working
+        case .charging, .toppingUp, .discharging, .heatProtect, .calibrating: menuTint = .working
         case .off, .unplugged:                         menuTint = .none
         }
     }
@@ -161,7 +304,26 @@ final class SousManager: ObservableObject {
             helper.apply(config)                 // keep the daemon in sync (idempotent)
             if let s = await helper.fetchStatus() { status = s }
         }
+        reconcileCalibration()
+        maybeAutoCalibrate()
         updateMenuTint()
+    }
+
+    /// The daemon clears `calibrationActive` internally when the cycle ends, but
+    /// our persisted config still holds it true — and the idempotent re-apply
+    /// would re-arm it. Detect the running→idle edge from the reported phase and
+    /// clear our own flag, recording when it finished.
+    private func reconcileCalibration() {
+        guard config.calibrationActive else { sawCalibrationRunning = false; return }
+        if status.calibrationPhase != .idle {
+            sawCalibrationRunning = true
+        } else if sawCalibrationRunning {
+            // Was running, daemon now reports idle → completed.
+            sawCalibrationRunning = false
+            config.calibrationActive = false
+            lastCalibration = Date()
+            defaults.set(lastCalibration, forKey: lastCalibrationKey)
+        }
     }
 
     /// Force an immediate refresh (e.g. right after install/approval).

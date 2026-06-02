@@ -10,7 +10,7 @@ public enum SousXPC {
     public static let plistName = "com.oxine.soushelper.plist"
     /// Bumped whenever the daemon binary changes so the app can detect a stale
     /// installed helper and re-register.
-    public static let helperVersion = "4"
+    public static let helperVersion = "5"
 }
 
 /// What the user wants Sous to do. Sent app → daemon; the daemon is the sole
@@ -39,6 +39,11 @@ public struct SousConfig: Codable, Sendable, Equatable {
     /// amber while charging/discharging toward it. Off hands the LED back to the
     /// system. Only effective on MagSafe-equipped Macs (`SousStatus.canControlLED`).
     public var controlLED: Bool
+    /// One-shot battery calibration cycle (charge 100 → drain → recharge 100 →
+    /// hold → return to limit). The daemon owns the multi-phase state machine and
+    /// clears this flag when the cycle finishes or is cancelled; the charge limit
+    /// is ignored for the duration. See `CalibrationPhase`.
+    public var calibrationActive: Bool
 
     public init(enabled: Bool = false,
                 chargeLimit: Int = 80,
@@ -47,7 +52,8 @@ public struct SousConfig: Codable, Sendable, Equatable {
                 dischargeActive: Bool = false,
                 heatProtectEnabled: Bool = false,
                 maxTempC: Double = 35,
-                controlLED: Bool = false) {
+                controlLED: Bool = false,
+                calibrationActive: Bool = false) {
         self.enabled = enabled
         self.chargeLimit = chargeLimit
         self.sailingRange = sailingRange
@@ -56,6 +62,43 @@ public struct SousConfig: Codable, Sendable, Equatable {
         self.heatProtectEnabled = heatProtectEnabled
         self.maxTempC = maxTempC
         self.controlLED = controlLED
+        self.calibrationActive = calibrationActive
+    }
+}
+
+/// The phases of a battery calibration cycle, in order. Recalibrates the cell's
+/// fuel-gauge IC by exercising a full discharge/charge cycle. Mirrors AlDente's
+/// calibration sequence. The daemon advances through these on its control loop.
+public enum CalibrationPhase: String, Codable, Sendable {
+    case idle              // not calibrating
+    case chargingToFull    // 1: charge to 100 %
+    case dischargingToLow  // 2: drain (adapter cut) to the low target
+    case recharging        // 3: charge back to 100 %
+    case holdingAtFull     // 4: hold at 100 % for the dwell window
+    case restoring         // 5: drain back down to the user's charge limit
+
+    /// Short user-facing description of what's happening in this phase.
+    public var label: String {
+        switch self {
+        case .idle:             return "Idle"
+        case .chargingToFull:   return "Charging to 100%"
+        case .dischargingToLow: return "Draining to \(SafetyFloors.calibrationLowTarget)%"
+        case .recharging:       return "Recharging to 100%"
+        case .holdingAtFull:    return "Holding at 100%"
+        case .restoring:        return "Returning to limit"
+        }
+    }
+
+    /// Rough 0–1 progress through the whole cycle, for a progress bar.
+    public var fraction: Double {
+        switch self {
+        case .idle:             return 0
+        case .chargingToFull:   return 0.15
+        case .dischargingToLow: return 0.4
+        case .recharging:       return 0.65
+        case .holdingAtFull:    return 0.85
+        case .restoring:        return 0.95
+        }
     }
 }
 
@@ -74,6 +117,12 @@ public enum SafetyFloors {
     /// Refuse a heat threshold outside a sane band.
     public static let minTempC = 25.0
     public static let maxTempC = 45.0
+
+    /// Calibration drains to this charge before recharging. Matches AlDente's
+    /// 10 % target — low enough to exercise the gauge, above the discharge floor.
+    public static let calibrationLowTarget = 10
+    /// How long calibration holds at 100 % before returning to the limit (1 h).
+    public static let calibrationHoldSeconds: TimeInterval = 3600
 
     public static func clamp(_ c: SousConfig) -> SousConfig {
         var c = c
@@ -97,6 +146,7 @@ public enum SousState: String, Codable, Sendable {
     case toppingUp    // one-shot charge to 100
     case heatProtect  // charging paused because it's too hot
     case unplugged    // on battery
+    case calibrating  // running a calibration cycle (see SousStatus.calibrationPhase)
 }
 
 /// Daemon → app snapshot. Encoded as JSON across XPC.
@@ -114,6 +164,10 @@ public struct SousStatus: Codable, Sendable, Equatable {
     public var lastError: String?
     /// This Mac exposes the MagSafe/adapter LED control key.
     public var canControlLED: Bool
+    /// Which calibration phase the daemon is in (`.idle` when not calibrating).
+    public var calibrationPhase: CalibrationPhase
+    /// Seconds left in the 100 % hold during `.holdingAtFull`, else nil.
+    public var calibrationHoldRemaining: Int?
 
     public init(capable: Bool = false,
                 chargeInhibited: Bool = false,
@@ -124,7 +178,9 @@ public struct SousStatus: Codable, Sendable, Equatable {
                 heatThrottled: Bool = false,
                 state: SousState = .off,
                 lastError: String? = nil,
-                canControlLED: Bool = false) {
+                canControlLED: Bool = false,
+                calibrationPhase: CalibrationPhase = .idle,
+                calibrationHoldRemaining: Int? = nil) {
         self.capable = capable
         self.chargeInhibited = chargeInhibited
         self.adapterInhibited = adapterInhibited
@@ -135,6 +191,8 @@ public struct SousStatus: Codable, Sendable, Equatable {
         self.state = state
         self.lastError = lastError
         self.canControlLED = canControlLED
+        self.calibrationPhase = calibrationPhase
+        self.calibrationHoldRemaining = calibrationHoldRemaining
     }
 }
 

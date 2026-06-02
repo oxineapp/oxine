@@ -26,6 +26,10 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
     private var lastError: String?
     private var currentState: SousState = .off
 
+    // Calibration state machine (advanced on `queue` from `tick`).
+    private var calibPhase: CalibrationPhase = .idle
+    private var calibHoldUntil: Date?
+
     private static let tickInterval: TimeInterval = 15
     private static let heatDwell: TimeInterval = 300   // 5-min min dwell each way
 
@@ -50,7 +54,10 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
                 reply(false); return
             }
             config = SafetyFloors.clamp(decoded)
-            log.notice("applyConfig: enabled=\(self.config.enabled) limit=\(self.config.chargeLimit) sailing=\(self.config.sailingRange) topUp=\(self.config.topUpActive) discharge=\(self.config.dischargeActive)")
+            // Cancelled (or never started) → reset the calibration machine so a
+            // later re-arm starts cleanly from phase 1.
+            if !config.calibrationActive { calibPhase = .idle; calibHoldUntil = nil }
+            log.notice("applyConfig: enabled=\(self.config.enabled) limit=\(self.config.chargeLimit) sailing=\(self.config.sailingRange) topUp=\(self.config.topUpActive) discharge=\(self.config.dischargeActive) calibrate=\(self.config.calibrationActive)")
             tick()                 // apply immediately, don't wait for the timer
             reply(true)
         }
@@ -91,11 +98,11 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
     /// green = held at the limit (or topped to 100), amber = working toward it.
     private func applyLED() {
         guard smcOpen, smc.canControlLED else { return }
-        guard config.enabled, config.controlLED else { smc.setLED(.auto); return }
+        guard config.enabled || config.calibrationActive, config.controlLED else { smc.setLED(.auto); return }
         switch currentState {
         case .holding, .sailing:                    smc.setLED(.green)
         case .charging, .toppingUp, .heatProtect:   smc.setLED(.amber)
-        case .discharging:                          smc.setLED(.blinkAmber)
+        case .discharging, .calibrating:            smc.setLED(.blinkAmber)
         case .off, .unplugged:                      smc.setLED(.auto)
         }
     }
@@ -116,13 +123,18 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
         let wasPlugged = wasPluggedIn
         defer { wasPluggedIn = plugged }
 
-        // Master switch off → behave like macOS does by default.
-        guard config.enabled else { release(); return }
-
         // A failed BUIC read must NOT be treated as 0% (which would silently
-        // enable charging). Hold the last hardware decision and bail.
+        // enable charging). Hold the last hardware decision and bail. Checked
+        // before the enabled gate so calibration is just as protected.
         guard charge >= 0 else { lastError = "BUIC read failed"; return }
         lastError = nil
+
+        // Calibration supersedes every normal mode (and the master switch): it's a
+        // deliberate one-shot maintenance cycle that ignores the charge limit.
+        if config.calibrationActive { runCalibration(charge: charge, plugged: plugged); return }
+
+        // Master switch off → behave like macOS does by default.
+        guard config.enabled else { release(); return }
 
         // Clear one-shots on the unplug edge.
         if wasPlugged && !plugged {
@@ -187,6 +199,83 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
         log.notice("hold: charge=\(charge) limit=\(limit) lower=\(lower) inhibit=\(inhibit) chargingEnabled=\(self.smc.isChargingEnabled)")
     }
 
+    /// Battery calibration cycle: charge to 100 → drain to the low target →
+    /// recharge to 100 → hold at 100 for the dwell → drain back to the user's
+    /// limit. Recalibrates the cell's fuel gauge. The limit is ignored throughout;
+    /// the loop advances one phase per healthy tick. Always on `queue`.
+    private func runCalibration(charge: Int, plugged: Bool) {
+        currentState = .calibrating
+        if calibPhase == .idle { calibPhase = .chargingToFull; log.notice("calibration start at \(charge)%") }
+
+        switch calibPhase {
+        case .idle:
+            break
+
+        case .chargingToFull:
+            smc.setAdapterEnabled(true)
+            smc.setChargingEnabled(true)
+            lastChargeInhibited = false
+            if charge >= 100 { advanceCalibration(to: .dischargingToLow) }
+
+        case .dischargingToLow:
+            if charge <= SafetyFloors.calibrationLowTarget {
+                smc.setAdapterEnabled(true)
+                advanceCalibration(to: .recharging)
+            } else {
+                // Cut the adapter so the cell drains even while plugged in.
+                smc.setAdapterEnabled(false)
+                smc.setChargingEnabled(false)
+                lastChargeInhibited = true
+            }
+
+        case .recharging:
+            smc.setAdapterEnabled(true)
+            smc.setChargingEnabled(true)
+            lastChargeInhibited = false
+            if charge >= 100 {
+                calibHoldUntil = Date().addingTimeInterval(SafetyFloors.calibrationHoldSeconds)
+                advanceCalibration(to: .holdingAtFull)
+            }
+
+        case .holdingAtFull:
+            smc.setAdapterEnabled(true)
+            smc.setChargingEnabled(true)       // top off / hold at 100
+            lastChargeInhibited = false
+            if charge < 99 {
+                // Lost full (typically the charger was pulled) → recharge first.
+                calibHoldUntil = nil
+                advanceCalibration(to: .recharging)
+            } else if let until = calibHoldUntil, Date() >= until {
+                advanceCalibration(to: .restoring)
+            }
+
+        case .restoring:
+            if charge <= config.chargeLimit {
+                finishCalibration()
+            } else if plugged {
+                // Drain back down to the user's normal limit before handing back.
+                smc.setAdapterEnabled(false)
+                smc.setChargingEnabled(false)
+                lastChargeInhibited = true
+            }
+            // If unplugged it drains on its own; just wait for the limit.
+        }
+    }
+
+    private func advanceCalibration(to phase: CalibrationPhase) {
+        calibPhase = phase
+        log.notice("calibration phase -> \(phase.rawValue)")
+    }
+
+    private func finishCalibration() {
+        log.notice("calibration finished")
+        config.calibrationActive = false
+        calibPhase = .idle
+        calibHoldUntil = nil
+        smc.setAdapterEnabled(true)
+        // Normal hold/limit behaviour resumes on the next tick.
+    }
+
     /// Heat-protection state with a 5-minute minimum dwell each way, so charging
     /// doesn't flap around the threshold. Returns true while throttled.
     private func heatGate(_ temp: Double) -> Bool {
@@ -216,8 +305,16 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
             heatThrottled: heatThrottled,
             state: currentState,
             lastError: lastError,
-            canControlLED: smc.canControlLED
+            canControlLED: smc.canControlLED,
+            calibrationPhase: calibPhase,
+            calibrationHoldRemaining: calibrationHoldRemaining()
         )
+    }
+
+    /// Whole seconds left in the calibration 100 % hold, or nil outside that phase.
+    private func calibrationHoldRemaining() -> Int? {
+        guard calibPhase == .holdingAtFull, let until = calibHoldUntil else { return nil }
+        return max(0, Int(until.timeIntervalSinceNow.rounded()))
     }
 
     /// Battery temperature in °C from the AppleSmartBattery IORegistry node

@@ -218,9 +218,15 @@ final class PluginManager: ObservableObject {
             eventMask: [.write, .rename, .delete],
             queue: DispatchQueue.global(qos: .utility)
         )
-        source.setEventHandler { [weak self] in
+        // The handler MUST stay non-isolated: the dispatch source fires it on the
+        // utility queue, and if the closure inherited this class's @MainActor
+        // isolation the Swift runtime asserts the wrong executor and traps
+        // (dispatch_assert_queue → EXC_BREAKPOINT). Typing it @Sendable strips the
+        // isolation; we hop to the main actor explicitly inside.
+        let onChange: @Sendable () -> Void = { [weak self] in
             Task { @MainActor in self?.scheduleReload() }
         }
+        source.setEventHandler(handler: onChange)
         source.setCancelHandler { close(fd) }
         source.resume()
         watcher = source

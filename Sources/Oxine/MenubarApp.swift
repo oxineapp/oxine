@@ -60,6 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Install crash capture before anything else can fault, so a crash during
+        // startup is still recorded for the next-launch report.
+        CrashReporter.install()
         // Carry settings/clipboard/setup state from the legacy com.menubar.*
         // domains to com.oxine.* (must run before anything reads a setting), then
         // rename the legacy "MenuBar Notes" folder to the new default. Both are
@@ -76,6 +79,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
         observeSous()
+        // If we crashed last run, offer to send the captured report.
+        CrashReporter.presentPendingReportIfNeeded()
     }
 
     /// Tint the menu-bar bead from the live Sous charge state.

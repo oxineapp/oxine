@@ -38,3 +38,5 @@ dist/
 
 # Local editor state
 .vscode/
+watchtower/
+oxshots/
