@@ -8,7 +8,7 @@ import Sparkle
 /// block the buttons invoke. The update *mechanics* (download, EdDSA verify,
 /// install) are untouched — this only replaces the presentation.
 @MainActor
-final class OxineUpdaterDriver: NSObject, SPUUserDriver {
+final class PanelUpdaterDriver: NSObject, SPUUserDriver {
     let model = UpdaterUIModel()
     private var window: NSWindow?
 
@@ -149,7 +149,7 @@ final class UpdaterUIModel: ObservableObject {
 
 private struct UpdaterView: View {
     @ObservedObject var model: UpdaterUIModel
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -170,7 +170,7 @@ private struct UpdaterView: View {
                 Image(nsImage: icon).resizable().frame(width: 44, height: 44)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Oxine").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                Text(PanelKit.branding.appName).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                 Text(title).font(.system(size: 12)).foregroundColor(.white.opacity(0.55))
             }
             Spacer()
@@ -198,7 +198,7 @@ private struct UpdaterView: View {
 
         case .available(let version):
             VStack(alignment: .leading, spacing: 6) {
-                Text("Oxine \(version) is available — you have \(model.currentVersion).")
+                Text("\(PanelKit.branding.appName) \(version) is available — you have \(model.currentVersion).")
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                 Text("The update is signed and verified, then installed in place.")
                     .font(.caption2).foregroundColor(.white.opacity(0.45))
@@ -227,7 +227,7 @@ private struct UpdaterView: View {
             ProgressView(value: max(0, min(1, model.extractProgress))).tint(accent)
 
         case .readyToInstall:
-            Text("The update is ready. Oxine will relaunch to finish installing.")
+            Text("The update is ready. \(PanelKit.branding.appName) will relaunch to finish installing.")
                 .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
@@ -240,7 +240,7 @@ private struct UpdaterView: View {
             progressRow(spinner: true, text: "Installing the update.")
 
         case .upToDate:
-            Text("You're on the latest version of Oxine.")
+            Text("You're on the latest version of \(PanelKit.branding.appName).")
                 .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack { Spacer(); accentButton("OK") { model.ack?(); model.onClose?() } }

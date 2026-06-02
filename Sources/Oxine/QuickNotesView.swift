@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 
 struct NotesView: View {
     @ObservedObject var notesManager: QuickNotesManager
@@ -145,7 +146,7 @@ struct JustTypeNotesSection: View {
     @State private var showConnect = false
     /// Brief confirmation tick shown when a sync finishes (dots collapse into it).
     @State private var showSyncedCheck = false
-    private let syncAccent = Color.oxineAccent
+    private let syncAccent = Color.panelAccent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -168,7 +169,7 @@ struct JustTypeNotesSection: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color.oxineAccent.opacity(0.9))
+                .foregroundColor(Color.panelAccent.opacity(0.9))
                 .disabled(sync.isSyncing)
             }
             .animation(.spring(response: 0.32, dampingFraction: 0.72), value: sync.isSyncing)
@@ -390,7 +391,7 @@ struct JustTypeConnectView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.oxineAccent)
+                .foregroundColor(Color.panelAccent)
                 .disabled(sync.isSigningIn)
             }
 
@@ -458,7 +459,7 @@ struct NoteItemRow: View {
                 if holdTimer != nil {
                     Circle()
                         .trim(from: 0, to: holdProgress)
-                        .stroke(Color.oxineAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .stroke(Color.panelAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .frame(width: 16, height: 16)
                         .transition(.opacity)

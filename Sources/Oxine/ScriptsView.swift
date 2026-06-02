@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import AppKit
 import UniformTypeIdentifiers
 
@@ -20,7 +21,7 @@ struct ScriptsView: View {
     @State private var draggingID: String?
     @FocusState private var gridFocused: Bool
 
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
     private let columns = [GridItem(.adaptive(minimum: 86, maximum: 120), spacing: 12)]
 
     var body: some View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 
 /// Identity for a content tab. The tab bar is user-customizable (add / remove /
 /// reorder), so tabs are addressed by identity, never by position — a removed
@@ -144,7 +145,7 @@ struct TabBarPreview: View {
                 .foregroundColor(.white.opacity(isActive ? 0.9 : 0.32))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
-                .background { if isActive { Capsule().fill(Color.oxineAccent.opacity(0.14)) } }
+                .background { if isActive { Capsule().fill(Color.panelAccent.opacity(0.14)) } }
             }
         }
         .padding(.horizontal, 8)
@@ -363,7 +364,7 @@ private struct ComposerChip: View {
         .padding(.horizontal, 8)
         .frame(maxWidth: fill ? .infinity : nil)
         .frame(height: 32)
-        .background(Capsule().fill(Color.oxineAccent.opacity(lifted ? 0.28 : 0.14)))
+        .background(Capsule().fill(Color.panelAccent.opacity(lifted ? 0.28 : 0.14)))
         .overlay(Capsule().stroke(.white.opacity(lifted ? 0.28 : 0.10), lineWidth: 0.5))
         .scaleEffect(lifted ? 1.06 : 1.0)
         .shadow(color: .black.opacity(lifted ? 0.4 : 0), radius: lifted ? 10 : 0, y: lifted ? 5 : 0)

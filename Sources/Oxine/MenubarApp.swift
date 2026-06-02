@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import AppKit
 import Combine
 
@@ -61,6 +62,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Tell the shared chrome who it is (settings suite + display name) before
+        // anything touches the theme, size store, crash reporter, or updater.
+        PanelKit.configure(.oxine)
         // Install crash capture before anything else can fault, so a crash during
         // startup is still recorded for the next-launch report.
         CrashReporter.install()
@@ -123,7 +127,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 name: .clipboardCaptured, object: nil)
         }
 
-        let initial = OxinePanelLayout.current
+        let initial = PanelLayout.current
         panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: initial.width, height: initial.height),
             styleMask: [.borderless, .fullSizeContentView, .resizable],
@@ -155,9 +159,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// here on every live-resize tick — and refuse resizes entirely when locked.
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         if isProgrammaticResize { return frameSize }
-        guard OxinePanelLayout.isResizable else { return sender.frame.size }
-        let lo = OxinePanelLayout.minSize
-        let hi = OxinePanelLayout.maxSize
+        guard PanelLayout.isResizable else { return sender.frame.size }
+        let lo = PanelLayout.minSize
+        let hi = PanelLayout.maxSize
         return NSSize(
             width: min(max(frameSize.width, lo.width), hi.width),
             height: min(max(frameSize.height, lo.height), hi.height)
@@ -183,11 +187,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// in place keeping the top edge pinned under the menubar.
     func applyPanelSize() {
         guard let panel else { return }
-        let size = OxinePanelLayout.current
+        let size = PanelLayout.current
         // Use frame-based min/max — AppKit honors these during live resize even
         // for a borderless panel; contentMinSize gets reset by the host controller.
-        let lo = OxinePanelLayout.isResizable ? OxinePanelLayout.minSize : size
-        let hi = OxinePanelLayout.isResizable ? OxinePanelLayout.maxSize : size
+        let lo = PanelLayout.isResizable ? PanelLayout.minSize : size
+        let hi = PanelLayout.isResizable ? PanelLayout.maxSize : size
         panel.minSize = lo
         panel.maxSize = hi
         panel.contentMinSize = lo
@@ -199,10 +203,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         frame.size = size
         frame.origin.y = top - size.height
         // Eased, fixed-duration resize that matches the SwiftUI content's
-        // animation (OxinePanelLayout.resizeDuration) so they move together
+        // animation (PanelLayout.resizeDuration) so they move together
         // instead of the AppKit default fighting the content's snap.
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = OxinePanelLayout.resizeDuration
+            ctx.duration = PanelLayout.resizeDuration
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             ctx.allowsImplicitAnimation = true
             panel.animator().setFrame(frame, display: true)
@@ -213,8 +217,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Persist user drag-resizes when the Custom preset is active.
     @objc private func panelDidResize(_ n: Notification) {
-        guard !isProgrammaticResize, OxinePanelLayout.isResizable, let panel else { return }
-        OxinePanelLayout.setCustomSize(panel.frame.size)
+        guard !isProgrammaticResize, PanelLayout.isResizable, let panel else { return }
+        PanelLayout.setCustomSize(panel.frame.size)
     }
 
     private func setupEventMonitoring() {
@@ -408,7 +412,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let buttonRect = button.convert(button.bounds, to: nil)
         let screenRect = button.window?.convertToScreen(buttonRect) ?? .zero
 
-        let size = OxinePanelLayout.current
+        let size = PanelLayout.current
         let panelWidth: CGFloat = size.width
         let panelHeight: CGFloat = size.height
         let x = screenRect.midX - panelWidth / 2

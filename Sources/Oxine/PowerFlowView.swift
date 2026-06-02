@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import SousShared
 
 /// A real Sankey power-flow diagram in the AlDente spirit: energy enters from
@@ -12,7 +13,7 @@ import SousShared
 struct PowerFlowView: View {
     let metrics: BatteryMetrics
     let state: SousState
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     private struct Port { let symbol: String }
     private struct Band { let from: Int; let to: Int; let watts: Double; let color: Color }

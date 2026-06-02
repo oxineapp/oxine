@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 
 struct AuthView: View {
     @StateObject private var store = Store()
@@ -6,7 +7,7 @@ struct AuthView: View {
     @State private var message: String?
     @State private var showAddSecret = false
     @State private var authing = false
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -338,7 +339,7 @@ struct CountdownRing: View {
                 .stroke(.white.opacity(0.1), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: 1 - progress)
-                .stroke(remaining <= 5 ? Color.red.opacity(0.7) : Color.oxineAccent,
+                .stroke(remaining <= 5 ? Color.red.opacity(0.7) : Color.panelAccent,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(remaining)")
@@ -439,7 +440,7 @@ struct AddSecretView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.oxineAccent)
+                .foregroundColor(Color.panelAccent)
                 .disabled(!Base32.isValid(secretInput.trimmingCharacters(in: .whitespaces)))
             }
             .padding(.bottom, 12)

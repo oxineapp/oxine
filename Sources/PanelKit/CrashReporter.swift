@@ -12,16 +12,17 @@ import Darwin
 /// The signal path is kept async-signal-safe: it only uses pre-allocated buffers
 /// and `open`/`write`/`backtrace_symbols_fd`. The richer NSException path runs in
 /// a normal context, so it can format freely.
-enum CrashReporter {
-    /// Watchtower crash sink (self-hosted). The ingest token ships in the app, so
-    /// it's effectively public; it only permits *submitting* a crash. Viewing is
-    /// gated by a separate admin token that lives only on the server.
+public enum CrashReporter {
+    /// Watchtower crash sink (self-hosted), shared across justtype apps. The
+    /// ingest token ships in the app, so it's effectively public; it only permits
+    /// *submitting* a crash. Viewing is gated by a separate admin token that
+    /// lives only on the server.
     static let endpoint = URL(string: "https://watchtower.justtype.io/ingest")!
     static let ingestToken = "13e9106f084c6a6ed5c6de5b284951713aded4af6717eae1"
 
     static var crashURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Oxine/last-crash.log")
+        return appSupport.appendingPathComponent("\(PanelKit.branding.appName)/last-crash.log")
     }
 
     // Pre-allocated so the signal handler never has to allocate. Marked
@@ -31,7 +32,7 @@ enum CrashReporter {
     nonisolated(unsafe) private static var frameBuffer = [UnsafeMutableRawPointer?](repeating: nil, count: 128)
 
     /// Install handlers. Call once, early, on the main thread.
-    static func install() {
+    public static func install() {
         try? FileManager.default.createDirectory(
             at: crashURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         pathBuffer = crashURL.path.utf8CString.map { $0 }
@@ -95,7 +96,7 @@ enum CrashReporter {
 
     /// If a crash file is waiting, show the report window. Call on launch (main).
     @MainActor
-    static func presentPendingReportIfNeeded() {
+    public static func presentPendingReportIfNeeded() {
         guard let raw = try? String(contentsOf: crashURL, encoding: .utf8),
               !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let report = metadataHeader() + "\n" + raw
@@ -109,7 +110,7 @@ enum CrashReporter {
     static func sendReport(_ report: String) async -> Bool {
         let info = Bundle.main.infoDictionary
         let payload: [String: Any] = [
-            "app": "Oxine",
+            "app": PanelKit.branding.appName,
             "version": (info?["CFBundleShortVersionString"] as? String) ?? "?",
             "os": ProcessInfo.processInfo.operatingSystemVersionString,
             "report": report,
@@ -137,7 +138,7 @@ enum CrashReporter {
             .flatMap { $0 } ?? Date()
         let stamp = when.formatted(date: .abbreviated, time: .standard)
         return """
-        Oxine \(version) (\(build))
+        \(PanelKit.branding.appName) \(version) (\(build))
         macOS \(os)
         Crashed: \(stamp)
         """
@@ -200,12 +201,12 @@ private final class CrashReportModel: ObservableObject {
 /// Dark crash-report sheet, styled to match `UpdaterView`.
 private struct CrashReportView: View {
     @ObservedObject var model: CrashReportModel
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 16) {
             header
-            Text("Oxine ran into a problem and had to close. Sending the details helps us fix it — nothing is sent until you choose to.")
+            Text("\(PanelKit.branding.appName) ran into a problem and had to close. Sending the details helps us fix it — nothing is sent until you choose to.")
                 .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -252,8 +253,8 @@ private struct CrashReportView: View {
                 Image(nsImage: icon).resizable().frame(width: 44, height: 44)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Oxine").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                Text("Oxine quit unexpectedly").font(.system(size: 12)).foregroundColor(.white.opacity(0.55))
+                Text(PanelKit.branding.appName).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                Text("\(PanelKit.branding.appName) quit unexpectedly").font(.system(size: 12)).foregroundColor(.white.opacity(0.55))
             }
             Spacer()
         }

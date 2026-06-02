@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 
 /// Create / edit a script without leaving the panel. A compact form over the
 /// grid: identity (name, icon, color), behaviour (input / output / trigger),

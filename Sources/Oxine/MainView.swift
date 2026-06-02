@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import AppKit
 
 struct MainView: View {
@@ -22,7 +23,7 @@ struct MainView: View {
     /// frame. Without this, `.frame(maxWidth:.infinity)` lets SwiftUI's NSHostingView resolve
     /// an unbounded width against the screen and animate the window to a degenerate size,
     /// which trips AppKit's Update-Constraints loop guard and crashes.
-    @State private var panelSize: CGSize = OxinePanelLayout.current
+    @State private var panelSize: CGSize = PanelLayout.current
     var appDelegate: AppDelegate?
 
     /// Slide direction follows tab order: higher index enters from the right.
@@ -57,7 +58,7 @@ struct MainView: View {
     }
 
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
-    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
+    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = PanelSize.standard.rawValue
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
     @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
@@ -71,7 +72,7 @@ struct MainView: View {
     @State private var preSettingsTab: TabID = .notes
 
     /// The corner grip shows only when the panel is actually drag-resizable.
-    var showResizeGrip: Bool { panelSizePreset == OxinePanelSize.custom.rawValue && !panelCustomLocked }
+    var showResizeGrip: Bool { panelSizePreset == PanelSize.custom.rawValue && !panelCustomLocked }
 
     var body: some View {
         Group {
@@ -90,7 +91,7 @@ struct MainView: View {
             }
         }
         .frame(width: panelSize.width, height: panelSize.height)
-        .background(OxineGlassShell(tint: glassOpacity))
+        .background(GlassShell(tint: glassOpacity))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -138,8 +139,8 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
             // Match the window's eased resize (see AppDelegate.applyPanelSize) so
             // the content frame tracks the window instead of snapping ahead of it.
-            withAnimation(.easeInOut(duration: OxinePanelLayout.resizeDuration)) {
-                panelSize = OxinePanelLayout.current
+            withAnimation(.easeInOut(duration: PanelLayout.resizeDuration)) {
+                panelSize = PanelLayout.current
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
@@ -147,7 +148,7 @@ struct MainView: View {
             // Skip while a preset change is animating the window — otherwise this
             // snaps the content frame to each animation tick and fights the eased
             // `panelSizeChanged` animation (the preset→custom jump).
-            guard OxinePanelLayout.isResizable,
+            guard PanelLayout.isResizable,
                   appDelegate?.isProgrammaticResize == false,
                   let window = note.object as? NSWindow, window == appDelegate?.panel else { return }
             panelSize = window.frame.size
@@ -258,61 +259,6 @@ struct SettingsBackBar: View {
     }
 }
 
-/// iOS-style curved corner resize handle that hugs the panel's rounded
-/// bottom-right corner, hinting the window can be dragged to resize.
-struct ResizeGrip: View {
-    var body: some View {
-        ZStack {
-            // Outer curve following the corner radius.
-            grip(inset: 0, length: 15)
-                .stroke(.white.opacity(0.45), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            // Inner shorter curve for the fin look.
-            grip(inset: 5, length: 9)
-                .stroke(.white.opacity(0.30), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-        }
-        .frame(width: 18, height: 18)
-        .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
-    }
-
-    private func grip(inset: CGFloat, length: CGFloat) -> Path {
-        Path { p in
-            let s: CGFloat = 18
-            p.move(to: CGPoint(x: s - inset, y: s - inset - length))
-            p.addQuadCurve(
-                to: CGPoint(x: s - inset - length, y: s - inset),
-                control: CGPoint(x: s - inset, y: s - inset)
-            )
-        }
-    }
-}
-
-/// The single Liquid Glass surface the whole panel sits on. One uniform tint
-/// driven by `glassOpacity` — no stacked materials, no separate dark slab.
-struct OxineGlassShell: View {
-    let tint: Double
-    var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.06 + tint * 0.46))
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-extension View {
-    /// Softly fades content under the chrome at top and bottom instead of
-    /// cutting it with divider lines.
-    func scrollEdgeFade(top: CGFloat = 14, bottom: CGFloat = 16) -> some View {
-        mask(
-            VStack(spacing: 0) {
-                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                    .frame(height: top)
-                Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: bottom)
-            }
-        )
-    }
-}
-
 struct TabBar: View {
     /// The user's chosen tabs, in order — driven by `TabBarConfig`.
     var tabs: [TabID]
@@ -405,7 +351,7 @@ struct TabBarItem: View {
                 ZStack {
                     if isActive {
                         Capsule()
-                            .fill(Color.oxineAccent.opacity(0.12))
+                            .fill(Color.panelAccent.opacity(0.12))
                             .matchedGeometryEffect(id: "tabHighlight", in: namespace)
                     }
                 }
@@ -432,7 +378,7 @@ struct FooterView: View {
     var appDelegate: AppDelegate?
     var onToggleSettings: () -> Void
     @State private var focusEnabled = FocusModeManager.shared.isEnabled
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -502,7 +448,7 @@ struct BiometricLockView: View {
     let onUnlock: () -> Void
     @State private var authing = false
     @State private var failed = false
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 14) {

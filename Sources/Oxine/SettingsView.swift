@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import ServiceManagement
 
 struct SettingsView: View {
@@ -9,7 +10,7 @@ struct SettingsView: View {
     @AppStorage("showPreview", store: UserDefaults(suiteName: "com.oxine.settings")) var showPreview = true
     @AppStorage("maxItems", store: UserDefaults(suiteName: "com.oxine.settings")) var maxItems = 50
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
-    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = OxinePanelSize.standard.rawValue
+    @AppStorage("panelSizePreset", store: UserDefaults(suiteName: "com.oxine.settings")) var panelSizePreset = PanelSize.standard.rawValue
     @AppStorage("panelCustomWidth", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomWidth = 380.0
     @AppStorage("panelCustomHeight", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomHeight = 560.0
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
@@ -40,12 +41,12 @@ struct SettingsView: View {
 
     /// Selecting a preset switches to it. Re-clicking the already-active Custom
     /// toggles its lock (lock icon shown); a fresh switch to Custom starts unlocked.
-    private func selectPanelSize(_ size: OxinePanelSize) {
+    private func selectPanelSize(_ size: PanelSize) {
         if size == .custom {
-            if panelSizePreset == OxinePanelSize.custom.rawValue {
+            if panelSizePreset == PanelSize.custom.rawValue {
                 panelCustomLocked.toggle()
             } else {
-                panelSizePreset = OxinePanelSize.custom.rawValue
+                panelSizePreset = PanelSize.custom.rawValue
                 panelCustomLocked = false
             }
         } else {
@@ -155,7 +156,7 @@ struct SettingsView: View {
                             .font(.caption2).foregroundColor(.white.opacity(0.5))
                     }
                 }
-                .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
 
                 if editingTabs {
                     TabEditor(config: tabConfig)
@@ -176,7 +177,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "folder")
                         .font(.system(size: 12))
-                        .foregroundColor(Color.oxineAccent)
+                        .foregroundColor(Color.panelAccent)
                     Text(NotesLocation.displayPath)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.white.opacity(0.6))
@@ -193,10 +194,10 @@ struct SettingsView: View {
                     Button("Change") { chooseNotesFolder() }
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color.oxineAccent)
+                        .foregroundColor(Color.panelAccent)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Capsule().fill(Color.oxineAccent.opacity(0.12)))
-                        .overlay(Capsule().stroke(Color.oxineAccent.opacity(0.25), lineWidth: 0.5))
+                        .background(Capsule().fill(Color.panelAccent.opacity(0.12)))
+                        .overlay(Capsule().stroke(Color.panelAccent.opacity(0.25), lineWidth: 0.5))
                         .contentShape(Capsule())
                 }
                 .padding(10)
@@ -217,7 +218,7 @@ struct SettingsView: View {
                             .foregroundColor(.white.opacity(0.5))
                     }
                 }
-                .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
             }
         }
     }
@@ -229,7 +230,7 @@ struct SettingsView: View {
                     Button(action: { showSetup = true }) {
                         HStack {
                             Image(systemName: "wand.and.stars")
-                                .foregroundColor(Color.oxineAccent)
+                                .foregroundColor(Color.panelAccent)
                             Text("Re-run Setup")
                                 .font(.system(size: 13, weight: .medium))
                             Spacer()
@@ -274,7 +275,7 @@ struct SettingsView: View {
                                     .font(.caption)
                             }
                             Slider(value: $glassOpacity, in: 0.0...1.0, step: 0.02)
-                                .tint(Color.oxineAccent)
+                                .tint(Color.panelAccent)
                         }
                     }
 
@@ -284,7 +285,7 @@ struct SettingsView: View {
                                 .foregroundColor(.white.opacity(0.8))
 
                             HStack(spacing: 4) {
-                                ForEach(OxinePanelSize.allCases) { size in
+                                ForEach(PanelSize.allCases) { size in
                                     let isActive = panelSizePreset == size.rawValue
                                     Button(action: { selectPanelSize(size) }) {
                                         HStack(spacing: 4) {
@@ -301,7 +302,7 @@ struct SettingsView: View {
                                         .background(
                                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                                 .fill(isActive
-                                                      ? Color.oxineAccent.opacity(0.14)
+                                                      ? Color.panelAccent.opacity(0.14)
                                                       : Color.white.opacity(0.04))
                                         )
                                         .overlay(
@@ -313,7 +314,7 @@ struct SettingsView: View {
                                 }
                             }
 
-                            if panelSizePreset == OxinePanelSize.custom.rawValue {
+                            if panelSizePreset == PanelSize.custom.rawValue {
                                 HStack(spacing: 6) {
                                     Image(systemName: panelCustomLocked ? "lock.fill" : "arrow.up.left.and.arrow.down.right")
                                         .font(.system(size: 10))
@@ -366,7 +367,7 @@ appearanceSection
                                     .foregroundColor(.white.opacity(0.5))
                             }
                         }
-                        .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                        .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
 
                         Divider()
                             .opacity(0.1)
@@ -421,7 +422,7 @@ appearanceSection
                                     .font(.caption)
                             }
                             Slider(value: $focusDimLevel, in: 0.0...0.8, step: 0.05)
-                                .tint(Color.oxineAccent)
+                                .tint(Color.panelAccent)
                                 .onChange(of: focusDimLevel) { _, newValue in
                                     FocusModeManager.shared.overlayOpacity = newValue
                                 }
@@ -439,7 +440,7 @@ appearanceSection
                                     .font(.caption)
                             }
                             Slider(value: $focusBlurIntensity, in: 0.0...1.0, step: 0.05)
-                                .tint(Color.oxineAccent)
+                                .tint(Color.panelAccent)
                                 .onChange(of: focusBlurIntensity) { _, newValue in
                                     FocusModeManager.shared.blurIntensity = newValue
                                 }
@@ -462,7 +463,7 @@ appearanceSection
                                 if obsidianConfigured {
                                     HStack(spacing: 6) {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(Color.oxineAccent)
+                                            .foregroundColor(Color.panelAccent)
                                             .font(.system(size: 12))
                                         Text("Obsidian vault ready")
                                             .font(.caption2)
@@ -499,7 +500,7 @@ appearanceSection
                             Spacer()
                             if justType.isConfigured {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(Color.oxineAccent)
+                                    .foregroundColor(Color.panelAccent)
                             } else {
                                 IntegrateButton(isLoading: justType.isSigningIn) { justType.signIn() }
                             }
@@ -556,7 +557,7 @@ appearanceSection
                                         .foregroundColor(.white.opacity(0.5))
                                 }
                             }
-                            .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                            .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
 
                             Button(action: { updater.checkForUpdates() }) {
                                 HStack(spacing: 8) {
@@ -566,13 +567,13 @@ appearanceSection
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
-                                .foregroundColor(Color.oxineAccent)
+                                .foregroundColor(Color.panelAccent)
                                 .font(.system(size: 12))
-                                .background(Color.oxineAccent.opacity(0.10))
+                                .background(Color.panelAccent.opacity(0.10))
                                 .cornerRadius(8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.oxineAccent.opacity(0.22), lineWidth: 0.5)
+                                        .stroke(Color.panelAccent.opacity(0.22), lineWidth: 0.5)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -671,7 +672,7 @@ appearanceSection
                         Text("Pause charging when the battery runs hot.")
                             .font(.caption2).foregroundColor(.white.opacity(0.5))
                     }
-                }.toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                }.toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
                 if sous.config.heatProtectEnabled {
                     HStack {
                         Text("Max temperature").foregroundColor(.white.opacity(0.8))
@@ -692,7 +693,7 @@ appearanceSection
                             Text("Green when held at your limit, amber while charging toward it.")
                                 .font(.caption2).foregroundColor(.white.opacity(0.5))
                         }
-                    }.toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+                    }.toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
                 }
                 Divider().overlay(Color.white.opacity(0.06))
                 HStack {
@@ -723,9 +724,9 @@ appearanceSection
                         Text("Reinstall / repair helper").fontWeight(.medium)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-                    .foregroundColor(Color.oxineAccent).font(.system(size: 12))
-                    .background(Color.oxineAccent.opacity(0.10)).cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.oxineAccent.opacity(0.2), lineWidth: 0.5))
+                    .foregroundColor(Color.panelAccent).font(.system(size: 12))
+                    .background(Color.panelAccent.opacity(0.10)).cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.panelAccent.opacity(0.2), lineWidth: 0.5))
                 }.buttonStyle(.plain)
                 Button {
                     Task { await sous.helper.uninstall() }
@@ -752,7 +753,7 @@ appearanceSection
 struct EditorChip: View {
     /// Bound to the same key NotesEditor stores under, so a pick re-renders us.
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -820,7 +821,7 @@ struct EditorChip: View {
 struct IntegrateButton: View {
     var isLoading: Bool
     let action: () -> Void
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         Button(action: action) {

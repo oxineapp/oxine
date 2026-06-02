@@ -5,26 +5,27 @@ import AppKit
 /// from Settings. The stored value is either a hex string (a manual swatch) or
 /// the sentinel `"system"`, which follows the user's macOS accent colour
 /// (System Settings → Appearance → Accent colour) and updates live when they
-/// change it.
+/// change it. Persists into the host's configured settings suite (see
+/// `PanelBranding`).
 @MainActor
-final class ThemeManager: ObservableObject {
-    static let shared = ThemeManager()
+public final class ThemeManager: ObservableObject {
+    public static let shared = ThemeManager()
 
-    static let systemSentinel = "system"
+    public static let systemSentinel = "system"
     private static let storeKey = "accentHex"
-    private static let defaultHex = "#66D9FF"   // the original Oxine blue (== ScriptPalette.swatches[0])
+    private static let defaultHex = "#66D9FF"   // the original Oxine blue
 
-    private let suite = UserDefaults(suiteName: "com.oxine.settings")
+    private let suite = PanelKit.settingsDefaults
 
     /// Republished whenever the tint changes so observing views re-render.
-    @Published private(set) var accent: Color = Color(hex: ThemeManager.defaultHex)
+    @Published public private(set) var accent: Color = Color(hex: ThemeManager.defaultHex)
 
     /// Raw stored mode: a hex string, or `systemSentinel`.
-    var mode: String {
-        suite?.string(forKey: Self.storeKey) ?? Self.defaultHex
+    public var mode: String {
+        suite.string(forKey: Self.storeKey) ?? Self.defaultHex
     }
 
-    var isSystem: Bool { mode == Self.systemSentinel }
+    public var isSystem: Bool { mode == Self.systemSentinel }
 
     private init() {
         recompute()
@@ -39,8 +40,8 @@ final class ThemeManager: ObservableObject {
     }
 
     /// Pick a manual swatch (pass a hex) or follow macOS (pass `systemSentinel`).
-    func setMode(_ value: String) {
-        suite?.set(value, forKey: Self.storeKey)
+    public func setMode(_ value: String) {
+        suite.set(value, forKey: Self.storeKey)
         recompute()
     }
 
@@ -49,18 +50,18 @@ final class ThemeManager: ObservableObject {
     }
 
     /// A concrete hex for the *current* accent — used as the default colour when
-    /// creating a new script (so new scripts inherit the app tint).
-    var resolvedHex: String {
-        isSystem ? NSColor.controlAccentColor.oxineHexString : mode
+    /// creating a new tinted item (so it inherits the app tint).
+    public var resolvedHex: String {
+        isSystem ? NSColor.controlAccentColor.panelHexString : mode
     }
 }
 
-extension Color {
+public extension Color {
     /// Snapshot of the current app accent. Reactive inside any view that
     /// observes `ThemeManager.shared` (re-evaluated on each body pass).
-    @MainActor static var oxineAccent: Color { ThemeManager.shared.accent }
+    @MainActor static var panelAccent: Color { ThemeManager.shared.accent }
 
-    /// Hex string ("#RRGGBB" or "RRGGBB") → Color. Falls back to the Oxine blue
+    /// Hex string ("#RRGGBB" or "RRGGBB") → Color. Falls back to the default blue
     /// (a literal, to avoid recursing through the themed accent).
     init(hex: String) {
         let s = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
@@ -77,10 +78,10 @@ extension Color {
     }
 }
 
-extension NSColor {
+public extension NSColor {
     /// "#RRGGBB" for this colour (converted to sRGB first). Falls back to the
-    /// Oxine blue if conversion fails.
-    var oxineHexString: String {
+    /// default blue if conversion fails.
+    var panelHexString: String {
         guard let c = usingColorSpace(.sRGB) else { return "#66D9FF" }
         let r = Int((c.redComponent * 255).rounded())
         let g = Int((c.greenComponent * 255).rounded())

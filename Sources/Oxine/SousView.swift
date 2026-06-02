@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 import SousShared
 import UniformTypeIdentifiers
 
@@ -10,7 +11,7 @@ struct SousView: View {
     @State private var alert: String?
     @State private var draggingWidget: SousManager.SousWidget?
     @State private var showCalibInfo = false
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         ScrollView {

@@ -31,10 +31,19 @@ let package = Package(
             name: "SousHelper",
             dependencies: ["SousShared", "SousHelperCore"]
         ),
+        // Brand-neutral panel chrome shared by Oxine and the standalone sous-vide
+        // app: glass shell, theme, size store, Sparkle updater UI, crash reporter.
+        .target(
+            name: "PanelKit",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ]
+        ),
         .executableTarget(
             name: "Oxine",
             dependencies: [
                 "SousShared",
+                "PanelKit",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []

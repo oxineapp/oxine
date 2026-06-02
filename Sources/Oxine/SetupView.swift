@@ -1,4 +1,5 @@
 import SwiftUI
+import PanelKit
 
 struct SetupView: View {
     @State var currentStep = 0
@@ -113,9 +114,9 @@ struct SetupView: View {
         HStack(spacing: 6) {
             ForEach(0..<SetupView.stepCount, id: \.self) { step in
                 Capsule()
-                    .fill(step <= currentStep ? Color.oxineAccent : Color.white.opacity(0.12))
+                    .fill(step <= currentStep ? Color.panelAccent : Color.white.opacity(0.12))
                     .frame(height: 3)
-                    .shadow(color: Color.oxineAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
+                    .shadow(color: Color.panelAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
             }
         }
@@ -174,7 +175,7 @@ struct SetupView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.oxineAccent.opacity(0.15)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.panelAccent.opacity(0.15)))
             .disabled(isLoading)
             .scaleEffect(isLoading ? 0.98 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isLoading)
@@ -187,7 +188,7 @@ struct Step1Welcome: View {
         VStack(spacing: 14) {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 38))
-                .foregroundColor(Color.oxineAccent)
+                .foregroundColor(Color.panelAccent)
             VStack(spacing: 6) {
                 Text("Welcome to Oxine")
                     .font(.system(size: 20, weight: .bold))
@@ -224,7 +225,7 @@ struct Step2Obsidian: View {
     /// Bumped on .notesEditorChanged to force this header (icon/name/"what
     /// happens" text, all read from NotesEditor) to re-render after a pick.
     @State private var editorTick = 0
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -355,7 +356,7 @@ struct Step3JustType: View {
         VStack(spacing: 12) {
             Image(systemName: "cloud.fill")
                 .font(.system(size: 36))
-                .foregroundColor(Color.oxineAccent)
+                .foregroundColor(Color.panelAccent)
             VStack(spacing: 6) {
                 Text("justtype Sync")
                     .font(.system(size: 19, weight: .bold))
@@ -368,10 +369,10 @@ struct Step3JustType: View {
                 Text("RECOMMENDED")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .tracking(0.8)
-                    .foregroundColor(Color.oxineAccent)
+                    .foregroundColor(Color.panelAccent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.oxineAccent.opacity(0.15)))
+                    .background(Capsule().fill(Color.panelAccent.opacity(0.15)))
                     .padding(.top, 2)
             }
 
@@ -396,8 +397,8 @@ struct Step3JustType: View {
                         .font(.system(size: 12, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .foregroundColor(Color.oxineAccent)
-                        .background(Color.oxineAccent.opacity(0.1))
+                        .foregroundColor(Color.panelAccent)
+                        .background(Color.panelAccent.opacity(0.1))
                         .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
                         .contentShape(Rectangle())
                 }
@@ -420,7 +421,7 @@ struct Step3JustType: View {
 /// degrades gracefully on Intel / battery-less Macs where Sous can't run.
 struct Step4Sous: View {
     @ObservedObject private var sous = SousManager.shared
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -521,7 +522,7 @@ struct Step4Sous: View {
 /// add / remove / reorder editor used in Settings, so the last thing you do in
 /// setup is make the bar yours. Re-runnable from Settings → Tabs.
 struct Step5Tabs: View {
-    private var accent: Color { .oxineAccent }
+    private var accent: Color { .panelAccent }
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.3.group")
@@ -555,7 +556,7 @@ struct FeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundColor(Color.oxineAccent)
+                .foregroundColor(Color.panelAccent)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)

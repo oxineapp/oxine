@@ -17,32 +17,32 @@ import Sparkle
 /// scheduled background checks still run on Sparkle's own timer (`SUFeedURL` +
 /// `SUScheduledCheckInterval` in Info.plist).
 @MainActor
-final class UpdaterManager: ObservableObject {
-    static let shared = UpdaterManager()
+public final class UpdaterManager: ObservableObject {
+    public static let shared = UpdaterManager()
 
-    private let driver: OxineUpdaterDriver
+    private let driver: PanelUpdaterDriver
     private let updater: SPUUpdater
 
     /// Mirrors Sparkle's "can a check start right now" so the button disables
     /// itself while a check/download is already in flight.
-    @Published var canCheckForUpdates = true
+    @Published public var canCheckForUpdates = true
 
     /// User-facing toggle for scheduled background checks (Sparkle persists it).
-    @Published var automaticallyChecks: Bool {
+    @Published public var automaticallyChecks: Bool {
         didSet { updater.automaticallyChecksForUpdates = automaticallyChecks }
     }
 
     private init() {
         // Custom user driver → Oxine's own dark update UI (see UpdaterUI.swift)
         // instead of Sparkle's stock AppKit windows.
-        driver = OxineUpdaterDriver()
+        driver = PanelUpdaterDriver()
         updater = SPUUpdater(hostBundle: .main, applicationBundle: .main,
                              userDriver: driver, delegate: nil)
         automaticallyChecks = updater.automaticallyChecksForUpdates
         do {
             try updater.start()
         } catch {
-            log("updater failed to start: \(error.localizedDescription)")
+            panelLog("updater failed to start: \(error.localizedDescription)")
         }
         updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
@@ -51,7 +51,7 @@ final class UpdaterManager: ObservableObject {
 
     /// Manual check. Brings the app forward first — an accessory app's Sparkle
     /// dialogs would otherwise open behind whatever's frontmost.
-    func checkForUpdates() {
+    public func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
         updater.checkForUpdates()
     }
