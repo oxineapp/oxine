@@ -1,16 +1,47 @@
 import Foundation
 
-/// Types and identifiers shared verbatim between the Oxine app and the
-/// privileged `Sous` daemon. Kept dependency-free so both sides can link it.
+/// Types and identifiers shared verbatim between a host app and the privileged
+/// `Sous` daemon. Kept dependency-free so both sides can link it.
 public enum SousXPC {
-    /// launchd label + Mach service the daemon advertises and the app looks up.
-    public static let machServiceName = "com.oxine.soushelper"
-    public static let helperLabel = "com.oxine.soushelper"
-    /// LaunchDaemon plist bundled at Contents/Library/LaunchDaemons/<plistName>.
-    public static let plistName = "com.oxine.soushelper.plist"
     /// Bumped whenever the daemon binary changes so the app can detect a stale
-    /// installed helper and re-register.
+    /// installed helper and re-register. Part of the protocol contract, so it's
+    /// shared across brands (an Oxine and a sous-vide helper of the same version
+    /// speak the same XPC).
     public static let helperVersion = "5"
+}
+
+/// Per-brand identity for a Sous daemon: its launchd label / Mach service, the
+/// log subsystem, and the codesign requirement it enforces on clients. Two
+/// signed apps can't share a launchd label, so each brand builds its own helper
+/// from `SousHelperCore` with one of these, and the matching app talks to it.
+public struct HelperBranding: Sendable {
+    /// launchd label == Mach service name == helper binary file name.
+    public let machServiceName: String
+    /// os.Logger subsystem for the daemon's logging.
+    public let logSubsystem: String
+    /// The codesign requirement a connecting client must satisfy. The daemon
+    /// rejects any XPC peer that fails it. Pins the host app's identity.
+    public let clientRequirement: String
+
+    public init(machServiceName: String, logSubsystem: String, clientRequirement: String) {
+        self.machServiceName = machServiceName
+        self.logSubsystem = logSubsystem
+        self.clientRequirement = clientRequirement
+    }
+
+    /// launchd label (same string as the Mach service, by convention).
+    public var label: String { machServiceName }
+    /// LaunchDaemon plist file name (`/Library/LaunchDaemons/<plistName>`).
+    public var plistName: String { machServiceName + ".plist" }
+
+    /// Oxine's daemon: `com.oxine.soushelper`, accepting the Oxine app signed by
+    /// our own "Oxine" / "Oxine Dev" self-signed code-signing certs.
+    public static let oxine = HelperBranding(
+        machServiceName: "com.oxine.soushelper",
+        logSubsystem: "com.oxine.soushelper",
+        clientRequirement: "identifier \"com.oxine.app\" and "
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+    )
 }
 
 /// What the user wants Sous to do. Sent app → daemon; the daemon is the sole

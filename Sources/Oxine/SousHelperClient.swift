@@ -20,14 +20,15 @@ final class SousHelperClient: ObservableObject {
 
     @Published private(set) var installState: InstallState = .notInstalled
 
-    private let label = SousXPC.helperLabel             // com.oxine.soushelper
-    private let plistPath = "/Library/LaunchDaemons/\(SousXPC.plistName)"
+    private let branding = HelperBranding.oxine
+    private var label: String { branding.label }       // com.oxine.soushelper
+    private var plistPath: String { "/Library/LaunchDaemons/\(branding.plistName)" }
     private var connection: NSXPCConnection?
 
     init() { Task { await refresh() } }
 
     private var helperBinaryPath: String {
-        Bundle.main.bundlePath + "/Contents/MacOS/\(SousXPC.helperLabel)"
+        Bundle.main.bundlePath + "/Contents/MacOS/\(branding.machServiceName)"
     }
 
     // MARK: State

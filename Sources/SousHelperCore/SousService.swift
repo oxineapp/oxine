@@ -3,16 +3,21 @@ import IOKit
 import os
 import SousShared
 
-private let log = Logger(subsystem: "com.oxine.soushelper", category: "control")
-
 /// The daemon's brain. Owns the SMC connection and a serial maintenance loop
 /// that decides, every tick, whether to inhibit charging and/or the adapter.
 /// All state lives on `queue`; the class is `@unchecked Sendable` because every
 /// access is funnelled through that queue.
 final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "com.oxine.soushelper.control")
+    private let log: Logger
+    private let queue: DispatchQueue
     private let smc = SMC()
     private var smcOpen = false
+
+    init(branding: HelperBranding) {
+        self.log = Logger(subsystem: branding.logSubsystem, category: "control")
+        self.queue = DispatchQueue(label: branding.logSubsystem + ".control")
+        super.init()
+    }
 
     private var config = SousConfig()          // last config the app pushed
     private var timer: DispatchSourceTimer?

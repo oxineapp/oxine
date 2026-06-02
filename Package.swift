@@ -18,11 +18,18 @@ let package = Package(
         .target(
             name: "SousShared"
         ),
-        // The privileged battery-control daemon. Tiny on purpose: it owns the
-        // SMC connection, a safety-guarded maintenance loop, and nothing else.
+        // The daemon's reusable engine: SMC access, the safety-guarded
+        // maintenance loop, and the brand-parameterized XPC runtime. Each brand
+        // builds a tiny @main helper on top of this.
+        .target(
+            name: "SousHelperCore",
+            dependencies: ["SousShared"]
+        ),
+        // Oxine's privileged battery-control daemon. Tiny on purpose: just an
+        // entry point that runs SousHelperCore with the Oxine branding.
         .executableTarget(
             name: "SousHelper",
-            dependencies: ["SousShared"]
+            dependencies: ["SousShared", "SousHelperCore"]
         ),
         .executableTarget(
             name: "Oxine",
