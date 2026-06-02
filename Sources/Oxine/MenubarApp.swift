@@ -423,6 +423,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
         panel.makeKeyAndOrderFront(nil)
         orbitView?.setPanelOpen(true)
+        UpdaterManager.shared.checkOnOpen()   // throttled; pops the updater if one's waiting
+
+
 
         panelJustOpened = true
         panelJustOpenedTimer?.cancel()

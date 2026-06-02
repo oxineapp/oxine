@@ -31,6 +31,9 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
         }
         model.onClose = { [weak self] in self?.window?.close() }
         guard let window else { return }
+        // Lock the window shut for a critical update so it can't be dismissed
+        // around the (Skip/Later-less) buttons.
+        window.standardWindowButton(.closeButton)?.isEnabled = !model.isCritical
         if !window.isVisible { window.center() }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -52,6 +55,9 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState,
                          reply: @escaping (SPUUserUpdateChoice) -> Void) {
         model.updateReply = reply
+        // A critical update (tagged in the appcast) can't be skipped or deferred —
+        // the view hides Skip/Later and we lock the window closed.
+        model.isCritical = appcastItem.isCriticalUpdate
         model.phase = .available(version: appcastItem.displayVersionString)
         present()
     }
@@ -134,6 +140,8 @@ final class UpdaterUIModel: ObservableObject {
     @Published var downloadReceived: Double = 0
     @Published var downloadTotal: Double = 0
     @Published var extractProgress: Double = 0
+    /// Set from the appcast item: a critical update offers Install only.
+    @Published var isCritical = false
 
     // Reply/cancel/ack blocks for the current phase; set by the driver.
     var updateReply: ((SPUUserUpdateChoice) -> Void)?
@@ -200,13 +208,17 @@ private struct UpdaterView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(PanelKit.branding.appName) \(version) is available — you have \(model.currentVersion).")
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
-                Text("The update is signed and verified, then installed in place.")
-                    .font(.caption2).foregroundColor(.white.opacity(0.45))
+                Text(model.isCritical
+                     ? "This is a required update and can't be skipped."
+                     : "The update is signed and verified, then installed in place.")
+                    .font(.caption2).foregroundColor(model.isCritical ? accent.opacity(0.85) : .white.opacity(0.45))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
-                ghostButton("Skip") { model.updateReply?(.skip) }
-                ghostButton("Later") { model.updateReply?(.dismiss) }
+                if !model.isCritical {
+                    ghostButton("Skip") { model.updateReply?(.skip) }
+                    ghostButton("Later") { model.updateReply?(.dismiss) }
+                }
                 Spacer()
                 accentButton("Install") { model.updateReply?(.install) }
             }
@@ -231,7 +243,7 @@ private struct UpdaterView: View {
                 .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
-                ghostButton("Later") { model.installReply?(.dismiss) }
+                if !model.isCritical { ghostButton("Later") { model.installReply?(.dismiss) } }
                 Spacer()
                 accentButton("Install & Relaunch") { model.installReply?(.install) }
             }
