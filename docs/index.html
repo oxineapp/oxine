@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oxine, the only menubar app you'll (probably) ever need</title>
-<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, scriptable plugins, and battery charge-limiting.">
+<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, scripts, and full battery care: charge limit, heat protection, and calibration.">
 <meta name="theme-color" content="#000000">
 <meta property="og:title" content="Oxine">
 <meta property="og:description" content="The only menubar app you'll (probably) ever need, notes, clipboard, 2FA & battery health.">
@@ -138,7 +138,7 @@
   <header class="shell hero" id="top">
     <div>
       <h1 class="load d1">The only<br>menubar app<br>you'll <span class="wink">(probably)</span><br><span class="grad">ever need.</span></h1>
-      <p class="lede load d2">Quick notes, clipboard history, 2FA codes, scriptable plugins, and battery charge-limiting, one keystroke away. Local-first, free, and open source.</p>
+      <p class="lede load d2">Quick notes, clipboard history, 2FA codes, scripts, and full battery care, one keystroke away. Local-first, free, and open source.</p>
       <div class="cta-row load d3">
         <a class="btn primary" href="https://github.com/oxineapp/oxine/releases/latest">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
@@ -154,13 +154,13 @@
         <img class="on" data-i="0" src="shots/notes.png"   alt="Oxine Quick Notes">
         <img         data-i="1" src="shots/history.png" alt="Oxine Clipboard History">
         <img         data-i="2" src="shots/auth.png"    alt="Oxine Authenticator">
-        <img         data-i="3" src="shots/plugins.png" alt="Oxine Plugins">
+        <img         data-i="3" src="shots/plugins.png" alt="Oxine Scripts">
         <img         data-i="4" src="shots/sous.png"     alt="Oxine Sous battery">
         <div class="glint"></div>
         <button class="hot" data-i="0" style="left:2.3%"  aria-label="Notes"></button>
         <button class="hot" data-i="1" style="left:21.4%" aria-label="History"></button>
         <button class="hot" data-i="2" style="left:40.5%" aria-label="Auth"></button>
-        <button class="hot" data-i="3" style="left:59.5%" aria-label="Plugins"></button>
+        <button class="hot" data-i="3" style="left:59.5%" aria-label="Scripts"></button>
         <button class="hot" data-i="4" style="left:78.6%" aria-label="Sous"></button>
       </div>
     </div>
@@ -201,7 +201,7 @@
       <div class="frow reveal">
         <div class="fhead">
           <div class="fic"><img src="shots/icons/puzzlepiece-extension.png" alt=""></div>
-          <span class="fname">Plugins</span>
+          <span class="fname">Scripts</span>
           <h3>Teach it new tricks.</h3>
         </div>
         <p class="ftext">Write a tiny script in any language and Oxine runs it on whatever you've copied or selected. Format some JSON, convert a value, hit an API; wire it up once and it's a keystroke away from then on.</p>
@@ -211,9 +211,9 @@
         <div class="fhead">
           <div class="fic"><img src="shots/icons/battery-100-bolt.png" alt=""></div>
           <span class="fname">Sous</span>
-          <h3>Your battery, sous-vide.</h3>
+          <h3>A healthier battery, a longer-lived Mac.</h3>
         </div>
-        <p class="ftext">Low and slow beats a rolling boil. Sous holds your charge at the limit you set instead of cooking the cell at 100% all day, and shows the watts flowing in and out as it works. Your battery just ages slower, quietly.</p>
+        <p class="ftext">Full battery care, built in. Cap how far your Mac charges so it isn't cooked at 100% all day, the single biggest thing you can do for its lifespan, with heat protection and calibration to keep it honest. Low and slow beats a rolling boil.</p>
       </div>
 
       <div class="frow reveal">
@@ -259,16 +259,25 @@
   const hots = [...device.querySelectorAll('.hot')];
   let cur = 0, timer = null;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The tour opens on Sous and lingers there 3s longer than the other tabs.
+  const SOUS = imgs.findIndex((im) => /sous/i.test(im.src));
+  const BASE = 3600, SOUS_EXTRA = 3000;
+  const dwell = (i) => BASE + (i === SOUS ? SOUS_EXTRA : 0);
   function show(n) {
     cur = n;
     imgs.forEach((im, k) => im.classList.toggle('on', k === cur));
   }
-  function start() { if (reduce) return; stop(); timer = setInterval(() => show((cur + 1) % imgs.length), 3600); }
-  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function start() {
+    if (reduce) return;
+    stop();
+    const tick = () => { show((cur + 1) % imgs.length); timer = setTimeout(tick, dwell(cur)); };
+    timer = setTimeout(tick, dwell(cur));   // dwell on whatever's showing now
+  }
+  function stop() { if (timer) { clearTimeout(timer); timer = null; } }
   hots.forEach((h) => h.addEventListener('click', () => { show(+h.dataset.i); start(); }));
   device.addEventListener('pointerenter', stop);
   device.addEventListener('pointerleave', start);
-  show(0); start();
+  show(SOUS < 0 ? 0 : SOUS); start();
 
   // Cursor-follow 3D tilt + glass glint (desktop only, respects reduced-motion)
   const stage = device.parentElement;
