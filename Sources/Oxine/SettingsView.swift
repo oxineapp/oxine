@@ -29,9 +29,15 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
+    /// Human label for the saved caffeine default, for the Settings menu button.
+    private var defaultDurationLabel: String {
+        CaffeineManager.presets.first { $0.seconds == caffeine.defaultDuration }?.label ?? "1 hour"
+    }
+
     @State var showClearConfirm = false
     @State var focusDimLevel = FocusModeManager.shared.overlayOpacity
     @State var focusBlurIntensity = FocusModeManager.shared.blurIntensity
+    @ObservedObject private var caffeine = CaffeineManager.shared
     @State private var obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured
     @State private var obsidianIntegrating = false
     @State private var obsidianError: String?
@@ -342,6 +348,61 @@ struct SettingsView: View {
                                     FocusModeManager.shared.blurIntensity = newValue
                                 }
                         }
+                    }
+
+                    SettingSection(title: "Caffeine") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Keep Mac awake")
+                                    .foregroundColor(.white.opacity(0.9))
+                                Text(caffeine.isActive
+                                    ? "Active · \(caffeine.statusText) remaining"
+                                    : "Starts from the footer bolt")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            Spacer()
+                            Menu {
+                                ForEach(CaffeineManager.presets, id: \.label) { preset in
+                                    Button {
+                                        caffeine.defaultDuration = preset.seconds
+                                    } label: {
+                                        if caffeine.defaultDuration == preset.seconds {
+                                            Label(preset.label, systemImage: "checkmark")
+                                        } else {
+                                            Text(preset.label)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(defaultDurationLabel)
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.system(size: 9))
+                                }
+                                .foregroundColor(Color.panelAccent)
+                                .font(.caption)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
+
+                        Divider().opacity(0.1)
+
+                        Toggle(isOn: Binding(
+                            get: { caffeine.keepAppsActive },
+                            set: { caffeine.keepAppsActive = $0 }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Keep apps active")
+                                    .foregroundColor(.white.opacity(0.9))
+                                Text("Nudges input when idle so Teams/Slack stay available (needs Accessibility)")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        .tint(Color.panelAccent)
                     }
 
                     SettingSection(title: "Integrations") {

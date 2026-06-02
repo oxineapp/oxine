@@ -379,6 +379,7 @@ struct FooterView: View {
     var appDelegate: AppDelegate?
     var onToggleSettings: () -> Void
     @State private var focusEnabled = FocusModeManager.shared.isEnabled
+    @ObservedObject private var caffeine = CaffeineManager.shared
     private var accent: Color { .panelAccent }
 
     var body: some View {
@@ -387,6 +388,44 @@ struct FooterView: View {
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.white.opacity(0.2))
                 .padding(.trailing, 4)
+
+            utilityButton(
+                icon: caffeine.isActive ? "bolt.horizontal.fill" : "bolt.horizontal",
+                on: caffeine.isActive,
+                help: caffeine.isActive
+                    ? "Keeping your Mac awake — click to stop"
+                    : "Keep your Mac awake (right-click to choose how long)"
+            ) {
+                caffeine.toggle()
+            }
+            .contextMenu {
+                Section("Stay awake for") {
+                    ForEach(CaffeineManager.presets, id: \.label) { preset in
+                        Button {
+                            caffeine.startAndSetDefault(preset.seconds)
+                        } label: {
+                            if caffeine.defaultDuration == preset.seconds {
+                                Label(preset.label, systemImage: "checkmark")
+                            } else {
+                                Text(preset.label)
+                            }
+                        }
+                    }
+                }
+                if caffeine.isActive {
+                    Divider()
+                    Button("Turn off", role: .destructive) { caffeine.stop() }
+                }
+            }
+
+            if caffeine.isActive {
+                Text(caffeine.statusText)
+                    .font(.system(size: 10, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundColor(accent.opacity(0.75))
+                    .padding(.trailing, 2)
+                    .transition(.opacity)
+            }
 
             utilityButton(
                 icon: focusEnabled ? "moon.fill" : "moon",

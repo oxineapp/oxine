@@ -42,6 +42,52 @@ for arg in "$@"; do
   [ "$arg" = "--critical" ] && CRITICAL=1   # mark this release mandatory (no Skip/Later)
 done
 
+# ── Changelog → release notes ──────────────────────────────────────────────────
+# Every release must document its version in CHANGELOG.md. We extract that section
+# to HTML now; generate_appcast embeds it so the in-app updater shows what changed.
+# Fail fast (before the long build) when publishing without an entry.
+NOTES_HTML="$(mktemp -t oxine-notes-XXXX).html"
+if CHANGELOG_FILE="CHANGELOG.md" TARGET_VERSION="$VERSION" OUT="$NOTES_HTML" python3 - <<'PY'
+import os, re, sys, html
+ver = os.environ["TARGET_VERSION"]
+try:
+    text = open(os.environ["CHANGELOG_FILE"]).read()
+except FileNotFoundError:
+    sys.exit(1)
+m = re.search(r"^##\s*\[?" + re.escape(ver) + r"\]?.*?$(.*?)(?=^##\s|\Z)", text, re.M | re.S)
+if not m or not m.group(1).strip():
+    sys.exit(1)
+out, in_ul = [], False
+def inline(s):
+    s = html.escape(s)
+    s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"`(.+?)`", r"<code>\1</code>", s)
+    return s
+for line in m.group(1).strip().splitlines():
+    t = line.strip()
+    if t.startswith(("- ", "* ")):
+        if not in_ul: out.append("<ul>"); in_ul = True
+        out.append("<li>%s</li>" % inline(t[2:]))
+    else:
+        if in_ul: out.append("</ul>"); in_ul = False
+        if t: out.append("<p>%s</p>" % inline(t))
+if in_ul: out.append("</ul>")
+style = ("<style>body,*{font-family:-apple-system,system-ui;font-size:13px;"
+         "line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}"
+         "li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style>")
+open(os.environ["OUT"], "w").write(style + "<h2>Oxine %s</h2>" % html.escape(ver) + "".join(out))
+PY
+then
+  echo "▸ release notes for $VERSION ready"
+else
+  rm -f "$NOTES_HTML"; NOTES_HTML=""
+  if [ "$PUBLISH" = "1" ]; then
+    echo "✗ no CHANGELOG.md entry for $VERSION — add a '## $VERSION' section before releasing." >&2
+    exit 1
+  fi
+  echo "  (no CHANGELOG.md entry for $VERSION; appcast will have no release notes)"
+fi
+
 # Locate Sparkle's tools + universal framework from the SPM checkout.
 SPARKLE_BIN=".build/artifacts/sparkle/Sparkle/bin"
 SPARKLE_FW=$(find .build/artifacts -path "*macos-arm64_x86_64/Sparkle.framework" -type d 2>/dev/null | head -1)
@@ -117,11 +163,15 @@ UPDATES="$DIST/updates"
 mkdir -p "$UPDATES" docs
 # ditto preserves the code signature + symlinks inside the .app (zip -r doesn't).
 ditto -c -k --keepParent "$DIST/$APP" "$UPDATES/Oxine-$VERSION.zip"
+# Place the release notes beside the archive (matching basename) so generate_appcast
+# embeds them as this item's <description>.
+[ -n "$NOTES_HTML" ] && cp "$NOTES_HTML" "$UPDATES/Oxine-$VERSION.html"
 # generate_appcast signs each archive with the EdDSA key from the Keychain and
 # writes the feed. Download URLs point at the GitHub release assets.
 "$SPARKLE_BIN/generate_appcast" \
   --download-url-prefix "$DOWNLOAD_PREFIX" \
   --link "https://github.com/$REPO" \
+  --embed-release-notes \
   -o docs/appcast.xml \
   "$UPDATES"
 echo "  ✓ docs/appcast.xml ($VERSION)"
