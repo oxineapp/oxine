@@ -3,6 +3,16 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.2.2</title>
+            <pubDate>Tue, 02 Jun 2026 23:17:52 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>122</sparkle:version>
+            <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.2/Oxine-1.2.2.zip" length="2662664" type="application/octet-stream" sparkle:edSignature="GbldMjk2BYPrDGaxf01/bfyI2WsoEk+Pq9dX3QhDhFRFkF/DiG1BvqbMa3kEtMREj9hPDuSc+UY7+mT6TCVCAw=="/>
+        </item>
+        <item>
             <title>1.2.1</title>
             <pubDate>Tue, 02 Jun 2026 22:40:00 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -21,16 +31,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.0/Oxine-1.2.0.zip" length="2658821" type="application/octet-stream" sparkle:edSignature="tgxkpH8dRWryaF0a8c4D2AXSUvjigMaaXZZUSQdf7JWIkWqmEbqbDvZ1eyuWbM9NUbE+V8BTOjkyHpQtoA3zAg=="/>
-        </item>
-        <item>
-            <title>1.1.2</title>
-            <pubDate>Tue, 02 Jun 2026 16:24:58 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>112</sparkle:version>
-            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.1.2/Oxine-1.1.2.zip" length="2630943" type="application/octet-stream" sparkle:edSignature="fcnwoAhklXcib004JQcEmfiTEx+Fut7W7hojYni+fOkzR2IOjePspBkCWNO0NR7g8sPl8Hr6ltmmyDKUvPxrCw=="/>
         </item>
     </channel>
 </rss>
