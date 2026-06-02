@@ -20,7 +20,7 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         case .auth:    return "lock.shield"
         case .scripts: return "puzzlepiece.extension"
-        case .sous:    return "bolt.heart.fill"
+        case .sous:    return "heart.badge.bolt"
         }
     }
 

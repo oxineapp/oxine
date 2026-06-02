@@ -17,6 +17,9 @@ public struct PanelBranding: Sendable {
 
     /// Oxine's chrome configuration.
     public static let oxine = PanelBranding(settingsSuite: "com.oxine.settings", appName: "Oxine")
+
+    /// The standalone sous-vide app's chrome configuration (its own settings store).
+    public static let sousVide = PanelBranding(settingsSuite: "com.sousvide.settings", appName: "sous-vide")
 }
 
 /// PanelKit's entry point for host configuration.

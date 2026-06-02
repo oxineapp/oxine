@@ -20,7 +20,7 @@ public final class SousHelperClient: ObservableObject {
 
     @Published public private(set) var installState: InstallState = .notInstalled
 
-    private let branding = HelperBranding.oxine
+    private let branding = SousKit.helperBranding
     private var label: String { branding.label }       // com.oxine.soushelper
     private var plistPath: String { "/Library/LaunchDaemons/\(branding.plistName)" }
     private var connection: NSXPCConnection?

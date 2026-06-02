@@ -8,7 +8,9 @@ let package = Package(
     ],
     products: [
         .executable(name: "Oxine", targets: ["Oxine"]),
-        .executable(name: "com.oxine.soushelper", targets: ["SousHelper"])
+        .executable(name: "com.oxine.soushelper", targets: ["SousHelper"]),
+        .executable(name: "SousVide", targets: ["SousVide"]),
+        .executable(name: "com.sousvide.soushelper", targets: ["SousVideHelper"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
@@ -56,6 +58,22 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []
+        ),
+        // The standalone sous-vide app's daemon (its own brand).
+        .executableTarget(
+            name: "SousVideHelper",
+            dependencies: ["SousShared", "SousHelperCore"]
+        ),
+        // The standalone sous-vide peer app: Sous feature + shared chrome, its
+        // own branding. Reuses PanelKit + SousKit, no copy-paste.
+        .executableTarget(
+            name: "SousVide",
+            dependencies: [
+                "SousShared",
+                "PanelKit",
+                "SousKit",
+                .product(name: "Sparkle", package: "Sparkle")
+            ]
         )
     ]
 )

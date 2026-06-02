@@ -42,6 +42,15 @@ public struct HelperBranding: Sendable {
         clientRequirement: "identifier \"com.oxine.app\" and "
             + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
     )
+
+    /// The standalone sous-vide app's daemon: its own launchd label so it can
+    /// coexist with Oxine's, accepting the sous-vide app signed by our dev certs.
+    public static let sousVide = HelperBranding(
+        machServiceName: "com.sousvide.soushelper",
+        logSubsystem: "com.sousvide.soushelper",
+        clientRequirement: "identifier \"com.sousvide.app\" and "
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+    )
 }
 
 /// What the user wants Sous to do. Sent app → daemon; the daemon is the sole

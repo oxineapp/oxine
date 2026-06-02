@@ -426,7 +426,7 @@ struct Step4Sous: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "bolt.heart.fill")
+            Image(systemName: "heart.badge.bolt")
                 .font(.system(size: 36))
                 .foregroundColor(accent)
             VStack(spacing: 6) {
