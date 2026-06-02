@@ -4,6 +4,9 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.2.7
+- The in-app updater now shows the changelog for the version being installed.
+
 ## 1.2.6
 - **Caffeine**: a new footer control (the bolt) to keep your Mac awake. Left-click starts a timed session at your default duration; click again to stop.
 - Right-click the bolt to pick how long to stay awake. Your choice becomes the new default.

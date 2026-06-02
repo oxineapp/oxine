@@ -58,11 +58,19 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
         // A critical update (tagged in the appcast) can't be skipped or deferred —
         // the view hides Skip/Later and we lock the window closed.
         model.isCritical = appcastItem.isCriticalUpdate
+        // Embedded changelog (the appcast item's <description>), shown in the panel.
+        model.releaseNotesHTML = appcastItem.itemDescription
         model.phase = .available(version: appcastItem.displayVersionString)
         present()
     }
 
-    func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
+    // Called only for *linked* release notes (separate download); embedded notes
+    // arrive via itemDescription above. Handle both so either appcast style works.
+    func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {
+        if let text = String(data: downloadData.data, encoding: .utf8) {
+            model.releaseNotesHTML = text
+        }
+    }
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
 
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
@@ -142,6 +150,8 @@ final class UpdaterUIModel: ObservableObject {
     @Published var extractProgress: Double = 0
     /// Set from the appcast item: a critical update offers Install only.
     @Published var isCritical = false
+    /// HTML changelog from the appcast item, rendered in the "available" phase.
+    @Published var releaseNotesHTML: String?
 
     // Reply/cancel/ack blocks for the current phase; set by the driver.
     var updateReply: ((SPUUserUpdateChoice) -> Void)?
@@ -214,6 +224,13 @@ private struct UpdaterView: View {
                     .font(.caption2).foregroundColor(model.isCritical ? accent.opacity(0.85) : .white.opacity(0.45))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if let notes = model.releaseNotesHTML, !notes.isEmpty {
+                ReleaseNotesView(html: notes)
+                    .frame(height: 150)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.white.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
             HStack(spacing: 8) {
                 if !model.isCritical {
                     ghostButton("Skip") { model.updateReply?(.skip) }
@@ -299,5 +316,63 @@ private struct UpdaterView: View {
 
     private func byteString(_ bytes: Double) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+}
+
+/// Renders the appcast's HTML changelog inside the dark update panel. Converts the
+/// HTML to an attributed string and forces a light, consistent font/color so it's
+/// legible on the dark background (the imported HTML defaults to black text).
+private struct ReleaseNotesView: NSViewRepresentable {
+    let html: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainerInset = .zero
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.textContainer?.widthTracksTextView = true
+        textView.autoresizingMask = [.width]
+        textView.textStorage?.setAttributedString(Self.attributed(from: html))
+
+        scroll.documentView = textView
+        return scroll
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        (nsView.documentView as? NSTextView)?
+            .textStorage?.setAttributedString(Self.attributed(from: html))
+    }
+
+    private static func attributed(from html: String) -> NSAttributedString {
+        guard let data = html.data(using: .utf8),
+              let s = try? NSMutableAttributedString(
+                data: data,
+                options: [.documentType: NSAttributedString.DocumentType.html,
+                          .characterEncoding: String.Encoding.utf8.rawValue],
+                documentAttributes: nil)
+        else { return NSAttributedString(string: "") }
+
+        let full = NSRange(location: 0, length: s.length)
+        // Keep bold where the HTML had it, but normalize everything else to the
+        // panel's font and a light foreground so it reads on the dark background.
+        s.enumerateAttribute(.font, in: full) { value, range, _ in
+            let bold = (value as? NSFont)?.fontDescriptor.symbolicTraits.contains(.bold) ?? false
+            let big = ((value as? NSFont)?.pointSize ?? 12) >= 15
+            let size: CGFloat = big ? 14 : 12
+            s.addAttribute(.font, value: bold || big
+                ? NSFont.systemFont(ofSize: size, weight: .semibold)
+                : NSFont.systemFont(ofSize: size), range: range)
+        }
+        s.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.8), range: full)
+        return s
     }
 }
