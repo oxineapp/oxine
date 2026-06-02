@@ -4,6 +4,9 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.2.8
+- The menu bar dot now pulses with an amber heartbeat while Caffeine keeps your Mac awake.
+
 ## 1.2.7
 - The in-app updater now shows the changelog for the version being installed.
 

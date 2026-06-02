@@ -86,6 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
         observeSous()
+        observeCaffeine()
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()
     }
@@ -102,6 +103,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 case .working: color = .systemOrange
                 }
                 self?.orbitView?.setSousTint(color)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Pulse the menu-bar bead while Caffeine keeps the Mac awake.
+    private func observeCaffeine() {
+        CaffeineManager.shared.$isActive
+            .receive(on: RunLoop.main)
+            .sink { [weak self] active in
+                self?.orbitView?.setCaffeinated(active)
             }
             .store(in: &cancellables)
     }

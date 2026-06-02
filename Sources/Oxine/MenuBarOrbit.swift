@@ -141,6 +141,52 @@ final class OrbitStatusView: NSView {
         pop()
     }
 
+    /// Caffeine (keep-awake) state. While active the bead wears a pulsing amber
+    /// "heartbeat" halo — the Mac is wired and won't rest. The halo is a shadow on
+    /// the bead, independent of its fill, so a Sous tint can still show through.
+    /// Turning on kicks a single celebratory spin.
+    private let caffeineGlow = NSColor(srgbRed: 1.0, green: 0.72, blue: 0.26, alpha: 1).cgColor
+    private var caffeinated = false
+
+    func setCaffeinated(_ active: Bool) {
+        guard active != caffeinated else { return }
+        caffeinated = active
+        if active {
+            startHeartbeat()
+            spinOnce(stiffness: 150, damping: 13)
+        } else {
+            stopHeartbeat()
+        }
+    }
+
+    /// A double-thump (lub-dub) glow that loops while caffeinated.
+    private func startHeartbeat() {
+        bead.shadowColor = caffeineGlow
+        bead.shadowOffset = .zero
+        bead.masksToBounds = false
+
+        let keyTimes: [NSNumber] = [0, 0.10, 0.20, 0.30, 0.46, 1.0]
+        let radius = CAKeyframeAnimation(keyPath: "shadowRadius")
+        radius.values = [1.0, 4.2, 1.8, 3.2, 1.0, 1.0]
+        radius.keyTimes = keyTimes
+        let opacity = CAKeyframeAnimation(keyPath: "shadowOpacity")
+        opacity.values = [0.2, 0.95, 0.45, 0.8, 0.2, 0.2]
+        opacity.keyTimes = keyTimes
+
+        let beat = CAAnimationGroup()
+        beat.animations = [radius, opacity]
+        beat.duration = 1.5
+        beat.repeatCount = .infinity
+        beat.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        bead.shadowOpacity = 0.2   // resting model value the loop returns to
+        bead.add(beat, forKey: "heartbeat")
+    }
+
+    private func stopHeartbeat() {
+        bead.removeAnimation(forKey: "heartbeat")
+        bead.shadowOpacity = 0
+    }
+
     /// Panel shown/hidden → the bead slides to the bottom-right on open, then
     /// *continues the same way round* (down through the bottom-left) on close,
     /// rather than retracing its path, so it completes a full loop.
