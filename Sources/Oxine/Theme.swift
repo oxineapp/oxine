@@ -12,7 +12,7 @@ final class ThemeManager: ObservableObject {
 
     static let systemSentinel = "system"
     private static let storeKey = "accentHex"
-    private static let defaultHex = "#66D9FF"   // the original Oxine blue (== PluginPalette.swatches[0])
+    private static let defaultHex = "#66D9FF"   // the original Oxine blue (== ScriptPalette.swatches[0])
 
     private let suite = UserDefaults(suiteName: "com.oxine.settings")
 
@@ -49,7 +49,7 @@ final class ThemeManager: ObservableObject {
     }
 
     /// A concrete hex for the *current* accent — used as the default colour when
-    /// creating a new plugin (so new plugins inherit the app tint).
+    /// creating a new script (so new scripts inherit the app tint).
     var resolvedHex: String {
         isSystem ? NSColor.controlAccentColor.oxineHexString : mode
     }

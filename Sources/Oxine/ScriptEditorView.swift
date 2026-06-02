@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Create / edit a plugin without leaving the panel. A compact form over the
+/// Create / edit a script without leaving the panel. A compact form over the
 /// grid: identity (name, icon, color), behaviour (input / output / trigger),
 /// advisory permissions, an optional one-key shortcut, and the script itself.
-struct PluginEditorView: View {
-    @State var draft: PluginDraft
+struct ScriptEditorView: View {
+    @State var draft: ScriptDraft
     let accent: Color
-    let onSave: (PluginDraft) -> Void
+    let onSave: (ScriptDraft) -> Void
     let onCancel: () -> Void
 
     private var isEditing: Bool { draft.existingFolder != nil }
@@ -49,7 +49,7 @@ struct PluginEditorView: View {
                 Image(systemName: draft.symbol.isEmpty ? "puzzlepiece.extension.fill" : draft.symbol)
                     .font(.system(size: 16)).foregroundColor(tint)
             }
-            Text(isEditing ? "Edit Plugin" : "New Plugin")
+            Text(isEditing ? "Edit Script" : "New Script")
                 .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
             Spacer()
             Button(action: onCancel) {
@@ -81,13 +81,13 @@ struct PluginEditorView: View {
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("Identity")
-            field("Name") { textField("My Plugin", text: $draft.name) }
+            field("Name") { textField("My Script", text: $draft.name) }
             field("Icon") {
                 textField("SF Symbol, e.g. wand.and.stars", text: $draft.symbol)
             }
             field("Color") {
                 HStack(spacing: 8) {
-                    ForEach(PluginPalette.swatches, id: \.self) { hex in
+                    ForEach(ScriptPalette.swatches, id: \.self) { hex in
                         Circle().fill(Color(hex: hex)).frame(width: 20, height: 20)
                             .overlay(Circle().stroke(.white, lineWidth: draft.colorHex == hex ? 2 : 0))
                             .onTapGesture { draft.colorHex = hex }
@@ -122,7 +122,7 @@ struct PluginEditorView: View {
                     .foregroundColor(.white)
                     .padding(.vertical, 5)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.08)))
-                    Text("press this key (while on the Plugins tab) to run")
+                    Text("press this key (while on the Scripts tab) to run")
                         .font(.system(size: 10)).foregroundColor(.white.opacity(0.4))
                 }
             }

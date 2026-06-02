@@ -5,7 +5,7 @@ import SwiftUI
 /// tab must not shift the meaning of the others. Settings is deliberately *not*
 /// a `TabID`: it's a separate route opened from the footer gear (see `Route`).
 enum TabID: String, CaseIterable, Codable, Identifiable {
-    case notes, history, auth, plugins, sous
+    case notes, history, auth, scripts, sous
 
     var id: String { rawValue }
 
@@ -18,7 +18,7 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .notes:   return "square.and.pencil"
         case .history: return "clock.arrow.circlepath"
         case .auth:    return "lock.shield"
-        case .plugins: return "puzzlepiece.extension"
+        case .scripts: return "puzzlepiece.extension"
         case .sous:    return "bolt.heart.fill"
         }
     }
@@ -28,7 +28,7 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .notes:   return "Notes"
         case .history: return "History"
         case .auth:    return "Auth"
-        case .plugins: return "Plugins"
+        case .scripts: return "Scripts"
         case .sous:    return "Sous"
         }
     }
@@ -57,7 +57,11 @@ final class TabBarConfig: ObservableObject {
 
     private init() {
         if let raw = UserDefaults(suiteName: "com.oxine.settings")?.string(forKey: Self.key) {
-            let parsed = raw.split(separator: ",").compactMap { TabID(rawValue: String($0)) }
+            // Map the pre-rename token so a bar that listed the old "plugins" tab
+            // keeps it (now "scripts") instead of silently dropping it. See
+            // ScriptsMigration, which also rewrites the stored value once.
+            let parsed = raw.split(separator: ",").map { $0 == "plugins" ? "scripts" : String($0) }
+                .compactMap { TabID(rawValue: $0) }
             self.enabled = TabBarConfig.normalize(parsed)
         } else {
             self.enabled = TabID.canonical

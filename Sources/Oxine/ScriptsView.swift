@@ -2,19 +2,19 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// The "Plugins" hub: a smart icon grid of installed plugins plus an action bar
-/// to create, install, edit, and run them. Tapping an instant plugin runs it;
-/// an argument plugin reveals an inline text field first. A plugin can also
+/// The "Scripts" hub: a smart icon grid of installed scripts plus an action bar
+/// to create, install, edit, and run them. Tapping an instant script runs it;
+/// an argument script reveals an inline text field first. A script can also
 /// declare a one-key shortcut that fires while this tab is focused.
-struct PluginsView: View {
-    @StateObject private var manager = PluginManager()
+struct ScriptsView: View {
+    @StateObject private var manager = ScriptManager()
     @ObservedObject var clipboardManager: ClipboardManager
     @ObservedObject var notesManager: QuickNotesManager
 
-    @State private var argumentFor: Plugin?
+    @State private var argumentFor: Script?
     @State private var argumentText = ""
-    @State private var inspecting: Plugin?
-    @State private var editing: PluginDraft?
+    @State private var inspecting: Script?
+    @State private var editing: ScriptDraft?
     @State private var bannerDismiss: Task<Void, Never>?
     @State private var editMode = false
     @State private var draggingID: String?
@@ -27,7 +27,7 @@ struct PluginsView: View {
         ZStack {
             VStack(spacing: 0) {
                 actionBar
-                if manager.plugins.isEmpty {
+                if manager.scripts.isEmpty {
                     emptyState
                 } else {
                     grid
@@ -37,7 +37,7 @@ struct PluginsView: View {
             // Floating: argument input + result banner.
             VStack(spacing: 0) {
                 Spacer()
-                if let plugin = argumentFor { argumentBar(for: plugin) }
+                if let script = argumentFor { argumentBar(for: script) }
                 if let result = manager.lastResult { banner(result) }
             }
             .padding(.horizontal, 12)
@@ -45,18 +45,18 @@ struct PluginsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay {
-            if let plugin = inspecting {
-                PluginDetailCard(
-                    plugin: plugin, accent: tint(for: plugin),
-                    onEdit: { beginEdit(plugin) },
-                    onDelete: { manager.delete(plugin); inspecting = nil },
+            if let script = inspecting {
+                ScriptDetailCard(
+                    script: script, accent: tint(for: script),
+                    onEdit: { beginEdit(script) },
+                    onDelete: { manager.delete(script); inspecting = nil },
                     onReveal: { manager.revealInFinder() },
                     onClose: { inspecting = nil }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
             if let draft = editing {
-                PluginEditorView(
+                ScriptEditorView(
                     draft: draft, accent: accent,
                     onSave: { saveDraft($0) },
                     onCancel: { editing = nil }
@@ -92,7 +92,7 @@ struct PluginsView: View {
                 barButton(icon: "square.and.arrow.down", label: "Install") { manager.installViaPanel() }
                 Spacer()
                 barButton(icon: "folder", label: nil) { manager.revealInFinder() }
-                    .help("Open plugins folder")
+                    .help("Open scripts folder")
             }
         }
         .padding(.horizontal, 14)
@@ -103,18 +103,18 @@ struct PluginsView: View {
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(manager.plugins) { plugin in
-                    PluginTile(
-                        plugin: plugin,
-                        tint: tint(for: plugin),
-                        running: manager.running.contains(plugin.id),
+                ForEach(manager.scripts) { script in
+                    ScriptTile(
+                        script: script,
+                        tint: tint(for: script),
+                        running: manager.running.contains(script.id),
                         editMode: editMode,
-                        onRun: { trigger(plugin) },
-                        onInspect: { inspecting = plugin },
+                        onRun: { trigger(script) },
+                        onInspect: { inspecting = script },
                         onBeginEdit: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { editMode = true } }
                     )
-                    .opacity(draggingID == plugin.id ? 0.35 : 1)
-                    .modifier(Reorderable(enabled: editMode, plugin: plugin, manager: manager, draggingID: $draggingID))
+                    .opacity(draggingID == script.id ? 0.35 : 1)
+                    .modifier(Reorderable(enabled: editMode, script: script, manager: manager, draggingID: $draggingID))
                 }
             }
             .padding(.horizontal, 14)
@@ -141,59 +141,59 @@ struct PluginsView: View {
 
     // MARK: - Actions
 
-    private func tint(for plugin: Plugin) -> Color {
-        plugin.manifest.color.map { Color(hex: $0) } ?? accent
+    private func tint(for script: Script) -> Color {
+        script.manifest.color.map { Color(hex: $0) } ?? accent
     }
 
-    private func trigger(_ plugin: Plugin) {
-        if plugin.manifest.mode == .argument {
+    private func trigger(_ script: Script) {
+        if script.manifest.mode == .argument {
             argumentText = ""
-            argumentFor = plugin
+            argumentFor = script
             return
         }
-        runPlugin(plugin, argument: nil)
+        runScript(script, argument: nil)
     }
 
     private func runArgument() {
-        guard let plugin = argumentFor else { return }
+        guard let script = argumentFor else { return }
         let text = argumentText
         argumentFor = nil
-        runPlugin(plugin, argument: text)
+        runScript(script, argument: text)
     }
 
-    private func runPlugin(_ plugin: Plugin, argument: String?) {
-        Task { await manager.run(plugin, argument: argument, clipboard: clipboardManager, notes: notesManager) }
+    private func runScript(_ script: Script, argument: String?) {
+        Task { await manager.run(script, argument: argument, clipboard: clipboardManager, notes: notesManager) }
     }
 
-    /// A fresh draft pre-tinted with the app's current accent, so new plugins
-    /// inherit the global tint (existing plugins keep their own stored colour).
-    private func newDraft() -> PluginDraft {
-        var d = PluginDraft()
+    /// A fresh draft pre-tinted with the app's current accent, so new scripts
+    /// inherit the global tint (existing scripts keep their own stored colour).
+    private func newDraft() -> ScriptDraft {
+        var d = ScriptDraft()
         d.colorHex = ThemeManager.shared.resolvedHex
         return d
     }
 
-    private func beginEdit(_ plugin: Plugin) {
-        let draft = PluginDraft(from: plugin, script: manager.scriptContents(for: plugin))
+    private func beginEdit(_ script: Script) {
+        let draft = ScriptDraft(from: script, script: manager.scriptContents(for: script))
         inspecting = nil
         editing = draft
     }
 
-    private func saveDraft(_ draft: PluginDraft) {
+    private func saveDraft(_ draft: ScriptDraft) {
         if let err = manager.save(draft) {
-            manager.lastResult = PluginRunResult(pluginName: "Save", ok: false, message: err)
+            manager.lastResult = ScriptRunResult(scriptName: "Save", ok: false, message: err)
         } else {
             editing = nil
         }
     }
 
-    /// Run a plugin by its declared one-key shortcut (no modifiers), as long as
+    /// Run a script by its declared one-key shortcut (no modifiers), as long as
     /// no overlay/argument field is competing for the keystroke.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
         guard editing == nil, inspecting == nil, argumentFor == nil,
               press.modifiers.isEmpty, !press.characters.isEmpty else { return .ignored }
-        if let plugin = manager.plugin(forKeybind: press.characters) {
-            trigger(plugin)
+        if let script = manager.script(forKeybind: press.characters) {
+            trigger(script)
             return .handled
         }
         return .ignored
@@ -217,7 +217,7 @@ struct PluginsView: View {
                 .font(.system(size: 34))
                 .foregroundColor(accent.opacity(0.8))
             VStack(spacing: 6) {
-                Text("No Plugins Yet")
+                Text("No Scripts Yet")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                 Text("Create one in seconds, or install a folder someone shared.")
@@ -229,7 +229,7 @@ struct PluginsView: View {
             Button(action: { editing = newDraft() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
-                    Text("New Plugin").fontWeight(.semibold)
+                    Text("New Script").fontWeight(.semibold)
                 }
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 16).padding(.vertical, 9)
@@ -243,12 +243,12 @@ struct PluginsView: View {
         .padding(28)
     }
 
-    private func argumentBar(for plugin: Plugin) -> some View {
+    private func argumentBar(for script: Script) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: plugin.manifest.resolvedSymbol)
+            Image(systemName: script.manifest.resolvedSymbol)
                 .font(.system(size: 12))
-                .foregroundColor(tint(for: plugin))
-            TextField("Input for \(plugin.displayName)…", text: $argumentText)
+                .foregroundColor(tint(for: script))
+            TextField("Input for \(script.displayName)…", text: $argumentText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundColor(.white)
@@ -266,7 +266,7 @@ struct PluginsView: View {
         .padding(.bottom, 6)
     }
 
-    private func banner(_ result: PluginRunResult) -> some View {
+    private func banner(_ result: ScriptRunResult) -> some View {
         HStack(spacing: 8) {
             Image(systemName: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 12))
@@ -288,8 +288,8 @@ struct PluginsView: View {
 /// A single grid tile: tinted icon, name, an advisory permission dot, an
 /// optional keybind badge, and a spinner while it runs. The tile is the run
 /// button; a small ⓘ opens detail.
-struct PluginTile: View {
-    let plugin: Plugin
+struct ScriptTile: View {
+    let script: Script
     let tint: Color
     let running: Bool
     var editMode: Bool = false
@@ -302,7 +302,7 @@ struct PluginTile: View {
     /// Desync the jiggle so the tiles don't wobble in lockstep.
     private let wigglePhase = Double.random(in: 0...0.12)
 
-    private var hasPermissions: Bool { !plugin.manifest.permissions.isEmpty }
+    private var hasPermissions: Bool { !script.manifest.permissions.isEmpty }
 
     var body: some View {
         Button(action: { editMode ? () : onRun() }) {
@@ -322,9 +322,9 @@ struct PluginTile: View {
                         .opacity(hasPermissions && hovering && !editMode ? 1 : 0)
                 )
                 .overlay(alignment: .bottomTrailing) { keybindBadge }
-                .help(hasPermissions ? "Declares: " + plugin.manifest.permissions.map(\.rawValue).joined(separator: ", ") : "")
+                .help(hasPermissions ? "Declares: " + script.manifest.permissions.map(\.rawValue).joined(separator: ", ") : "")
 
-                Text(plugin.displayName)
+                Text(script.displayName)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.85))
                     .lineLimit(1)
@@ -366,11 +366,11 @@ struct PluginTile: View {
     }
 
     @ViewBuilder private var icon: some View {
-        if let url = plugin.customIconURL, let img = NSImage(contentsOf: url) {
+        if let url = script.customIconURL, let img = NSImage(contentsOf: url) {
             Image(nsImage: img).resizable().scaledToFit().frame(width: 28, height: 28)
                 .opacity(running ? 0.3 : 1)
         } else {
-            Image(systemName: plugin.manifest.resolvedSymbol)
+            Image(systemName: script.manifest.resolvedSymbol)
                 .font(.system(size: 22))
                 .foregroundColor(tint)
                 .opacity(running ? 0.3 : 1)
@@ -378,7 +378,7 @@ struct PluginTile: View {
     }
 
     @ViewBuilder private var keybindBadge: some View {
-        if let key = plugin.manifest.keybind, !key.isEmpty {
+        if let key = script.manifest.keybind, !key.isEmpty {
             Text(key.uppercased())
                 .font(.system(size: 8, weight: .bold, design: .rounded))
                 .foregroundColor(.white.opacity(0.9))
@@ -391,9 +391,9 @@ struct PluginTile: View {
     }
 }
 
-/// Detail card: what the plugin does + edit / delete / show-files.
-struct PluginDetailCard: View {
-    let plugin: Plugin
+/// Detail card: what the script does + edit / delete / show-files.
+struct ScriptDetailCard: View {
+    let script: Script
     let accent: Color
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -408,9 +408,9 @@ struct PluginDetailCard: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    Image(systemName: plugin.manifest.resolvedSymbol)
+                    Image(systemName: script.manifest.resolvedSymbol)
                         .font(.system(size: 20)).foregroundColor(accent)
-                    Text(plugin.displayName)
+                    Text(script.displayName)
                         .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                     Spacer()
                     Button(action: onClose) {
@@ -418,22 +418,22 @@ struct PluginDetailCard: View {
                     }.buttonStyle(.plain)
                 }
 
-                if let desc = plugin.manifest.description {
+                if let desc = script.manifest.description {
                     Text(desc).font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    detailRow("Input", plugin.manifest.input.rawValue)
-                    detailRow("Output", plugin.manifest.output.rawValue)
-                    detailRow("Trigger", plugin.manifest.mode.rawValue)
-                    if let k = plugin.manifest.keybind, !k.isEmpty { detailRow("Keybind", k.uppercased()) }
-                    detailRow("Declares", plugin.manifest.permissions.isEmpty ? "nothing"
-                              : plugin.manifest.permissions.map(\.rawValue).joined(separator: ", "))
+                    detailRow("Input", script.manifest.input.rawValue)
+                    detailRow("Output", script.manifest.output.rawValue)
+                    detailRow("Trigger", script.manifest.mode.rawValue)
+                    if let k = script.manifest.keybind, !k.isEmpty { detailRow("Keybind", k.uppercased()) }
+                    detailRow("Declares", script.manifest.permissions.isEmpty ? "nothing"
+                              : script.manifest.permissions.map(\.rawValue).joined(separator: ", "))
                 }
 
-                if !plugin.manifest.permissions.isEmpty {
-                    Text("Permissions are advisory — Oxine doesn't sandbox plugins. Only run scripts you trust.")
+                if !script.manifest.permissions.isEmpty {
+                    Text("Permissions are advisory — Oxine doesn't sandbox scripts. Only run scripts you trust.")
                         .font(.system(size: 10, weight: .medium)).foregroundColor(.orange.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -480,22 +480,22 @@ struct PluginDetailCard: View {
 }
 
 /// Makes a tile draggable + a drop target while in rearrange mode. Disabled
-/// otherwise so a normal tap still runs the plugin.
+/// otherwise so a normal tap still runs the script.
 struct Reorderable: ViewModifier {
     let enabled: Bool
-    let plugin: Plugin
-    let manager: PluginManager
+    let script: Script
+    let manager: ScriptManager
     @Binding var draggingID: String?
 
     func body(content: Content) -> some View {
         if enabled {
             content
                 .onDrag {
-                    draggingID = plugin.id
-                    return NSItemProvider(object: plugin.id as NSString)
+                    draggingID = script.id
+                    return NSItemProvider(object: script.id as NSString)
                 }
-                .onDrop(of: [UTType.text], delegate: PluginDropDelegate(
-                    target: plugin, manager: manager, draggingID: $draggingID))
+                .onDrop(of: [UTType.text], delegate: ScriptDropDelegate(
+                    target: script, manager: manager, draggingID: $draggingID))
         } else {
             content
         }
@@ -504,9 +504,9 @@ struct Reorderable: ViewModifier {
 
 /// Live reorder: as the dragged tile passes over another, the array reflows
 /// (iOS-home-screen feel). Reorder happens on the main actor.
-struct PluginDropDelegate: DropDelegate {
-    let target: Plugin
-    let manager: PluginManager
+struct ScriptDropDelegate: DropDelegate {
+    let target: Script
+    let manager: ScriptManager
     @Binding var draggingID: String?
 
     func dropEntered(info: DropInfo) {

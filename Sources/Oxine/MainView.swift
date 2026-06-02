@@ -193,8 +193,8 @@ struct MainView: View {
             }
         case .auth:
             AuthView()
-        case .plugins:
-            PluginsView(clipboardManager: clipboardManager, notesManager: notesManager)
+        case .scripts:
+            ScriptsView(clipboardManager: clipboardManager, notesManager: notesManager)
         case .sous:
             SousView(sous: sous)
         }

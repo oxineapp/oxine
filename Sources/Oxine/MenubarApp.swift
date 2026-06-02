@@ -69,6 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // rename the legacy "MenuBar Notes" folder to the new default. Both are
         // one-time no-ops once migrated.
         StorageMigration.runIfNeeded()
+        ScriptsMigration.runIfNeeded()
         NotesLocation.migrateLegacyIfNeeded()
         setupMenuBar()
         setupEventMonitoring()

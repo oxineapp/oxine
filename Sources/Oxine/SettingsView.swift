@@ -92,7 +92,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Accent tint")
                     .foregroundColor(.white.opacity(0.85))
-                Text("Colors buttons, highlights, and the default for new plugins.")
+                Text("Colors buttons, highlights, and the default for new scripts.")
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.5))
 
@@ -113,7 +113,7 @@ struct SettingsView: View {
 
                     Rectangle().fill(.white.opacity(0.1)).frame(width: 1, height: 20)
 
-                    ForEach(PluginPalette.swatches, id: \.self) { hex in
+                    ForEach(ScriptPalette.swatches, id: \.self) { hex in
                         Button(action: { theme.setMode(hex) }) {
                             Circle().fill(Color(hex: hex)).frame(width: 24, height: 24)
                                 .overlay(Circle().stroke(.white, lineWidth: (!theme.isSystem && theme.mode == hex) ? 2 : 0))
