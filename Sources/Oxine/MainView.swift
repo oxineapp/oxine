@@ -8,7 +8,12 @@ struct MainView: View {
     /// Observed so a tint change in Settings re-renders the whole tree and every
     /// computed `accent` picks up the new colour.
     @ObservedObject private var theme = ThemeManager.shared
-    @State var activeTab: Int = 0
+    /// The user's customizable tab bar (which tabs, in what order). Observed so
+    /// edits in Settings / the tour reorder the live bar.
+    @ObservedObject private var tabConfig = TabBarConfig.shared
+    @State var activeTab: TabID = TabBarConfig.shared.enabled.first ?? .notes
+    /// Settings is a route, not a tab (opened from the footer gear).
+    @State private var showingSettings = false
     @State var showSetup = SetupManager.shared.isFirstLaunch
     @State var isPinned: Bool = false
     @State var didStart = false
@@ -27,11 +32,27 @@ struct MainView: View {
             : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
     }
 
-    func switchTab(to tab: Int) {
-        guard tab != activeTab else { return }
-        slideForward = tab > activeTab
+    /// Position of a tab within the current bar order (drives slide direction).
+    private func position(of tab: TabID) -> Int { tabConfig.enabled.firstIndex(of: tab) ?? 0 }
+
+    func switchTab(to tab: TabID) {
+        // Coming back from Settings to the same tab still needs to dismiss Settings.
+        guard tab != activeTab || showingSettings else { return }
+        slideForward = position(of: tab) >= position(of: activeTab)
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            showingSettings = false
             activeTab = tab
+        }
+    }
+
+    /// Open Settings as an overlay route (Settings slides in from the right of
+    /// whatever tab you were on).
+    private func showSettingsRoute() {
+        guard !showingSettings else { return }
+        preSettingsTab = activeTab
+        slideForward = true
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            showingSettings = true
         }
     }
 
@@ -47,7 +68,7 @@ struct MainView: View {
     @State private var notesUnlocked = false
     /// The content tab to return to when leaving Settings (which is opened from
     /// the footer gear rather than living in the tab bar).
-    @State private var preSettingsTab = 0
+    @State private var preSettingsTab: TabID = .notes
 
     /// The corner grip shows only when the panel is actually drag-resizable.
     var showResizeGrip: Bool { panelSizePreset == OxinePanelSize.custom.rawValue && !panelCustomLocked }
@@ -85,25 +106,34 @@ struct MainView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showResizeGrip)
         .onAppear {
-            appDelegate?.isAuthVisible = (activeTab == 2)
+            appDelegate?.isAuthVisible = (!showingSettings && activeTab == .auth)
             guard !didStart else { return }
             didStart = true
             clipboardManager.startMonitoring()
         }
         .onChange(of: activeTab) { oldTab, newTab in
-            slideForward = newTab > oldTab
-            appDelegate?.isAuthVisible = (newTab == 2)
-            if newTab != 1 { clipboardUnlocked = false }
-            if newTab != 0 { notesUnlocked = false }
-            if oldTab != 2 && newTab == 2 {
+            slideForward = position(of: newTab) >= position(of: oldTab)
+            appDelegate?.isAuthVisible = (!showingSettings && newTab == .auth)
+            if newTab != .history { clipboardUnlocked = false }
+            if newTab != .notes { notesUnlocked = false }
+            if oldTab != .auth && newTab == .auth {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
         }
+        .onChange(of: showingSettings) { _, open in
+            appDelegate?.isAuthVisible = (!open && activeTab == .auth)
+        }
+        .onChange(of: tabConfig.enabled) { _, tabs in
+            // If the active tab was removed from the bar, retreat to the first one.
+            if !tabs.contains(activeTab) { switchTab(to: tabs.first ?? .notes) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            if activeTab != settingsTab {
-                preSettingsTab = activeTab
-                switchTab(to: settingsTab)
-            }
+            showSettingsRoute()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openTab)) { note in
+            // From the status-bar menu — navigable even if the tab is off the bar.
+            guard let raw = note.object as? String, let tab = TabID(rawValue: raw) else { return }
+            switchTab(to: tab)
         }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
             // Match the window's eased resize (see AppDelegate.applyPanelSize) so
@@ -124,54 +154,58 @@ struct MainView: View {
         }
     }
 
-    /// Settings lives after the content tabs (Notes 0, History 1, Auth 2,
-    /// Plugins 3, Sous 4) and is opened from the footer gear, not the tab bar.
-    private let settingsTab = 5
-
+    /// The tab to return to when leaving Settings (opened from the footer gear).
     func toggleSettings() {
-        if activeTab == settingsTab {
+        if showingSettings {
             switchTab(to: preSettingsTab)
         } else {
-            preSettingsTab = activeTab
-            switchTab(to: settingsTab)
+            showSettingsRoute()
+        }
+    }
+
+    /// Stable identity for the current route, so the slide transition fires on
+    /// every tab/settings change.
+    private var routeID: String { showingSettings ? "settings" : activeTab.rawValue }
+
+    @ViewBuilder private func tabContent(_ tab: TabID) -> some View {
+        switch tab {
+        case .notes:
+            if requireNotesAuth && !notesUnlocked {
+                BiometricLockView(
+                    title: "Notes Locked",
+                    subtitle: "Authenticate to view your notes.",
+                    reason: "Unlock to view your notes",
+                    onUnlock: { notesUnlocked = true }
+                )
+            } else {
+                NotesView(notesManager: notesManager)
+            }
+        case .history:
+            if requireClipboardAuth && !clipboardUnlocked {
+                BiometricLockView(
+                    title: "Clipboard Locked",
+                    subtitle: "Authenticate to view your clipboard history.",
+                    reason: "Unlock to view your clipboard history",
+                    onUnlock: { clipboardUnlocked = true }
+                )
+            } else {
+                ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: .notes) })
+            }
+        case .auth:
+            AuthView()
+        case .plugins:
+            PluginsView(clipboardManager: clipboardManager, notesManager: notesManager)
+        case .sous:
+            SousView(sous: sous)
         }
     }
 
     var mainContent: some View {
         VStack(spacing: 0) {
-            TabBar(activeTab: activeTab, onSelect: switchTab)
+            TabBar(tabs: tabConfig.enabled, activeTab: activeTab, onSelect: switchTab)
 
             Group {
-                switch activeTab {
-                case 0:
-                    if requireNotesAuth && !notesUnlocked {
-                        BiometricLockView(
-                            title: "Notes Locked",
-                            subtitle: "Authenticate to view your notes.",
-                            reason: "Unlock to view your notes",
-                            onUnlock: { notesUnlocked = true }
-                        )
-                    } else {
-                        NotesView(notesManager: notesManager)
-                    }
-                case 1:
-                    if requireClipboardAuth && !clipboardUnlocked {
-                        BiometricLockView(
-                            title: "Clipboard Locked",
-                            subtitle: "Authenticate to view your clipboard history.",
-                            reason: "Unlock to view your clipboard history",
-                            onUnlock: { clipboardUnlocked = true }
-                        )
-                    } else {
-                        ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: 0) })
-                    }
-                case 2:
-                    AuthView()
-                case 3:
-                    PluginsView(clipboardManager: clipboardManager, notesManager: notesManager)
-                case 4:
-                    SousView(sous: sous)
-                case 5:
+                if showingSettings {
                     VStack(spacing: 0) {
                         SettingsBackBar(onBack: { switchTab(to: preSettingsTab) })
                         SettingsView(showSetup: Binding(
@@ -179,18 +213,18 @@ struct MainView: View {
                             set: { showSetup = $0 }
                         ), clipboardManager: clipboardManager)
                     }
-                default:
-                    EmptyView()
+                } else {
+                    tabContent(activeTab)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .id(activeTab)
+            .id(routeID)
             .transition(contentTransition)
             .scrollEdgeFade()
 
             FooterView(
                 isPinned: $isPinned,
-                isSettingsOpen: activeTab == settingsTab,
+                isSettingsOpen: showingSettings,
                 appDelegate: appDelegate,
                 onToggleSettings: toggleSettings
             )
@@ -280,22 +314,14 @@ extension View {
 }
 
 struct TabBar: View {
-    var activeTab: Int
-    var onSelect: (Int) -> Void
+    /// The user's chosen tabs, in order — driven by `TabBarConfig`.
+    var tabs: [TabID]
+    var activeTab: TabID
+    var onSelect: (TabID) -> Void
     @Namespace private var tabAnimation
     /// Natural width of the labelled row, measured once by a hidden probe. The
     /// only measured value; the available width comes free from the layout.
     @State private var labeledWidth: CGFloat = 0
-
-    /// Only content tabs now — utilities (focus/pin) and Settings moved to the
-    /// footer so the top bar is pure navigation and can breathe.
-    private let tabs: [(icon: String, title: String, index: Int)] = [
-        ("square.and.pencil", "Notes", 0),
-        ("clock.arrow.circlepath", "History", 1),
-        ("lock.shield", "Auth", 2),
-        ("puzzlepiece.extension", "Plugins", 3),
-        ("battery.100.bolt", "Sous", 4),
-    ]
 
     var body: some View {
         GeometryReader { geo in
@@ -321,12 +347,12 @@ struct TabBar: View {
     /// sitting at natural size.
     private func tabRow(compact: Bool) -> some View {
         HStack(spacing: compact ? 6 : 3) {
-            ForEach(tabs, id: \.index) { tab in
-                TabBarItem(icon: tab.icon, title: tab.title, isActive: activeTab == tab.index, compact: compact, namespace: tabAnimation) {
+            ForEach(tabs) { tab in
+                TabBarItem(icon: tab.icon, title: tab.title, isActive: activeTab == tab, compact: compact, namespace: tabAnimation) {
                     // Always navigable — a transient auth flag must never trap you
                     // on a tab (the system Touch ID sheet already blocks input
                     // while it's actually up).
-                    onSelect(tab.index)
+                    onSelect(tab)
                 }
             }
         }
@@ -335,7 +361,7 @@ struct TabBar: View {
     /// Off-screen labelled row at natural width (drives `labeledWidth`).
     private var labelledProbe: some View {
         HStack(spacing: 3) {
-            ForEach(tabs, id: \.index) { tab in
+            ForEach(tabs) { tab in
                 TabBarItem(icon: tab.icon, title: tab.title, isActive: false, compact: false, namespace: tabAnimation, action: {})
             }
         }

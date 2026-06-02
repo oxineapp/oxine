@@ -7,8 +7,8 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous. Last index = stepCount − 1.
-    static let stepCount = 4
+    /// Welcome, Editor, justtype, Sous, Tabs. Last index = stepCount − 1.
+    static let stepCount = 5
     private var lastStep: Int { SetupView.stepCount - 1 }
 
     /// Steps slide along the nav direction: Next enters from the right, Back from the left.
@@ -20,28 +20,28 @@ struct SetupView: View {
                           removal: .opacity.combined(with: .move(edge: .trailing)))
     }
 
+    /// True on the final step, where the tour card shrinks to the bottom and the
+    /// real editable tab bar leaks through on the glass panel above it.
+    private var leaking: Bool { currentStep == lastStep }
+
     var body: some View {
+        Group {
+            if leaking { tabLeakLayout } else { standardLayout }
+        }
+        // Solid for the normal steps; clear on the last step so the panel's glass
+        // (and the editable bar laid on it) shows through above the shrunken card.
+        .background(leaking ? Color.clear : Color(red: 0.06, green: 0.06, blue: 0.08))
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: leaking)
+    }
+
+    // MARK: layouts
+
+    private var standardLayout: some View {
         VStack(spacing: 0) {
             HStack {
-                HStack(spacing: 6) {
-                    ForEach(0..<SetupView.stepCount, id: \.self) { step in
-                        Capsule()
-                            .fill(step <= currentStep ? Color.oxineAccent : Color.white.opacity(0.12))
-                            .frame(height: 3)
-                            .shadow(color: Color.oxineAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
-                    }
-                }
+                progressDots
                 Spacer()
-                Button(action: {
-                    SetupManager.shared.markSetupComplete()
-                    onComplete()
-                }) {
-                    Text("Skip")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .buttonStyle(.plain)
+                skipButton
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)
@@ -49,85 +49,136 @@ struct SetupView: View {
 
             VStack {
                 if currentStep == 0 {
-                    Step1Welcome()
-                        .transition(stepTransition)
+                    Step1Welcome().transition(stepTransition)
                 } else if currentStep == 1 {
-                    Step2Obsidian(isLoading: $isLoading)
-                        .transition(stepTransition)
+                    Step2Obsidian(isLoading: $isLoading).transition(stepTransition)
                 } else if currentStep == 2 {
-                    Step3JustType()
-                        .transition(stepTransition)
+                    Step3JustType().transition(stepTransition)
                 } else {
-                    Step4Sous()
-                        .transition(stepTransition)
+                    Step4Sous().transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
 
-            HStack(spacing: 12) {
-                if currentStep > 0 {
-                    Button(action: {
-                        goingForward = false
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            currentStep -= 1
-                        }
-                    }) {
-                        Text("Back")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .foregroundColor(.white.opacity(0.8))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                    )
-                    .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .leading)), removal: .opacity))
-                }
+            navButtons
+                .padding(20)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+        }
+    }
 
+    private var tabLeakLayout: some View {
+        ZStack(alignment: .bottom) {
+            // The editable bar sits at the TRUE top of the panel — where the tab
+            // bar actually lives — with the tray in the revealed space below it.
+            // This is the panel leaking through, not a widget boxed in a card.
+            VStack(spacing: 0) {
+                TabEditor()
+                    .padding(.horizontal, 14)
+                    .padding(.top, 16)
+                Spacer(minLength: 0)
+            }
+            .transition(.opacity)
+
+            // The tour card, shrunk to the bottom and fading in at its top edge so
+            // the panel above shows through — the "decrease in height + leak" look.
+            VStack(spacing: 12) {
+                Text("Make it yours")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                progressDots
+                navButtons
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 44)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity)
+            .background(
+                Color(red: 0.06, green: 0.06, blue: 0.08).mask(
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black, location: 0.5),
+                            .init(color: .black, location: 1.0)]),
+                        startPoint: .top, endPoint: .bottom)
+                )
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    // MARK: shared pieces
+
+    private var progressDots: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<SetupView.stepCount, id: \.self) { step in
+                Capsule()
+                    .fill(step <= currentStep ? Color.oxineAccent : Color.white.opacity(0.12))
+                    .frame(height: 3)
+                    .shadow(color: Color.oxineAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
+            }
+        }
+    }
+
+    private var skipButton: some View {
+        Button(action: {
+            SetupManager.shared.markSetupComplete()
+            onComplete()
+        }) {
+            Text("Skip").font(.caption).foregroundColor(.white.opacity(0.5))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var navButtons: some View {
+        HStack(spacing: 12) {
+            if currentStep > 0 {
                 Button(action: {
-                    if currentStep < lastStep {
-                        goingForward = true
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            currentStep += 1
-                        }
-                    } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            SetupManager.shared.markSetupComplete()
-                            onComplete()
-                        }
-                    }
+                    goingForward = false
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { currentStep -= 1 }
                 }) {
-                    HStack(spacing: 6) {
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        Text(currentStep < lastStep ? "Next" : "Finish")
-                            .font(.system(size: 13, weight: .bold))
-                            .transition(.opacity)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
+                    Text("Back")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundColor(.white.opacity(0.8))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.oxineAccent.opacity(0.15))
-                )
-                .disabled(isLoading)
-                .scaleEffect(isLoading ? 0.98 : 1.0)
-                .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isLoading)
+                .background(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.08), lineWidth: 0.5))
+                .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .leading)), removal: .opacity))
             }
-            .padding(20)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+
+            Button(action: {
+                if currentStep < lastStep {
+                    goingForward = true
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { currentStep += 1 }
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        SetupManager.shared.markSetupComplete()
+                        onComplete()
+                    }
+                }
+            }) {
+                HStack(spacing: 6) {
+                    if isLoading {
+                        ProgressView().scaleEffect(0.7).transition(.scale.combined(with: .opacity))
+                    }
+                    Text(currentStep < lastStep ? "Next" : "Finish")
+                        .font(.system(size: 13, weight: .bold))
+                        .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.oxineAccent.opacity(0.15)))
+            .disabled(isLoading)
+            .scaleEffect(isLoading ? 0.98 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isLoading)
         }
-        .background(Color(red: 0.06, green: 0.06, blue: 0.08))
     }
 }
 
@@ -463,6 +514,35 @@ struct Step4Sous: View {
             .padding(11)
             .background(Color.white.opacity(0.035))
             .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Final tour step: compose the tab bar. A live preview sits above the same
+/// add / remove / reorder editor used in Settings, so the last thing you do in
+/// setup is make the bar yours. Re-runnable from Settings → Tabs.
+struct Step5Tabs: View {
+    private var accent: Color { .oxineAccent }
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "rectangle.3.group")
+                .font(.system(size: 34))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("Make it yours")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Pick the tabs you want on the bar and set their order. You can change this any time in Settings.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+            // No ScrollView — the drag gesture shouldn't fight a scroll view, and
+            // the composer fits the step.
+            TabEditor().padding(.top, 4)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
     }
 }
 

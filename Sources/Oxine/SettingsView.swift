@@ -18,6 +18,8 @@ struct SettingsView: View {
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
     @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
     @ObservedObject private var sous = SousManager.shared
+    @ObservedObject private var tabConfig = TabBarConfig.shared
+    @State private var editingTabs = false
 
     @StateObject private var justType = JustTypeSyncManager()
     @ObservedObject private var theme = ThemeManager.shared
@@ -140,6 +142,30 @@ struct SettingsView: View {
             NotesLocation.set(url)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { delegate?.isAuthenticating = false }
+    }
+
+    private var tabsSection: some View {
+        SettingSection(title: "Tabs") {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: Binding(get: { editingTabs },
+                                     set: { v in withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { editingTabs = v } })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Edit tab bar").foregroundColor(.white.opacity(0.85))
+                        Text("Drag to reorder, drag down to remove, drag up to add.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.oxineAccent))
+
+                if editingTabs {
+                    TabEditor(config: tabConfig)
+                } else {
+                    TabBarPreview(tabs: tabConfig.enabled)
+                    Text("Every tab stays reachable from the menu-bar icon's right-click menu, even when it's off the bar.")
+                        .font(.caption2).foregroundColor(.white.opacity(0.4))
+                }
+            }
+        }
     }
 
     private var notesSection: some View {
@@ -309,6 +335,8 @@ struct SettingsView: View {
                     }
 
 appearanceSection
+
+                    tabsSection
 
                     notesSection
 

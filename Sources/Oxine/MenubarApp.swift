@@ -14,6 +14,7 @@ extension Notification.Name {
     static let authTabActivated = Notification.Name("authTabActivated")
     static let clipboardCaptured = Notification.Name("clipboardCaptured")
     static let openSettings = Notification.Name("openSettings")
+    static let openTab = Notification.Name("openTab")
 }
 
 @main
@@ -341,18 +342,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func showStatusMenu() {
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Oxine", action: #selector(menuOpen), keyEquivalent: "")
+
+        // Every tab is reachable here, whether or not it's on the bar — so a
+        // hidden tab is never stranded.
+        let tabsItem = NSMenuItem(title: "Open Tab", action: nil, keyEquivalent: "")
+        let tabsMenu = NSMenu()
+        for tab in TabID.canonical {
+            let item = NSMenuItem(title: tab.title, action: #selector(menuOpenTab(_:)), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: tab.icon, accessibilityDescription: nil)
+            item.representedObject = tab.rawValue
+            item.target = self
+            tabsMenu.addItem(item)
+        }
+        tabsItem.submenu = tabsMenu
+        menu.addItem(tabsItem)
+
         menu.addItem(withTitle: "Settings\u{2026}", action: #selector(menuSettings), keyEquivalent: ",")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates\u{2026}", action: #selector(menuCheckUpdates), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Oxine", action: #selector(menuQuit), keyEquivalent: "q")
-        menu.items.forEach { $0.target = self }
+        menu.items.forEach { if $0.target == nil { $0.target = self } }
         if let button = statusItem?.button {
             menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 5), in: button)
         }
     }
 
     @objc private func menuOpen() { if panel?.isVisible != true { showPanel() } }
+    @objc private func menuOpenTab(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        if panel?.isVisible != true { showPanel() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: .openTab, object: raw)
+        }
+    }
     @objc private func menuSettings() { openSettings() }
     @objc private func menuCheckUpdates() { UpdaterManager.shared.checkForUpdates() }
     @objc private func menuQuit() { NSApp.terminate(nil) }
