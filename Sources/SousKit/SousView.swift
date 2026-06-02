@@ -551,8 +551,11 @@ struct ChargeLimitSlider: View {
     /// Show the plug glyph in the fill (while charging).
     var showPlug: Bool
 
-    private let lo = SafetyFloors.minChargeLimit
+    /// The track is an honest 0–100 battery gauge, so the current-charge fill
+    /// reads true. The *limit* knob, however, can't be dragged below `minLimit`.
+    private let lo = 0
     private let hi = 100
+    private let minLimit = 25
     private let barH: CGFloat = 12
 
     var body: some View {
@@ -598,7 +601,9 @@ struct ChargeLimitSlider: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { v in
                 let frac = min(max(v.location.x / w, 0), 1)
-                limit = Int((Double(lo) + frac * Double(hi - lo)).rounded())
+                // Map the drag across the full 0–100 track, then floor the limit at
+                // minLimit (the left quarter of the track is a no-go for the knob).
+                limit = max(minLimit, min(Int((frac * Double(hi)).rounded()), hi))
             })
         }
         .frame(height: barH + 18)
