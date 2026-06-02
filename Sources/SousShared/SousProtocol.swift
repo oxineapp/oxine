@@ -33,6 +33,16 @@ public struct HelperBranding: Sendable {
     public var label: String { machServiceName }
     /// LaunchDaemon plist file name (`/Library/LaunchDaemons/<plistName>`).
     public var plistName: String { machServiceName + ".plist" }
+    /// Absolute path to this brand's installed LaunchDaemon plist.
+    public var plistPath: String { "/Library/LaunchDaemons/" + plistName }
+
+    /// Whether this brand's Sous daemon is installed on the machine. The plist
+    /// sits at a fixed, world-readable path, so this needs no privileges and no
+    /// XPC round-trip — letting one Sous brand notice that another is present
+    /// (e.g. the standalone sous-vide detecting Oxine's built-in Sous).
+    public var isDaemonInstalled: Bool {
+        FileManager.default.fileExists(atPath: plistPath)
+    }
 
     /// Oxine's daemon: `com.oxine.soushelper`, accepting the Oxine app signed by
     /// our own "Oxine" / "Oxine Dev" self-signed code-signing certs.
