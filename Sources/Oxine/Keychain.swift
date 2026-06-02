@@ -116,7 +116,21 @@ enum Keychain {
         case failure(OSStatus)
     }
 
+    /// Once the vault has been decrypted in this process we keep the plaintext
+    /// dictionary in memory. Every later read is served from here, so we hit the
+    /// keychain (and its access prompt) AT MOST ONCE per launch — a user who
+    /// clicks plain "Allow" (not "Always Allow") is asked a single time instead
+    /// of on every secret access. Oxine is the sole writer of its own vault, so
+    /// the cache can't go stale behind our back; writes refresh it in `saveVault`.
+    nonisolated(unsafe) private static var cachedVault: [String: Data]?
+    private static let vaultLock = NSLock()
+
     private static func loadVault() -> VaultLoad {
+        // Hold the lock across the keychain call so concurrent first-readers
+        // coalesce: the first thread prompts, the rest wait and find the cache.
+        vaultLock.lock(); defer { vaultLock.unlock() }
+        if let cached = cachedVault { return .success(cached) }
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: vaultService,
@@ -129,8 +143,11 @@ enum Keychain {
         switch status {
         case errSecSuccess:
             guard let data = result as? Data else { return .failure(status) }
-            let dict = (try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: Data]
-            return .success(dict ?? [:])
+            let dict = ((try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: Data]) ?? [:]
+            cachedVault = dict          // first successful decrypt → cache for the session
+            return .success(dict)
+        // A missing item never prompts (nothing to decrypt), so it's safe to
+        // leave uncached and re-probe until it's actually created.
         case errSecItemNotFound:
             return .notFound
         case errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed:
@@ -155,12 +172,19 @@ enum Keychain {
         // re-prompt on the next read).
         let update: [String: Any] = [kSecValueData as String: blob]
         let status = SecItemUpdate(base as CFDictionary, update as CFDictionary)
-        if status == errSecSuccess { return true }
+        if status == errSecSuccess {
+            vaultLock.lock(); cachedVault = dict; vaultLock.unlock()
+            return true
+        }
         if status == errSecItemNotFound {
             var add = base
             add[kSecValueData as String] = blob
             add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-            return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+            if SecItemAdd(add as CFDictionary, nil) == errSecSuccess {
+                vaultLock.lock(); cachedVault = dict; vaultLock.unlock()
+                return true
+            }
+            return false
         }
         return false
     }
