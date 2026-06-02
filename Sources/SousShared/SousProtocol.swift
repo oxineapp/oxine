@@ -7,7 +7,7 @@ public enum SousXPC {
     /// installed helper and re-register. Part of the protocol contract, so it's
     /// shared across brands (an Oxine and a sous-vide helper of the same version
     /// speak the same XPC).
-    public static let helperVersion = "5"
+    public static let helperVersion = "6"
 }
 
 /// Per-brand identity for a Sous daemon: its launchd label / Mach service, the

@@ -35,6 +35,16 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
     private var calibPhase: CalibrationPhase = .idle
     private var calibHoldUntil: Date?
 
+    // Machine-wide control lock. Only ONE Sous daemon (Oxine's or the standalone
+    // sous-vide's) may drive the SMC at a time — otherwise they fight over
+    // charging + the MagSafe LED (green/amber flicker). A daemon grabs this
+    // exclusive flock only while it actually wants control; everyone else stays
+    // fully passive (no SMC writes). Shared, brand-neutral path so both brands
+    // contend for the same lock.
+    private var lockFD: Int32 = -1
+    private var ownsControl = false
+    private static let lockPath = "/Library/Application Support/Sous/owner.lock"
+
     private static let tickInterval: TimeInterval = 15
     private static let heatDwell: TimeInterval = 300   // 5-min min dwell each way
 
@@ -82,10 +92,33 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
     func uninstall(reply: @escaping @Sendable (Bool) -> Void) {
         queue.async { [self] in
             release()                       // hand charging control back to macOS
+            releaseOwnership()              // and let another daemon take over
+            ownsControl = false
             reply(true)
             // Don't exit(0): with KeepAlive launchd would just respawn us. The app
             // calls SMAppService.unregister(), which actually unloads the daemon.
         }
+    }
+
+    // MARK: Control lock (machine-wide, shared across brands)
+
+    /// True if we hold (or just acquired) the exclusive control lock. Opens the
+    /// shared lock file lazily and keeps the fd for the daemon's lifetime; the
+    /// flock is released on `releaseOwnership()` or when the process exits.
+    private func acquireOwnership() -> Bool {
+        if lockFD < 0 {
+            try? FileManager.default.createDirectory(
+                atPath: (Self.lockPath as NSString).deletingLastPathComponent,
+                withIntermediateDirectories: true)
+            lockFD = open(Self.lockPath, O_RDONLY | O_CREAT, 0o644)
+            if lockFD < 0 { return true }   // fail-open: never brick control over a lock-file error
+        }
+        return flock(lockFD, LOCK_EX | LOCK_NB) == 0   // idempotent re-lock if we already hold it
+    }
+
+    private func releaseOwnership() {
+        guard lockFD >= 0 else { return }
+        flock(lockFD, LOCK_UN)
     }
 
     // MARK: Control loop (always on `queue`)
@@ -114,6 +147,25 @@ final class SousService: NSObject, SousXPCProtocol, @unchecked Sendable {
 
     private func tick() {
         guard smcOpen else { return }
+
+        // Contend for the machine-wide control lock. Grab it only while we
+        // actually want control; when idle, drop it so the other app's daemon
+        // can take over cleanly (the charge-limit handoff).
+        let wantsControl = config.enabled || config.calibrationActive
+        if !wantsControl {
+            if ownsControl { release(); ownsControl = false }   // hand back to macOS, once
+            releaseOwnership()
+            return                                              // then stop touching the SMC
+        }
+        guard acquireOwnership() else {
+            // Another Sous daemon owns the battery — stay fully passive (no SMC
+            // writes at all) so we never fight it over charging or the LED.
+            ownsControl = false
+            currentState = .off
+            return
+        }
+        ownsControl = true
+
         defer { applyLED() }           // reflect whatever state this tick settled on
         let now = Date()
         // If the timer was starved (sleep/wake, throttling), we can't trust that
