@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.4.0</title>
+            <pubDate>Thu, 04 Jun 2026 01:12:10 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>140</sparkle:version>
+            <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.0</h2><ul><li><strong>Smart fan mode is calmer and far better spread across the slider.</strong> Each profile now holds a clear target temperature, eases the fans in instead of lurching, and truly idles to silence when nothing&#x27;s going on.</li><li>New <strong>Smart profile selector</strong>: snap between Silent, Quiet, Balanced, Brisk and Cool, each showing the temperature it holds, with a live readout of what Smart is doing right now and a thumb that shifts colour as it works.</li><li>Fixed Smart running too hard: idle no longer spins the fans up, and the cooler profiles are now distinct instead of all pinning to maximum.</li><li><strong>Extended temperature view</strong> (Settings): see the full grouped sensor map - CPU clusters, GPU, SSD, power delivery and more - instead of the short list.</li><li><strong>Verbose Smart output</strong> (Settings): a diagram showing exactly what Smart is thinking - the temperature it controls on, the target it holds, and how it builds the fan demand.</li><li>The sensor list no longer briefly drops CPU sensors on a glitchy reading, and the &quot;CPU&quot; row is now clearly labelled &quot;CPU (max)&quot; beside the die average.</li><li>Lower energy use: live gauges and animations pause while the panel is hidden.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.0/Oxine-1.4.0.zip" length="3155990" type="application/octet-stream" sparkle:edSignature="Niz1894Q2PKpqlHBbcTXFKqu0RFT+I5Uh5wYAGitX1ibsCKncfCAwTz/6v4RB7TChqiGd9vr5GuXW9XWgu/WDA=="/>
+        </item>
+        <item>
             <title>1.3.0</title>
             <pubDate>Wed, 03 Jun 2026 04:30:48 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.2.9</h2><ul><li>The menu bar dot now rides an ocean wave in your accent color while Caffeine keeps your Mac awake.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.9/Oxine-1.2.9.zip" length="2706742" type="application/octet-stream" sparkle:edSignature="/nvCyHWOkxJxX0SM7XYZF+wOdg8N4hGscNgpPFT8wxoC8fiCKUJHbP+5Yre3qm3xMvdgSx7P5TQbbPvgfMWKBw=="/>
-        </item>
-        <item>
-            <title>1.2.8</title>
-            <pubDate>Wed, 03 Jun 2026 01:34:30 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>128</sparkle:version>
-            <sparkle:shortVersionString>1.2.8</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.2.8</h2><ul><li>The menu bar dot now pulses with an amber heartbeat while Caffeine keeps your Mac awake.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.8/Oxine-1.2.8.zip" length="2705970" type="application/octet-stream" sparkle:edSignature="SJrOSlDRyojsqRCCeJNX9RvSlEvrCYeEOpouyZIY56GXNGPuTZvTvQDCxUxfIqc1izq+x5VV8KRK1sNtCggiDQ=="/>
         </item>
     </channel>
 </rss>
