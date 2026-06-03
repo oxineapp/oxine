@@ -48,6 +48,12 @@ mkdir -p Oxine.app/Contents/Library/LaunchDaemons
 cp .build/debug/com.oxine.soushelper Oxine.app/Contents/MacOS/com.oxine.soushelper
 cp daemon/com.oxine.soushelper.plist Oxine.app/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist
 
+# Temper fan daemon: a second privileged helper (disjoint SMC registers, so it
+# coexists with Sous). Same bundling shape.
+echo "▸ deploying Temper helper…"
+cp .build/debug/com.oxine.temperhelper Oxine.app/Contents/MacOS/com.oxine.temperhelper
+cp daemon/com.oxine.temperhelper.plist Oxine.app/Contents/Library/LaunchDaemons/com.oxine.temperhelper.plist
+
 # Embed Sparkle.framework so the bundle can load it (the binary links it as
 # @rpath/Sparkle.framework). Copy only if missing; always (re)add the rpath
 # since the fresh binary ships with only @loader_path.
@@ -58,8 +64,9 @@ mkdir -p Oxine.app/Contents/Frameworks
 install_name_tool -add_rpath "@executable_path/../Frameworks" Oxine.app/Contents/MacOS/Oxine 2>/dev/null || true
 
 echo "▸ signing with '$SIGN_ID'…"
-# Inside-out: sign the helper first (its own identifier), then seal the app.
+# Inside-out: sign both helpers first (own identifiers), then seal the app.
 codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" Oxine.app/Contents/MacOS/com.oxine.soushelper
+codesign --force --sign "$SIGN_ID" --identifier "com.oxine.temperhelper" Oxine.app/Contents/MacOS/com.oxine.temperhelper
 codesign --force --sign "$SIGN_ID" --identifier "$BUNDLE_ID" Oxine.app
 
 echo "▸ signature:"

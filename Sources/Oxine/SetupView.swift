@@ -1,6 +1,7 @@
 import SwiftUI
 import PanelKit
 import SousKit
+import TemperKit
 
 struct SetupView: View {
     @State var currentStep = 0
@@ -9,8 +10,8 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous, Tabs. Last index = stepCount − 1.
-    static let stepCount = 5
+    /// Welcome, Editor, justtype, Sous, Temper, Tabs. Last index = stepCount − 1.
+    static let stepCount = 6
     private var lastStep: Int { SetupView.stepCount - 1 }
 
     /// Steps slide along the nav direction: Next enters from the right, Back from the left.
@@ -56,8 +57,10 @@ struct SetupView: View {
                     Step2Obsidian(isLoading: $isLoading).transition(stepTransition)
                 } else if currentStep == 2 {
                     Step3JustType().transition(stepTransition)
-                } else {
+                } else if currentStep == 3 {
                     Step4Sous().transition(stepTransition)
+                } else {
+                    Step5Temper().transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -206,6 +209,7 @@ struct Step1Welcome: View {
                 FeatureRow(icon: "lock.shield", title: "2FA Codes", desc: "Your authenticator, built in")
                 FeatureRow(icon: "terminal", title: "Scripts", desc: "One-tap actions and shortcuts")
                 FeatureRow(icon: "heart.badge.bolt", title: "Battery Care", desc: "Cap charging to extend its life")
+                FeatureRow(icon: "fanblades.fill", title: "Temper", desc: "Temps, throttling, and fan control")
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.03)))
@@ -507,6 +511,111 @@ struct Step4Sous: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
         .onAppear { sous.refreshNow() }
+    }
+
+    private func infoCard(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.white.opacity(0.65))
+            .lineSpacing(4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(11)
+            .background(Color.white.opacity(0.035))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Thermal + fans. Monitoring works on every Mac with no helper, so this step
+/// always shows the live state; installing the privileged Temper helper (one
+/// admin prompt) is what unlocks fan control, and only where the hardware has
+/// controllable fans. Mirrors the install flow in `TemperView`.
+struct Step5Temper: View {
+    @ObservedObject private var temper = TemperManager.shared
+    private var accent: Color { .panelAccent }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "fanblades.fill")
+                .font(.system(size: 36))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("Temper · Thermal & Fans")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Watch temperatures, CPU load, and thermal pressure on any Mac. Install the fan helper to take control where the hardware allows.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                Text("OPTIONAL")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(.white.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .padding(.top, 2)
+            }
+
+            if !temper.fansPresent {
+                // Fanless Mac (an Air, say): nothing to control, so it runs purely
+                // as a thermal + performance dashboard - no helper, no prompt.
+                infoCard(text: "This Mac has no user-controllable fans, so Temper runs as a thermal and performance dashboard. No helper needed - just open the Temper tab.")
+            } else {
+                switch temper.helper.installState {
+                case .installed:
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                        Text("Fan helper ready!")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(Color.green.opacity(0.08))
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
+                    infoCard(text: "Open the Temper tab any time to set fans to Manual, an adaptive Smart mode, or a custom curve.")
+
+                case .installing:
+                    VStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Enter your Mac password in the prompt to install the helper. This happens once.")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(11)
+                    .background(Color.white.opacity(0.035))
+                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+
+                case .notInstalled, .failed:
+                    infoCard(text: "Fan control installs a small background helper - macOS will ask for your password once to allow it. You can skip this and still see every reading.")
+                    if case .failed(let msg) = temper.helper.installState {
+                        Text(msg)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundColor(.orange.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                    }
+                    Button(action: { Task { await temper.helper.install(); temper.refreshNow() } }) {
+                        Text("Install fan helper")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .foregroundColor(accent)
+                            .background(accent.opacity(0.12))
+                            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+        .onAppear { temper.setViewActive(true); temper.refreshNow() }
+        .onDisappear { temper.setViewActive(false) }
     }
 
     private func infoCard(text: String) -> some View {

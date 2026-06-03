@@ -1,6 +1,7 @@
 import SwiftUI
 import PanelKit
 import SousKit
+import TemperKit
 import AppKit
 import Combine
 
@@ -61,6 +62,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var isAuthVisible = false
     var isProgrammaticResize = false
     private var cancellables = Set<AnyCancellable>()
+    /// The two feeds that tint the menu-bar bead. Temper (thermal urgency) wins
+    /// over Sous (charge state) when both want it — see `resolveBeadTint`.
+    private var sousBeadColor: NSColor?
+    private var temperBeadColor: NSColor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Tell the shared chrome who it is (settings suite + display name) before
@@ -86,6 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
         observeSous()
+        observeTemper()
         observeCaffeine()
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()
@@ -96,15 +102,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         SousManager.shared.$menuTint
             .receive(on: RunLoop.main)
             .sink { [weak self] tint in
-                let color: NSColor?
                 switch tint {
-                case .none:    color = nil
-                case .holding: color = .systemGreen
-                case .working: color = .systemOrange
+                case .none:    self?.sousBeadColor = nil
+                case .holding: self?.sousBeadColor = .systemGreen
+                case .working: self?.sousBeadColor = .systemOrange
                 }
-                self?.orbitView?.setSousTint(color)
+                self?.resolveBeadTint()
             }
             .store(in: &cancellables)
+    }
+
+    /// Tint the menu-bar bead from macOS thermal pressure (Temper). A hot/throttling
+    /// Mac is worth surfacing, so this takes precedence over the Sous tint.
+    private func observeTemper() {
+        TemperManager.shared.$menuTint
+            .receive(on: RunLoop.main)
+            .sink { [weak self] tint in
+                switch tint {
+                case .none: self?.temperBeadColor = nil
+                case .warm: self?.temperBeadColor = .systemOrange
+                case .hot:  self?.temperBeadColor = .systemRed
+                }
+                self?.resolveBeadTint()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Resolve the two bead feeds: thermal urgency first, else charge state.
+    private func resolveBeadTint() {
+        orbitView?.setBeadTint(temperBeadColor ?? sousBeadColor)
     }
 
     /// Pulse the menu-bar bead while Caffeine keeps the Mac awake.

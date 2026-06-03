@@ -102,11 +102,13 @@ if [ "$UNIVERSAL" = "1" ]; then
   swift build -c release --arch arm64 --arch x86_64
   PRODUCT=".build/apple/Products/Release/Oxine"
   HELPER=".build/apple/Products/Release/com.oxine.soushelper"
+  TEMPER_HELPER=".build/apple/Products/Release/com.oxine.temperhelper"
 else
   echo "▸ building native release ($(uname -m))…  (pass --universal with full Xcode for Intel too)"
   swift build -c release
   PRODUCT=".build/release/Oxine"
   HELPER=".build/release/com.oxine.soushelper"
+  TEMPER_HELPER=".build/release/com.oxine.temperhelper"
 fi
 
 # ── Assemble the .app ─────────────────────────────────────────────────────────
@@ -122,6 +124,11 @@ echo "▸ bundling Sous helper…"
 mkdir -p "$DIST/$APP/Contents/Library/LaunchDaemons"
 cp "$HELPER" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
 cp daemon/com.oxine.soushelper.plist "$DIST/$APP/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist"
+
+# Temper fan daemon: a second privileged helper (disjoint SMC registers).
+echo "▸ bundling Temper helper…"
+cp "$TEMPER_HELPER" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
+cp daemon/com.oxine.temperhelper.plist "$DIST/$APP/Contents/Library/LaunchDaemons/com.oxine.temperhelper.plist"
 
 # Embed Sparkle.framework (a dynamic framework) and point the loader at
 # ../Frameworks. The SPM build's binary already carries an @loader_path rpath;
@@ -152,6 +159,7 @@ echo "▸ signing with '$SIGN_ID'…"
 # Inside-out: helper first (own identifier), then the main binary, then seal the
 # whole bundle.
 codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
+codesign --force --sign "$SIGN_ID" --identifier "com.oxine.temperhelper" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
 codesign --force --sign "$SIGN_ID" "$DIST/$APP/Contents/MacOS/Oxine"
 codesign --force --sign "$SIGN_ID" "$DIST/$APP"
 codesign --verify --deep --strict "$DIST/$APP" && echo "  ✓ signature valid"

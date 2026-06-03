@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Bundled descriptor for Oxine's privileged fan daemon, at
+	     Oxine.app/Contents/Library/LaunchDaemons/com.oxine.temperhelper.plist.
+	     The live install path writes its own copy to
+	     /Library/LaunchDaemons via TemperHelperClient (classic LaunchDaemon,
+	     one admin prompt) — this bundled copy mirrors Sous for consistency. -->
+	<key>Label</key>
+	<string>com.oxine.temperhelper</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/com.oxine.temperhelper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>com.oxine.temperhelper</key>
+		<true/>
+	</dict>
+	<!-- Run continuously so a manual fan setting persists when the app is
+	     closed, and so control is re-asserted against thermalmonitord. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.oxine.app</string>
+	</array>
+</dict>
+</plist>

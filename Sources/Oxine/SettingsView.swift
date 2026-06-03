@@ -1,6 +1,7 @@
 import SwiftUI
 import PanelKit
 import SousKit
+import TemperKit
 import ServiceManagement
 
 struct SettingsView: View {
@@ -16,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
     @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
     @ObservedObject private var sous = SousManager.shared
+    @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
     @State private var editingTabs = false
 
@@ -502,6 +504,10 @@ struct SettingsView: View {
                     
                     SettingSection(title: "Sous · Battery") {
                         SousSettings(sous: sous)
+                    }
+
+                    SettingSection(title: "Temper · Thermal & Fans") {
+                        TemperSettings(temper: temper)
                     }
 
                     SettingSection(title: "Software Update") {

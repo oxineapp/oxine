@@ -6,7 +6,7 @@ import PanelKit
 /// tab must not shift the meaning of the others. Settings is deliberately *not*
 /// a `TabID`: it's a separate route opened from the footer gear (see `Route`).
 enum TabID: String, CaseIterable, Codable, Identifiable {
-    case notes, history, auth, scripts, sous
+    case notes, history, auth, scripts, sous, temper
 
     var id: String { rawValue }
 
@@ -21,6 +21,7 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .auth:    return "lock.shield"
         case .scripts: return "puzzlepiece.extension"
         case .sous:    return "heart.badge.bolt"
+        case .temper:  return "fanblades.fill"
         }
     }
 
@@ -31,6 +32,7 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .auth:    return "Auth"
         case .scripts: return "Scripts"
         case .sous:    return "Sous"
+        case .temper:  return "Temper"
         }
     }
 }

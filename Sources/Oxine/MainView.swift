@@ -1,12 +1,14 @@
 import SwiftUI
 import PanelKit
 import SousKit
+import TemperKit
 import AppKit
 
 struct MainView: View {
     @StateObject var clipboardManager = ClipboardManager()
     @StateObject var notesManager = QuickNotesManager()
     @ObservedObject private var sous = SousManager.shared
+    @ObservedObject private var temper = TemperManager.shared
     /// Observed so a tint change in Settings re-renders the whole tree and every
     /// computed `accent` picks up the new colour.
     @ObservedObject private var theme = ThemeManager.shared
@@ -199,6 +201,8 @@ struct MainView: View {
             ScriptsView(clipboardManager: clipboardManager, notesManager: notesManager)
         case .sous:
             SousView(sous: sous)
+        case .temper:
+            TemperView(temper: temper)
         }
     }
 

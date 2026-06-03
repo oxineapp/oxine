@@ -4,6 +4,11 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.3.0
+- **Temper**: a new tab for thermal monitoring and fan control. See live temperatures, CPU load, and macOS thermal pressure on any Mac, fanless models included.
+- Drive your fans where the hardware allows: Manual sliders, an adaptive Smart mode that ramps with heat and load, or a custom curve.
+- Link fans to move them together, pick which sensor drives the readout, and switch between Celsius and Fahrenheit in Settings.
+
 ## 1.2.9
 - The menu bar dot now rides an ocean wave in your accent color while Caffeine keeps your Mac awake.
 

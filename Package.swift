@@ -9,12 +9,17 @@ let package = Package(
     products: [
         .executable(name: "Oxine", targets: ["Oxine"]),
         .executable(name: "com.oxine.soushelper", targets: ["SousHelper"]),
+        .executable(name: "com.oxine.temperhelper", targets: ["TemperHelper"]),
         // Shared libraries consumed by the standalone sous-vide app (alfaoz/sous-vide
         // depends on this package and builds its own app + helper on top of these).
         .library(name: "PanelKit", targets: ["PanelKit"]),
         .library(name: "SousKit", targets: ["SousKit"]),
         .library(name: "SousShared", targets: ["SousShared"]),
-        .library(name: "SousHelperCore", targets: ["SousHelperCore"])
+        .library(name: "SousHelperCore", targets: ["SousHelperCore"]),
+        // Temper (thermal/performance + fan control) as reusable products too.
+        .library(name: "TemperKit", targets: ["TemperKit"]),
+        .library(name: "TemperShared", targets: ["TemperShared"]),
+        .library(name: "TemperHelperCore", targets: ["TemperHelperCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
@@ -53,12 +58,35 @@ let package = Package(
             name: "SousKit",
             dependencies: ["SousShared", "PanelKit"]
         ),
+        // Types shared across the app↔fan-daemon XPC boundary.
+        .target(
+            name: "TemperShared"
+        ),
+        // The fan daemon's reusable engine: SMC fan access (with the Ftst unlock),
+        // the safety-guarded re-assert loop, and the brand-parameterized runtime.
+        .target(
+            name: "TemperHelperCore",
+            dependencies: ["TemperShared"]
+        ),
+        // Oxine's privileged fan-control daemon. Tiny entry point over the core.
+        .executableTarget(
+            name: "TemperHelper",
+            dependencies: ["TemperShared", "TemperHelperCore"]
+        ),
+        // The Temper thermal/performance dashboard + fan control as a reusable
+        // module, built on PanelKit chrome + the shared XPC types.
+        .target(
+            name: "TemperKit",
+            dependencies: ["TemperShared", "PanelKit"]
+        ),
         .executableTarget(
             name: "Oxine",
             dependencies: [
                 "SousShared",
                 "PanelKit",
                 "SousKit",
+                "TemperShared",
+                "TemperKit",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []

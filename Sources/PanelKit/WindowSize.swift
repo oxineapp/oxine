@@ -20,9 +20,9 @@ public enum PanelSize: String, CaseIterable, Identifiable {
     /// Fixed dimensions for the preset, or nil for `.custom` (user-resized).
     public var presetSize: CGSize? {
         switch self {
-        case .compact:  return CGSize(width: 380, height: 500)
-        case .standard: return CGSize(width: 440, height: 560)
-        case .tall:     return CGSize(width: 440, height: 660)
+        case .compact:  return CGSize(width: 360, height: 500)
+        case .standard: return CGSize(width: 480, height: 560)
+        case .tall:     return CGSize(width: 480, height: 660)
         case .custom:   return nil
         }
     }
