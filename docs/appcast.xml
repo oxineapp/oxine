@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.3.0</title>
+            <pubDate>Wed, 03 Jun 2026 04:30:48 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>130</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.3.0</h2><ul><li><strong>Temper</strong>: a new tab for thermal monitoring and fan control. See live temperatures, CPU load, and macOS thermal pressure on any Mac, fanless models included.</li><li>Drive your fans where the hardware allows: Manual sliders, an adaptive Smart mode that ramps with heat and load, or a custom curve.</li><li>Link fans to move them together, pick which sensor drives the readout, and switch between Celsius and Fahrenheit in Settings.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.3.0/Oxine-1.3.0.zip" length="3046708" type="application/octet-stream" sparkle:edSignature="6uvkR9xrYqfjUY8rHT2KX5g1w0Y/z0tqmiO2Cs1ehxi8Y7njIqIUOMQ+zzhxAUbZQ28BAu2CVx/5k/o/MWqwBw=="/>
+        </item>
+        <item>
             <title>1.2.9</title>
             <pubDate>Wed, 03 Jun 2026 02:05:02 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.2.8</h2><ul><li>The menu bar dot now pulses with an amber heartbeat while Caffeine keeps your Mac awake.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.8/Oxine-1.2.8.zip" length="2705970" type="application/octet-stream" sparkle:edSignature="SJrOSlDRyojsqRCCeJNX9RvSlEvrCYeEOpouyZIY56GXNGPuTZvTvQDCxUxfIqc1izq+x5VV8KRK1sNtCggiDQ=="/>
-        </item>
-        <item>
-            <title>1.2.7</title>
-            <pubDate>Wed, 03 Jun 2026 01:10:46 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>127</sparkle:version>
-            <sparkle:shortVersionString>1.2.7</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.2.7</h2><ul><li>The in-app updater now shows the changelog for the version being installed.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.2.7/Oxine-1.2.7.zip" length="2703634" type="application/octet-stream" sparkle:edSignature="3wJnsPvrYr41qoI+/B801/e9FXTsqmHaBduxvAz1rvEl2QBHJnal9SLwPqpkAEjpjosUs86yH0nrZwkgp2vuAA=="/>
         </item>
     </channel>
 </rss>
