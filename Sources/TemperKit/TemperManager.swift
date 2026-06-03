@@ -49,6 +49,12 @@ public final class TemperManager: ObservableObject {
     @Published public var tempUnit: TempUnit { didSet { persistUnit() } }
     /// When on, dragging one fan's manual slider moves every fan together.
     @Published public var fansLinked: Bool { didSet { persistLinked() } }
+    /// Show the full grouped sensor map (CPU clusters, GPU, power delivery, …)
+    /// instead of the short curated list. Display only - never affects Smart.
+    @Published public var extendedSensors: Bool { didSet { persistExtended(); refreshMetricsOnly() } }
+    /// Show the Smart reasoning diagram (what it's controlling on, aiming for, and
+    /// the demand it builds). Diagnostic; off by default.
+    @Published public var verboseSmart: Bool { didSet { persistVerbose() } }
 
     public let helper = TemperHelperClient()
     private let reader = ThermalReader()
@@ -58,12 +64,21 @@ public final class TemperManager: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var metricsTask: Task<Void, Never>?
     private var activeViewers = 0
+    /// Whether the panel is on screen. The fast UI refresh runs only while a
+    /// viewer is mounted AND the panel is visible - hiding the panel doesn't fire
+    /// `.onDisappear`, so without this the 2 Hz loop would keep churning
+    /// off-screen. Control logic is unaffected: `poll()` and `helper.apply()` keep
+    /// running regardless.
+    private var panelOpen = false
     private var thermalObserver: NSObjectProtocol?
+    private var visibilityObserver: NSObjectProtocol?
 
     private let widgetOrderKey = "temperWidgetOrder"
     private let displaySensorKey_ = "temperDisplaySensor"
     private let tempUnitKey = "temperUnit"
     private let fansLinkedKey = "temperFansLinked"
+    private let extendedSensorsKey = "temperExtendedSensors"
+    private let verboseSmartKey = "temperVerboseSmart"
 
     private init() {
         if let data = defaults.data(forKey: configKey),
@@ -83,12 +98,36 @@ public final class TemperManager: ObservableObject {
         displaySensorKey = defaults.string(forKey: displaySensorKey_)
         tempUnit = defaults.string(forKey: tempUnitKey).flatMap(TempUnit.init) ?? .celsius
         fansLinked = defaults.bool(forKey: fansLinkedKey)
+        extendedSensors = defaults.bool(forKey: extendedSensorsKey)
+        verboseSmart = defaults.bool(forKey: verboseSmartKey)
         startPolling()
         // Snappy tint updates the instant macOS changes thermal pressure.
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.refreshMetricsOnly() }
         }
+        panelOpen = PanelVisibility.shared.isOpen
+        visibilityObserver = NotificationCenter.default.addObserver(
+            forName: .panelVisibilityChanged, object: nil, queue: .main) { [weak self] note in
+            let open = (note.object as? Bool) ?? false
+            Task { @MainActor in self?.setPanelOpen(open) }
+        }
+    }
+
+    /// Panel shown/hidden: stop or resume the fast UI refresh (and snap a fresh
+    /// reading on reopen, since `.onAppear` won't fire again for an already-mounted
+    /// view). The always-on `pollTask` keeps the control logic alive either way.
+    private func setPanelOpen(_ open: Bool) {
+        guard panelOpen != open else { return }
+        panelOpen = open
+        reevaluateFastMetrics()
+        if open { refreshNow() }
+    }
+
+    /// Fast metrics want both a mounted viewer and a visible panel.
+    private var fastMetricsWanted: Bool { activeViewers > 0 && panelOpen }
+    private func reevaluateFastMetrics() {
+        if fastMetricsWanted { startFastMetrics() } else { stopFastMetrics() }
     }
 
     // MARK: Display
@@ -148,7 +187,8 @@ public final class TemperManager: ObservableObject {
     /// The speed (0–100 %) Temper is commanding `fan` right now, or nil when that
     /// fan is hands-off (Default, or Smart while it's idle) and macOS owns it.
     public func commandedPercent(for fan: FanInfo) -> Double? {
-        config.setting(for: fan.index)?.resolvedPercent(hottest: hottestC, pressureBias: pressureBias)
+        config.setting(for: fan.index)?.resolvedPercent(hottest: hottestC, pressureBias: pressureBias,
+                                                         temperament: config.temperament)
     }
 
     private func mutateAll(_ body: (inout FanSetting) -> Void) {
@@ -172,6 +212,8 @@ public final class TemperManager: ObservableObject {
 
     private func persistUnit() { defaults.set(tempUnit.rawValue, forKey: tempUnitKey) }
     private func persistLinked() { defaults.set(fansLinked, forKey: fansLinkedKey) }
+    private func persistExtended() { defaults.set(extendedSensors, forKey: extendedSensorsKey) }
+    private func persistVerbose() { defaults.set(verboseSmart, forKey: verboseSmartKey) }
 
     /// Drag handler for a fan slider: respects the link toggle (move all together
     /// when linked, else just that fan).
@@ -195,9 +237,32 @@ public final class TemperManager: ObservableObject {
     }
 
     /// What Smart would command right now (nil = staying hands-off), for the
-    /// adaptive readout in the UI.
+    /// adaptive readout in the UI. The live preview shows the instantaneous
+    /// *demand* (no rate info), matching the daemon's aim before it shapes it.
     public var smartTargetNow: Double? {
-        TemperSmart.percent(hottest: hottestC, pressureBias: pressureBias)
+        TemperSmart.demand(tempC: hottestC, pressureBias: pressureBias, temperament: config.temperament)
+    }
+
+    /// How hard Smart is working *right now*, 0–1, or nil when it's hands-off. Uses
+    /// the daemon's real reasoning (`smartDebug`, which folds in power feedforward,
+    /// the plant floor and slew) when the helper is live; falls back to the local
+    /// preview demand otherwise. Drives the selector's situation colour.
+    public var smartActivity: Double? {
+        if capable, let d = status.smartDebug {
+            if d.handsOff { return nil }
+            let pct = d.output >= 0 ? d.output : d.demand
+            return min(max(pct, 0), 100) / 100
+        }
+        guard let t = smartTargetNow else { return nil }
+        return min(max(t, 0), 100) / 100
+    }
+
+    /// Smart temperament: 0 = Silent (hotter, lazy fans) … 1 = Cool (lower
+    /// setpoint, eager fans). Persisted and pushed to the daemon through the
+    /// normal config commit.
+    public var temperament: Double {
+        get { config.temperament }
+        set { config.temperament = min(max(newValue, 0), 1) }
     }
 
     /// Ensure there's exactly one `FanSetting` per fan the machine reports, adding
@@ -237,11 +302,11 @@ public final class TemperManager: ObservableObject {
 
     public func setViewActive(_ active: Bool) {
         activeViewers = max(0, activeViewers + (active ? 1 : -1))
-        if activeViewers > 0 { startFastMetrics() } else { stopFastMetrics() }
+        reevaluateFastMetrics()
     }
 
     private func refreshMetricsOnly(updateCPU: Bool = true) {
-        metrics = reader.read(updateCPU: updateCPU)
+        metrics = reader.read(updateCPU: updateCPU, extended: extendedSensors)
         reconcileFans(count: metrics.fans.count)
         updateMenuTint()
     }
@@ -267,7 +332,7 @@ public final class TemperManager: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.poll()
-                let fast = (self?.activeViewers ?? 0) > 0
+                let fast = self?.fastMetricsWanted ?? false
                 try? await Task.sleep(for: .seconds(fast ? 3 : 12))
             }
         }

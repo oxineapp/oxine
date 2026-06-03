@@ -8,7 +8,14 @@ public struct TempSensor: Identifiable, Sendable, Equatable {
     public var key: String
     public var label: String
     public var celsius: Double
+    /// Subsystem group for the extended view's section headers; nil in the basic
+    /// (flat) list.
+    public var group: String?
     public var id: String { key }
+
+    public init(key: String, label: String, celsius: Double, group: String? = nil) {
+        self.key = key; self.label = label; self.celsius = celsius; self.group = group
+    }
 }
 
 /// A read-only snapshot of the machine's thermal + performance state, gathered
@@ -47,12 +54,12 @@ final class ThermalReader {
     /// this call (its delta is measured over the gap between recompute calls, so
     /// recomputing at a steady 1 Hz keeps the figure honest); fans/temps are
     /// always fresh.
-    func read(updateCPU: Bool = true) -> TemperMetrics {
+    func read(updateCPU: Bool = true, extended: Bool = false) -> TemperMetrics {
         var m = TemperMetrics()
         m.thermalState = ProcessInfo.processInfo.thermalState
         m.fans = TemperSMCReader.shared.fans()
-        m.sensors = TemperSMCReader.shared.temperatures()
-            .map { TempSensor(key: $0.key, label: $0.label, celsius: $0.celsius) }
+        m.sensors = TemperSMCReader.shared.temperatures(extended: extended)
+            .map { TempSensor(key: $0.key, label: $0.label, celsius: $0.celsius, group: $0.group) }
         m.batteryTempC = Self.batteryTempC()
         if updateCPU { cachedCPU = cpuUsage() }
         m.cpuUsage = cachedCPU

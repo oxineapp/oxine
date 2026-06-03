@@ -459,6 +459,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
         panel.makeKeyAndOrderFront(nil)
+        PanelVisibility.shared.set(true)
         orbitView?.setPanelOpen(true)
         UpdaterManager.shared.checkOnOpen()   // throttled; pops the updater if one's waiting
 
@@ -480,6 +481,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panelJustOpened = false
         NotificationCenter.default.post(name: .popoverWillClose, object: nil)
         panel?.orderOut(nil as Any?)
+        PanelVisibility.shared.set(false)
         orbitView?.setPanelOpen(false)
     }
 

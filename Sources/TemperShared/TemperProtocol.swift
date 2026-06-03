@@ -9,7 +9,7 @@ public enum TemperXPC {
     /// Bumped whenever the daemon binary or config contract changes so the app can
     /// detect a stale installed helper and re-register (one admin prompt). v2: the
     /// config moved from a single global mode to per-fan `FanSetting`s.
-    public static let helperVersion = "2"
+    public static let helperVersion = "3"
 }
 
 /// Per-brand identity for a Temper daemon: launchd label / Mach service, log
@@ -102,28 +102,140 @@ public enum FanControlMode: String, Codable, Sendable, CaseIterable, Identifiabl
     }
 }
 
-/// Temper's adaptive "Smart" controller, shared so the daemon (which applies it)
-/// and the app (which previews it live) compute identically. Returns the fan
-/// speed 0–100 %, or nil to mean "stay hands-off and let macOS idle the fans".
+/// Temper's adaptive "Smart" controller - the *instantaneous demand*: the fan
+/// fraction (0–100 %) the current thermal situation calls for, or nil to stay
+/// hands-off (let macOS idle the fans toward 0 rpm).
 ///
-/// The idea: while genuinely cool it returns nil, so fans can sit at 0 rpm just
-/// like Default. Once it warms past a floor - or the OS reports thermal pressure
-/// - it takes over and ramps, and it gets *more* aggressive (lower floor, earlier
-/// ceiling) the higher the pressure. `pressureBias` is 0 (nominal) … 1 (critical).
+/// This is a pure *setpoint* controller: it aims to hold a target temperature,
+/// ramping the fan as the (smoothed) temperature approaches that setpoint, and it
+/// *anticipates* - a fast upward `rising` rate pre-spins the fan before the heat
+/// arrives. `temperament` slides the whole behaviour from Silent (hotter setpoint,
+/// lazy) to Cool (lower setpoint, eager). `bias` is the 0–1 macOS thermal-pressure
+/// feedforward, which pulls the setpoint down so it acts before the SMC catches up.
+///
+/// It is deliberately stateless and shared so the daemon's stateful controller and
+/// the app's live preview agree on the *aim*; the daemon then shapes this demand
+/// over time (smoothing, slew, dead-band) in `SmartController`.
 public enum TemperSmart {
-    public static func percent(hottest: Double, pressureBias bias: Double) -> Double? {
-        let b = min(max(bias, 0), 1)
-        // Stay fully hands-off only when both cool AND the OS is calm.
-        if hottest < 55 && b < 0.25 { return nil }
-        // Adaptive ramp window: shifts down/steeper as pressure rises.
-        let floor = 55 - b * 15        // 55 → 40 °C
-        let ceil  = 88 - b * 13        // 88 → 75 °C
-        guard ceil > floor else { return 100 }
-        let f = min(max((hottest - floor) / (ceil - floor), 0), 1)
-        // A gentle ease so it eases in rather than snapping off the floor.
-        let eased = f * f * (3 - 2 * f)
-        return eased * 100
+    /// Default mid temperament when none is set.
+    public static let neutralTemperament = 0.5
+
+    /// The temperature the controller aims to *hold* for a given temperament: a
+    /// lazy 92 °C at Silent (0) down to a reachable, still-distinct 70 °C at Cool
+    /// (1). The range stops well above the old 60 °C so the eager end isn't a temp
+    /// the die blows past under any load (which made 0.75…1.0 all peg at max and
+    /// feel identical). Shared with the app so the profile selector's caption and
+    /// the daemon's aim are always the same number.
+    public static func targetTempC(temperament t: Double) -> Double {
+        92 - min(max(t, 0), 1) * 22
     }
+
+    /// Pure feedback demand, 0–100 %: the fan fraction the (effective) temperature
+    /// calls for, holding an *ambient-adjusted* setpoint. No hands-off concept
+    /// here - the stateful `SmartController` owns that once it folds in the power
+    /// feedforward, transport gate, and learned plant model. `ambientC` relaxes the
+    /// setpoint in a hot room (cooling is expensive and the floor is higher) and
+    /// tightens it slightly when cold.
+    public static func feedback(tempC T: Double,
+                                risingCPerSec rise: Double = 0,
+                                pressureBias bias: Double = 0,
+                                temperament t: Double = neutralTemperament,
+                                ambientC: Double = 25) -> Double {
+        let t01 = min(max(t, 0), 1)
+        let b = min(max(bias, 0), 1)
+        // Temperament shapes EVERYTHING, not just the steady setpoint, so Silent and
+        // Cool are genuinely different machines. Ambient slides the target.
+        let setpoint = targetTempC(temperament: t01) + min(max(ambientC - 25, -8), 12) * 0.6
+        let band = 20 - t01 * 6                           // wide, gradual ramp (Silent) … tighter (Cool)
+        let lo = setpoint - band
+        let hi = setpoint + 2
+        // Proportional distance to setpoint, FLOORED at 0 so anticipation/pressure
+        // can lift the fan while still cool.
+        var f = max(0, (T - lo) / max(hi - lo, 1))
+        f += min(rise * (t01 * 0.22), 0.4)               // temp-rise anticipation (backup for power FF)
+        f += b * (0.05 + t01 * 0.15)
+        let g = min(max(f, 0), 1)
+        // Response shape: Silent convex (low plateau, late steep ramp), Cool ~linear.
+        let shape = 1.0 + (1 - t01) * 2.0
+        return pow(g, shape) * 100
+    }
+
+    /// Preview-grade demand for the app: the feedback term, or nil when it's
+    /// effectively hands-off. The daemon uses `feedback` directly and adds the
+    /// feedforward layers on top.
+    public static func demand(tempC T: Double,
+                              risingCPerSec rise: Double = 0,
+                              pressureBias bias: Double = 0,
+                              temperament t: Double = neutralTemperament,
+                              ambientC: Double = 25) -> Double? {
+        let f = feedback(tempC: T, risingCPerSec: rise, pressureBias: bias, temperament: t, ambientC: ambientC)
+        return f < 1 ? nil : f
+    }
+}
+
+/// The SMC temperature keys Temper probes, shared by the daemon (fan control +
+/// safety) and the app's own reader (the UI sensor list) so the two can never
+/// drift out of sync. De-duplicated by label downstream, first match wins - so
+/// the Apple Silicon aggregate hotspots are listed first (the per-P-core `Tp0x`
+/// keys floor at a useless 40 °C at idle and must not win). The Virtual Memory
+/// keys are deliberately omitted: they read ~94 °C and would dominate `hottest`.
+public enum TemperSensors {
+    public static let tempKeys: [(key: String, label: String)] = [
+        ("TCMz", "CPU (max)"), ("TCMb", "CPU die avg"), ("TCHP", "CPU heatpipe"),
+        ("TUDX", "SoC"),                                       // Uncore Die Max
+        ("Tg0X", "GPU"), ("Tg05", "GPU"), ("TG0H", "GPU"),     // GPU hotspots
+        ("Tsx1", "SSD"),                                       // SSD aggregate
+        ("TaLP", "Airflow L"), ("TaRF", "Airflow R"),
+        ("TB0T", "Battery"), ("TPMP", "Power mgmt"), ("TPSP", "Power supply"),
+        // Legacy / Intel / older-AS fallbacks - same labels as the primaries above,
+        // so they de-dup away (stay hidden) whenever the aggregates are present.
+        // NB: the per-P-core `Tp0x` "CPU perf/eff" keys are intentionally NOT here -
+        // they floor at 40 °C and only added a misleading stale-looking row.
+        ("TC0P", "CPU (max)"), ("TC0E", "CPU (max)"),
+        ("TG0P", "GPU"), ("TA0P", "Ambient"), ("Ts0P", "Enclosure"),
+        ("TH0x", "SSD"), ("Tm0P", "Mainboard"),
+    ]
+
+    /// A richer, *grouped* sensor map for the optional "Extended temperature view"
+    /// (Settings). Curated from the full SMC array: deduped to one representative
+    /// per subsystem (using the aggregate / "Max" keys the SMC already provides),
+    /// not the raw ~190 near-duplicate probes. Apple-Silicon-oriented; keys absent
+    /// on a given Mac simply don't appear. The bogus Virtual Memory keys (`TVMR`,
+    /// `TVMr`, ~105 °C) are deliberately excluded - they'd dominate any "hottest".
+    /// Display only: Smart's control logic always uses `tempKeys`, never this.
+    public static let extendedTempKeys: [(key: String, label: String, group: String)] = [
+        ("TCMz", "Die (max)",    "CPU"), ("TCMb", "Die (avg)",  "CPU"),
+        ("Tpx1", "P-cluster 1",  "CPU"), ("Tpx3", "P-cluster 2", "CPU"),
+        ("Tpx5", "P-cluster 3",  "CPU"), ("Tex1", "E-cluster 1", "CPU"),
+        ("Tex3", "E-cluster 2",  "CPU"), ("TCHP", "Heatpipe",    "CPU"),
+
+        ("Tg0k", "GPU 1", "GPU"), ("Tg0z", "GPU 2", "GPU"), ("Tg1V", "GPU 3", "GPU"),
+        ("Tg05", "GPU 4", "GPU"), ("TfC2", "Fabric", "GPU"),
+
+        ("TUDX", "Uncore (max)", "SoC"), ("TVD0", "Virtual die", "SoC"),
+        ("TSCP", "Cooling probe", "SoC"),
+
+        ("Tsx1", "SSD",       "Memory"), ("Ts1P", "SSD controller", "Memory"),
+        ("TH0x", "NAND",      "Memory"), ("TMVR", "Memory VR",      "Memory"),
+
+        ("TPDX", "Delivery (max)", "Power"), ("TPMP", "Management", "Power"),
+        ("TPSP", "Supply",         "Power"), ("TRDX", "RF delivery (max)", "Power"),
+
+        ("TDVx", "Virtual", "Board"), ("TDEL", "Left",  "Board"),
+        ("TDER", "Right",   "Board"), ("TDTC", "Top",   "Board"),
+
+        ("TB0T", "Battery 1", "Battery"), ("TB1T", "Battery 2", "Battery"),
+        ("TB2T", "Battery 3", "Battery"),
+
+        ("TW0P", "Wi-Fi", "Wireless"), ("TaLT", "Thunderbolt L", "Wireless"),
+        ("TaRT", "Thunderbolt R", "Wireless"),
+
+        ("TaLP", "Airflow L", "Ambient"), ("TaRF", "Airflow R", "Ambient"),
+        ("TAOL", "Lid",       "Ambient"), ("TVA0", "Virtual ambient", "Ambient"),
+    ]
+
+    /// Group order for the extended view, so sections render top-down sensibly.
+    public static let extendedGroupOrder = ["CPU", "GPU", "SoC", "Memory", "Power", "Board", "Battery", "Wireless", "Ambient"]
 }
 
 /// One control point on a fan curve: a fan speed (`percent` of the fan's range)
@@ -173,11 +285,12 @@ public struct FanSetting: Codable, Sendable, Equatable, Identifiable {
     /// The speed (0–100 %) this fan should hold at `hottest`, or nil when this fan
     /// is hands-off (Default, or Smart while it's chosen to stay idle). `bias` is
     /// the 0–1 thermal-pressure bias, only used by Smart.
-    public func resolvedPercent(hottest: Double, pressureBias bias: Double) -> Double? {
+    public func resolvedPercent(hottest: Double, pressureBias bias: Double,
+                                temperament: Double = TemperSmart.neutralTemperament) -> Double? {
         switch mode {
         case .default: return nil
         case .manual:  return min(max(manualPercent, 0), 100)
-        case .smart:   return TemperSmart.percent(hottest: hottest, pressureBias: bias)
+        case .smart:   return TemperSmart.demand(tempC: hottest, pressureBias: bias, temperament: temperament)
         case .curve:   return Self.interpolate(curve, at: hottest)
         }
     }
@@ -233,8 +346,24 @@ public struct FanSetting: Codable, Sendable, Equatable, Identifiable {
 /// `TemperSafety`). Holds one `FanSetting` per fan the machine reports.
 public struct TemperConfig: Codable, Sendable, Equatable {
     public var fans: [FanSetting]
+    /// Global Smart temperament: 0 = Silent (hotter setpoint, lazy fans), 1 = Cool
+    /// (lower setpoint, eager fans). Only affects fans in Smart mode.
+    public var temperament: Double
 
-    public init(fans: [FanSetting] = []) { self.fans = fans }
+    public init(fans: [FanSetting] = [], temperament: Double = TemperSmart.neutralTemperament) {
+        self.fans = fans
+        self.temperament = temperament
+    }
+
+    enum CodingKeys: String, CodingKey { case fans, temperament }
+
+    // Tolerate configs persisted before `temperament` existed, so an upgrade
+    // doesn't wipe the user's fan settings.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fans = try c.decodeIfPresent([FanSetting].self, forKey: .fans) ?? []
+        temperament = try c.decodeIfPresent(Double.self, forKey: .temperament) ?? TemperSmart.neutralTemperament
+    }
 
     /// Temper is driving at least one fan (anything other than all-Default).
     public var anyControlled: Bool { fans.contains { $0.mode != .default } }
@@ -250,14 +379,23 @@ public enum TemperSafety {
     /// Temperature bounds for curve points.
     public static let minCurveTempC = 30.0
     public static let maxCurveTempC = 105.0
-    /// Above this temperature the daemon abandons manual control and hands the
-    /// fans straight back to macOS's thermal management - no user setting can
-    /// override this. The whole point of forcing fans is moot if it overheats.
-    public static let thermalCutoutC = 95.0
+    /// Once the raw die has been at/above this temperature *continuously* for
+    /// `thermalCutoutSustainS`, the daemon forces every fan to maximum - no user
+    /// setting can override this. (Max airflow is always safe; the SoC throttles
+    /// itself regardless of who drives the fans.) Set high, and sustained, so
+    /// Smart's own curve owns the ramp through the hot zone and a brief spike or a
+    /// glitchy read can't trip the emergency - it's only a last-resort backstop.
+    public static let thermalCutoutC = 100.0
+    /// How long the die must stay at/above the cutout before the emergency engages.
+    public static let thermalCutoutSustainS = 5.0
+    /// How far it must cool back below the cutout before normal control resumes,
+    /// so it doesn't flap on/off at the boundary.
+    public static let cutoutHysteresisC = 5.0
 
     public static func clamp(_ c: TemperConfig) -> TemperConfig {
         var c = c
         c.fans = c.fans.map(clampFan)
+        c.temperament = min(max(c.temperament, 0), 1)
         return c
     }
 
@@ -300,6 +438,42 @@ public struct FanInfo: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+/// A snapshot of one Smart tick's reasoning, for the optional "Verbose Smart
+/// output" diagram (Settings). Every term the controller balanced this tick, in
+/// the order it applies them: the temperature it's controlling on, the target it
+/// aims to hold, the three demand contributions (reactive feedback, power
+/// feedforward, learned-plant floor), and the shaped result before/after slew.
+/// All percentages are 0–100; `plantFloor < 0` means the plant model didn't apply.
+public struct SmartDebug: Codable, Sendable, Equatable {
+    public var temperament: Double
+    public var controlTempC: Double
+    public var setpointC: Double
+    public var feedback: Double
+    public var feedforward: Double
+    public var plantFloor: Double
+    public var demand: Double
+    public var output: Double          // post-slew command; < 0 = hands-off (released)
+    public var accumulation: Double
+    public var risePerSec: Double
+    public var powerW: Double
+    public var powerBaselineW: Double
+    public var ambientC: Double
+    public var idleFloorC: Double
+    public var handsOff: Bool
+
+    public init(temperament: Double = 0, controlTempC: Double = 0, setpointC: Double = 0,
+                feedback: Double = 0, feedforward: Double = 0, plantFloor: Double = -1,
+                demand: Double = 0, output: Double = -1, accumulation: Double = 0,
+                risePerSec: Double = 0, powerW: Double = 0, powerBaselineW: Double = 0,
+                ambientC: Double = 0, idleFloorC: Double = 0, handsOff: Bool = true) {
+        self.temperament = temperament; self.controlTempC = controlTempC; self.setpointC = setpointC
+        self.feedback = feedback; self.feedforward = feedforward; self.plantFloor = plantFloor
+        self.demand = demand; self.output = output; self.accumulation = accumulation
+        self.risePerSec = risePerSec; self.powerW = powerW; self.powerBaselineW = powerBaselineW
+        self.ambientC = ambientC; self.idleFloorC = idleFloorC; self.handsOff = handsOff
+    }
+}
+
 /// Daemon → app snapshot. Encoded as JSON across XPC.
 public struct TemperStatus: Codable, Sendable, Equatable {
     /// This Mac exposes writable fan keys (has fans the daemon can drive).
@@ -313,6 +487,8 @@ public struct TemperStatus: Codable, Sendable, Equatable {
     /// Safety cutout is engaged (too hot) - control was handed back to macOS.
     public var thermalCutout: Bool
     public var lastError: String?
+    /// Last Smart computation, for the verbose diagram. Nil when no fan is on Smart.
+    public var smartDebug: SmartDebug?
 
     public init(controllable: Bool = false,
                 fanCount: Int = 0,
@@ -320,7 +496,8 @@ public struct TemperStatus: Codable, Sendable, Equatable {
                 controlling: Bool = false,
                 hottestC: Double = 0,
                 thermalCutout: Bool = false,
-                lastError: String? = nil) {
+                lastError: String? = nil,
+                smartDebug: SmartDebug? = nil) {
         self.controllable = controllable
         self.fanCount = fanCount
         self.fans = fans
@@ -328,6 +505,7 @@ public struct TemperStatus: Codable, Sendable, Equatable {
         self.hottestC = hottestC
         self.thermalCutout = thermalCutout
         self.lastError = lastError
+        self.smartDebug = smartDebug
     }
 }
 

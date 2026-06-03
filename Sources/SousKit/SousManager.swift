@@ -80,6 +80,13 @@ public final class SousManager: ObservableObject {
     private var pollTask: Task<Void, Never>?
     /// Faster polling while the panel is on screen.
     private var activeViewers = 0
+    /// Whether the panel is on screen. Fast metrics run only while a viewer is
+    /// mounted AND the panel is visible - hiding the panel doesn't fire
+    /// `.onDisappear`, so this is what stops the 3 Hz power-flow refresh from
+    /// churning off-screen. The charge-limit control logic in `poll()` runs
+    /// regardless.
+    private var panelOpen = false
+    private var visibilityObserver: NSObjectProtocol?
 
     private init() {
         if let data = defaults.data(forKey: configKey),
@@ -106,6 +113,28 @@ public final class SousManager: ObservableObject {
         }
         // The poll loop pings the daemon, re-asserts config, and refreshes status.
         startPolling()
+        panelOpen = PanelVisibility.shared.isOpen
+        visibilityObserver = NotificationCenter.default.addObserver(
+            forName: .panelVisibilityChanged, object: nil, queue: .main) { [weak self] note in
+            let open = (note.object as? Bool) ?? false
+            Task { @MainActor in self?.setPanelOpen(open) }
+        }
+    }
+
+    /// Panel shown/hidden: stop or resume the fast power-flow refresh (and snap a
+    /// fresh reading on reopen, since `.onAppear` won't fire again for an
+    /// already-mounted view). The always-on `pollTask` keeps charge control alive.
+    private func setPanelOpen(_ open: Bool) {
+        guard panelOpen != open else { return }
+        panelOpen = open
+        reevaluateFastMetrics()
+        if open { refreshNow() }
+    }
+
+    /// Fast metrics want both a mounted viewer and a visible panel.
+    private var fastMetricsWanted: Bool { activeViewers > 0 && panelOpen }
+    private func reevaluateFastMetrics() {
+        if fastMetricsWanted { startFastMetrics() } else { stopFastMetrics() }
     }
 
     // MARK: Display
@@ -268,7 +297,7 @@ public final class SousManager: ObservableObject {
 
     public func setViewActive(_ active: Bool) {
         activeViewers = max(0, activeViewers + (active ? 1 : -1))
-        if activeViewers > 0 { startFastMetrics() } else { stopFastMetrics() }
+        reevaluateFastMetrics()
     }
 
     /// Power Flow refreshes at ~3 Hz while the Sous tab is on screen (cheap
@@ -292,7 +321,7 @@ public final class SousManager: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.poll()
-                let fast = (self?.activeViewers ?? 0) > 0
+                let fast = self?.fastMetricsWanted ?? false
                 try? await Task.sleep(for: .seconds(fast ? 3 : 12))
             }
         }

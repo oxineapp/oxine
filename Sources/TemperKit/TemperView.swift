@@ -14,6 +14,9 @@ public struct TemperView: View {
     @State private var draggingWidget: TemperManager.TemperWidget?
     @State private var showSensorPicker = false
     @State private var hoveringTemp = false
+    /// Live value while dragging the temperament slider; committed (and pushed to
+    /// the daemon) only on release, so a drag doesn't spam XPC/UserDefaults.
+    @State private var temperamentDraft: Double?
     private var accent: Color { .panelAccent }
 
     public init(temper: TemperManager) { self.temper = temper }
@@ -272,7 +275,7 @@ public struct TemperView: View {
                     .font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.45))
                 Spacer()
                 if temper.status.thermalCutout {
-                    Label("Safety override", systemImage: "exclamationmark.triangle.fill")
+                    Label("Max cooling", systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 10, weight: .semibold)).foregroundColor(.orange)
                 }
             }
@@ -282,7 +285,7 @@ public struct TemperView: View {
                 .fixedSize(horizontal: false, vertical: true)
             switch common {
             case .manual:  manualHintDown        // set each fan with its own bar below
-            case .smart:   smartReadout
+            case .smart:   smartControl
             case .curve:   curveControl
             case .none:    manualHint            // fans differ (per-fan fine-tune)
             case .default: EmptyView()
@@ -339,6 +342,30 @@ public struct TemperView: View {
             Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { temper.setMode(.default) } } label: {
                 Text("Reset to Default").font(.system(size: 10.5, weight: .semibold)).foregroundColor(accent)
             }.buttonStyle(.plain)
+        }
+    }
+
+    /// Smart's control: one Silent ↔ Cool temperament slider (the single knob that
+    /// shifts the setpoint + eagerness) over a line on what it's doing right now.
+    private var smartControl: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            TemperamentSelector(
+                value: Binding(get: { temperamentDraft ?? temper.temperament },
+                               set: { temperamentDraft = $0 }),
+                activity: temper.smartActivity,
+                onCommit: {
+                    if let v = temperamentDraft { temper.temperament = v; temperamentDraft = nil }
+                })
+            smartReadout
+            if temper.verboseSmart {
+                if let d = temper.status.smartDebug {
+                    SmartDebugView(d: d, tempFmt: temper.temp, accent: accent)
+                } else {
+                    Text("Verbose Smart will appear here once the helper is driving a fan on Smart.")
+                        .font(.system(size: 9)).foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -518,7 +545,11 @@ public struct TemperView: View {
     /// battery. Used by the picker so its list never reshuffles as temps move.
     private var sensorRowsStable: [TempSensor] {
         var rows = temper.metrics.sensors
-        if temper.metrics.batteryTempC > 0 {
+        // Only add the dedicated battery reading if the sensor sweep didn't already
+        // surface a Battery sensor (else it shows up twice). The extended set has
+        // its own battery group, so the fallback is basic-mode only.
+        if !temper.extendedSensors, temper.metrics.batteryTempC > 0,
+           !rows.contains(where: { $0.label == "Battery" }) {
             rows.append(TempSensor(key: "TB__", label: "Battery", celsius: temper.metrics.batteryTempC))
         }
         return rows
@@ -530,23 +561,71 @@ public struct TemperView: View {
     }
 
     private var sensorsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Sensors").font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.45))
-            ForEach(sensorRows) { s in
-                HStack(spacing: 9) {
-                    Image(systemName: sensorIcon(s.label))
-                        .font(.system(size: 11, weight: .medium)).foregroundColor(sensorColor(s.celsius)).frame(width: 18)
-                    Text(s.label).font(.system(size: 11.5)).foregroundColor(.white.opacity(0.6))
-                    Spacer(minLength: 12)
-                    Text(temper.temp(s.celsius))
-                        .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
-                        .foregroundColor(.white.opacity(0.9)).contentTransition(.numericText())
+        VStack(alignment: .leading, spacing: temper.extendedSensors ? 12 : 10) {
+            HStack(spacing: 6) {
+                Text("Sensors").font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.45))
+                if temper.extendedSensors {
+                    Text("extended").font(.system(size: 8.5, weight: .bold))
+                        .foregroundColor(accent.opacity(0.7))
+                        .padding(.horizontal, 5).padding(.vertical, 1.5)
+                        .background(Capsule().fill(accent.opacity(0.14)))
                 }
-                .padding(.vertical, 2)
+            }
+            if temper.extendedSensors { groupedSensors } else {
+                ForEach(sensorRows) { sensorRow($0) }
             }
         }
         .padding(16)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// Extended view: rows bucketed into subsystem sections, hottest-first within
+    /// each, in the canonical group order.
+    @ViewBuilder private var groupedSensors: some View {
+        let byGroup = Dictionary(grouping: sensorRowsStable) { $0.group ?? "Other" }
+        let order = TemperSensors.extendedGroupOrder + ["Other"]
+        ForEach(order.filter { byGroup[$0]?.isEmpty == false }, id: \.self) { g in
+            VStack(alignment: .leading, spacing: 5) {
+                Label(g, systemImage: groupIcon(g))
+                    .labelStyle(.titleAndIcon).imageScale(.small)
+                    .font(.system(size: 9, weight: .bold)).foregroundColor(.white.opacity(0.32))
+                ForEach((byGroup[g] ?? []).sorted { $0.celsius > $1.celsius }) { sensorRow($0, grouped: true) }
+            }
+        }
+    }
+
+    private func sensorRow(_ s: TempSensor, grouped: Bool = false) -> some View {
+        HStack(spacing: 9) {
+            if grouped {
+                // The section header already names the subsystem, so each row just
+                // needs a temperature-coloured dot.
+                Circle().fill(sensorColor(s.celsius)).frame(width: 6, height: 6).frame(width: 18)
+            } else {
+                Image(systemName: sensorIcon(s.label))
+                    .font(.system(size: 11, weight: .medium)).foregroundColor(sensorColor(s.celsius)).frame(width: 18)
+            }
+            Text(s.label).font(.system(size: 11.5)).foregroundColor(.white.opacity(0.6))
+            Spacer(minLength: 12)
+            Text(temper.temp(s.celsius))
+                .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
+                .foregroundColor(.white.opacity(0.9)).contentTransition(.numericText())
+        }
+        .padding(.vertical, grouped ? 1 : 2)
+    }
+
+    private func groupIcon(_ group: String) -> String {
+        switch group {
+        case "CPU": return "cpu"
+        case "GPU": return "cpu.fill"
+        case "SoC": return "square.stack.3d.up"
+        case "Memory": return "memorychip"
+        case "Power": return "bolt.fill"
+        case "Board": return "square.grid.3x3"
+        case "Battery": return "minus.plus.batteryblock"
+        case "Wireless": return "wifi"
+        case "Ambient": return "wind"
+        default: return "thermometer.medium"
+        }
     }
 
     /// A distinct SF Symbol per sensor kind so the list is scannable at a glance.
@@ -604,9 +683,12 @@ struct SpinningFan: View {
     var color: Color
     var size: CGFloat
     @State private var store = SpinStore()
+    @ObservedObject private var visibility = PanelVisibility.shared
 
     var body: some View {
-        TimelineView(.animation) { ctx in
+        // Pause the timeline when the panel is hidden: `TimelineView(.animation)`
+        // otherwise redraws at the display refresh rate forever, even off-screen.
+        TimelineView(.animation(paused: !visibility.isOpen)) { ctx in
             let now = ctx.date.timeIntervalSinceReferenceDate
             // Integrate angle over real elapsed time and ease the rate toward its
             // target, so a new RPM reading changes the *speed* smoothly and never
@@ -632,6 +714,305 @@ final class SpinStore { var phase = 0.0; var rate = 0.0; var last: TimeInterval?
 /// current RPM; the light knob marks the speed Temper is commanding, and dragging
 /// it scrubs the fan to a manual speed. The knob hides until the helper is
 /// installed (read-only gauge until then).
+/// Smart's temperament as a row of snapping *profile stops* rather than a bare
+/// slider. The track is a fixed warm→cool spectrum (so it reads as a selector, not
+/// a fill-to-here bar); the glass thumb springs magnetically between discrete
+/// setpoints with a soft haptic tick, and a live profile name + the temperature it
+/// aims to hold crossfades below. Silent (hotter, quieter) sits warm on the left;
+/// Cool (lower setpoint, eager) sits icy on the right - the same axis the daemon's
+/// controller reads, and the aim temp comes straight from `TemperSmart.targetTempC`.
+struct TemperamentSelector: View {
+    @Binding var value: Double
+    /// How hard Smart is working right now, 0–1, or nil = hands-off. Tints the
+    /// thumb's glow + the live status so the control reflects its *situation*, not
+    /// just its setting.
+    var activity: Double?
+    var onCommit: () -> Void
+
+    private let stops: [(v: Double, name: String)] = [
+        (0.00, "Silent"), (0.25, "Quiet"), (0.50, "Balanced"),
+        (0.75, "Brisk"), (1.00, "Cool"),
+    ]
+    private let trackH: CGFloat = 16
+    private let thumbW: CGFloat = 22
+
+    /// Warm (amber, quiet/hot) → cool (ice, eager/cold) blended at fraction `f`,
+    /// so the track is literally a temperature spectrum coloured from both ends.
+    private func spectrum(_ f: Double) -> Color {
+        let t = min(max(f, 0), 1)
+        return Color(red: 0.98 + (0.42 - 0.98) * t,
+                     green: 0.60 + (0.80 - 0.60) * t,
+                     blue:  0.26 + (1.00 - 0.26) * t)
+    }
+    private func nearestIndex(to f: Double) -> Int {
+        stops.indices.min(by: { abs(stops[$0].v - f) < abs(stops[$1].v - f) }) ?? 0
+    }
+    private var active: Int { nearestIndex(to: value) }
+
+    /// Situation colour: calm blue when hands-off, then green → amber → red as Smart
+    /// works harder. Orthogonal to the spectrum (which shows *which* profile).
+    private func activityColor(_ a: Double?) -> Color {
+        guard let a else { return Color(red: 0.45, green: 0.62, blue: 0.95) }   // hands-off (calm)
+        let t = min(max(a, 0), 1)
+        let lo = (0.30, 0.82, 0.52), mid = (0.98, 0.72, 0.22), hi = (0.95, 0.32, 0.30)
+        let (r, g, b) = t < 0.5
+            ? (lo.0 + (mid.0 - lo.0) * t * 2, lo.1 + (mid.1 - lo.1) * t * 2, lo.2 + (mid.2 - lo.2) * t * 2)
+            : (mid.0 + (hi.0 - mid.0) * (t - 0.5) * 2, mid.1 + (hi.1 - mid.1) * (t - 0.5) * 2, mid.2 + (hi.2 - mid.2) * (t - 0.5) * 2)
+        return Color(red: r, green: g, blue: b)
+    }
+    /// Short live status for the caption.
+    private var status: (label: String, color: Color) {
+        let c = activityColor(activity)
+        guard let a = activity else { return ("idle", c) }
+        if a < 0.12 { return ("easing in", c) }
+        if a < 0.85 { return ("ramping \(Int((a * 100).rounded()))%", c) }
+        return ("near max", c)
+    }
+
+    var body: some View {
+        VStack(spacing: 9) {
+            HStack(spacing: 9) {
+                Image(systemName: "moon.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(spectrum(0).opacity(0.9))
+                track
+                Image(systemName: "snowflake")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(spectrum(1).opacity(0.9))
+            }
+            caption
+        }
+    }
+
+    private var track: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let cy = geo.size.height / 2
+            let cx = min(max(CGFloat(value) * w, thumbW / 2), w - thumbW / 2)
+            ZStack {
+                // Glass base + always-on spectrum: the bar shows the whole range,
+                // not a fill to the current value.
+                Capsule().fill(.white.opacity(0.06)).frame(height: trackH)
+                Capsule()
+                    .fill(LinearGradient(colors: [spectrum(0), spectrum(0.5), spectrum(1)],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(height: trackH)
+                    .opacity(0.6)
+                    .overlay(Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5).frame(height: trackH))
+
+                // Setpoint ticks; the active one lights up.
+                ForEach(stops.indices, id: \.self) { i in
+                    let sx = min(max(CGFloat(stops[i].v) * w, thumbW / 2), w - thumbW / 2)
+                    Circle()
+                        .fill(.white.opacity(i == active ? 0.95 : 0.3))
+                        .frame(width: i == active ? 5 : 4, height: i == active ? 5 : 4)
+                        .position(x: sx, y: cy)
+                }
+
+                // Liquid-glass thumb: spectrum-tinted (which profile), wrapped in a
+                // situation glow + ring (how hard Smart is working right now).
+                ZStack {
+                    Capsule()
+                        .fill(activityColor(activity))
+                        .frame(width: thumbW + 10, height: trackH + 18)
+                        .blur(radius: 7)
+                        .opacity(activity == nil ? 0 : 0.3 + 0.55 * min(max(activity ?? 0, 0), 1))
+                    Color.clear
+                        .frame(width: thumbW, height: trackH + 10)
+                        .glassEffect(.regular.tint(spectrum(value).opacity(0.7)), in: Capsule())
+                        .overlay(Capsule().stroke(activity == nil ? .white.opacity(0.5)
+                                                  : activityColor(activity).opacity(0.95), lineWidth: 1.2))
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                }
+                .animation(.easeInOut(duration: 0.45), value: activity)
+                .position(x: cx, y: cy)
+            }
+            .frame(height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        let f = Double(min(max(g.location.x / w, 0), 1))
+                        let i = nearestIndex(to: f)
+                        if stops[i].v != value {
+                            withAnimation(.spring(response: 0.26, dampingFraction: 0.6)) { value = stops[i].v }
+                            tick()
+                        }
+                    }
+                    .onEnded { _ in onCommit() }
+            )
+        }
+        .frame(height: trackH + 10)
+    }
+
+    private var caption: some View {
+        let aim = Int(TemperSmart.targetTempC(temperament: value).rounded())
+        return HStack(spacing: 5) {
+            Text(stops[active].name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .id(active)
+                .transition(.opacity)
+            Text("· holds ~\(aim)°C")
+                .font(.system(size: 9.5))
+                .foregroundColor(.white.opacity(0.4))
+            Spacer()
+            Circle().fill(status.color).frame(width: 6, height: 6)
+                .animation(.easeInOut(duration: 0.45), value: activity)
+            Text(status.label)
+                .font(.system(size: 9, weight: .medium)).monospacedDigit()
+                .foregroundColor(status.color.opacity(0.9))
+                .contentTransition(.numericText())
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: active)
+    }
+
+    /// A soft alignment tap as the thumb crosses into a new setpoint.
+    private func tick() {
+        #if canImport(AppKit)
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        #endif
+    }
+}
+
+/// The "Verbose Smart output" diagram (Settings-gated): a compact x-ray of one
+/// Smart tick. Three rows top-down, in the order the controller reasons: where the
+/// control temperature sits relative to the target it holds, how the fan demand is
+/// built (reactive feedback + power feedforward, with the learned-plant floor and
+/// the slewed output marked), and the raw signals feeding it all.
+struct SmartDebugView: View {
+    let d: SmartDebug
+    let tempFmt: (Double) -> String
+    let accent: Color
+
+    private let fbColor = Color(red: 0.40, green: 0.70, blue: 1.0)   // reactive feedback
+    private var commandPct: Double { d.output >= 0 ? d.output : d.demand }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            header
+            controlBar
+            demandBar
+            signals
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.white.opacity(0.03)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(.white.opacity(0.06), lineWidth: 0.5))
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wand.and.stars").font(.system(size: 9))
+            Text("Smart reasoning").font(.system(size: 10, weight: .semibold))
+            Spacer()
+            Text(d.handsOff ? "hands off" : "driving \(Int(commandPct.rounded()))%")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(d.handsOff ? .white.opacity(0.4) : accent)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Capsule().fill((d.handsOff ? Color.white : accent).opacity(d.handsOff ? 0.06 : 0.16)))
+        }
+        .foregroundColor(.white.opacity(0.6))
+    }
+
+    // Where the control temperature sits inside its target band.
+    private var controlBar: some View {
+        let band = 20 - d.temperament * 6
+        let lo = d.setpointC - band, hiEnd = d.setpointC + 4
+        let span = max(hiEnd - lo, 1)
+        let frac = min(max((d.controlTempC - lo) / span, 0), 1)
+        let setFrac = min(max((d.setpointC - lo) / span, 0), 1)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text("Controlling on").font(.system(size: 9)).foregroundColor(.white.opacity(0.4))
+                Text(tempFmt(d.controlTempC)).font(.system(size: 9.5, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                Spacer()
+                Text("holds \(tempFmt(d.setpointC))").font(.system(size: 9)).foregroundColor(.white.opacity(0.4))
+            }
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.07)).frame(height: 8)
+                    Capsule()
+                        .fill(LinearGradient(colors: [fbColor.opacity(0.5), accent.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(CGFloat(frac) * w, 4), height: 8)
+                    // target line
+                    Rectangle().fill(.white.opacity(0.55)).frame(width: 1.5, height: 14)
+                        .position(x: CGFloat(setFrac) * w, y: 4)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    // How the demand is assembled: feedback + feedforward, plant-floor tick, output knob.
+    private var demandBar: some View {
+        let fb = min(max(d.feedback, 0), 100)
+        let ff = min(max(d.feedforward, 0), max(0, 100 - fb))
+        return VStack(alignment: .leading, spacing: 5) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let plantX = CGFloat(min(max(d.plantFloor, 0), 100) / 100) * w
+                let outX = CGFloat(min(max(commandPct, 0), 100) / 100) * w
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.07)).frame(height: 8)
+                    HStack(spacing: 0) {
+                        Capsule().fill(fbColor.opacity(0.85)).frame(width: CGFloat(fb / 100) * w, height: 8)
+                        Capsule().fill(accent.opacity(0.85)).frame(width: CGFloat(ff / 100) * w, height: 8)
+                    }
+                    if d.plantFloor >= 0 {
+                        Rectangle().fill(.white.opacity(0.75)).frame(width: 1.5, height: 13)
+                            .position(x: min(max(plantX, 1), w - 1), y: 4)
+                    }
+                    Capsule().fill(.white).frame(width: 6, height: 15)
+                        .shadow(color: .black.opacity(0.4), radius: 1.5)
+                        .position(x: min(max(outX, 3), w - 3), y: 4)
+                }
+            }
+            .frame(height: 15)
+            HStack(spacing: 10) {
+                legend(fbColor, "feedback \(Int(fb.rounded()))%")
+                legend(accent, "load \(Int(ff.rounded()))%")
+                if d.plantFloor >= 0 { legend(.white.opacity(0.75), "plant \(Int(d.plantFloor.rounded()))%") }
+                Spacer()
+                Text("output \(Int(commandPct.rounded()))%")
+                    .font(.system(size: 9, weight: .semibold)).monospacedDigit().foregroundColor(.white.opacity(0.85))
+            }
+        }
+    }
+
+    private func legend(_ c: Color, _ text: String) -> some View {
+        HStack(spacing: 3) {
+            Circle().fill(c).frame(width: 5, height: 5)
+            Text(text).font(.system(size: 9)).foregroundColor(.white.opacity(0.5))
+        }
+    }
+
+    // Raw inputs feeding the tick.
+    private var signals: some View {
+        let rise = String(format: "%@%.1f°/s", d.risePerSec >= 0 ? "+" : "", d.risePerSec)
+        let accum = String(format: "+%.1f°", d.accumulation)
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 7) {
+            chip("Power", "\(Int(d.powerW.rounded()))W", "base \(Int(d.powerBaselineW.rounded()))W")
+            chip("Ambient", tempFmt(d.ambientC), nil)
+            chip("Build-up", accum, nil)
+            chip("Rise", rise, nil)
+            chip("Idle floor", tempFmt(d.idleFloorC), nil)
+            chip("Temperament", "\(Int((d.temperament * 100).rounded()))%", nil)
+        }
+    }
+
+    private func chip(_ title: String, _ value: String, _ sub: String?) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.system(size: 8, weight: .medium)).foregroundColor(.white.opacity(0.35))
+            Text(value).font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundColor(.white.opacity(0.85))
+            if let sub { Text(sub).font(.system(size: 7.5)).foregroundColor(.white.opacity(0.3)) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 5).padding(.horizontal, 7)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.white.opacity(0.03)))
+    }
+}
+
 struct FanSpeedSlider: View {
     var liveFraction: Double          // 0–1, actual RPM in the fan's range
     var knobPercent: Double           // 0–100, the commanded target

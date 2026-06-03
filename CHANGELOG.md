@@ -4,6 +4,15 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.4.0
+- **Smart fan mode is calmer and far better spread across the slider.** Each profile now holds a clear target temperature, eases the fans in instead of lurching, and truly idles to silence when nothing's going on.
+- New **Smart profile selector**: snap between Silent, Quiet, Balanced, Brisk and Cool, each showing the temperature it holds, with a live readout of what Smart is doing right now and a thumb that shifts colour as it works.
+- Fixed Smart running too hard: idle no longer spins the fans up, and the cooler profiles are now distinct instead of all pinning to maximum.
+- **Extended temperature view** (Settings): see the full grouped sensor map - CPU clusters, GPU, SSD, power delivery and more - instead of the short list.
+- **Verbose Smart output** (Settings): a diagram showing exactly what Smart is thinking - the temperature it controls on, the target it holds, and how it builds the fan demand.
+- The sensor list no longer briefly drops CPU sensors on a glitchy reading, and the "CPU" row is now clearly labelled "CPU (max)" beside the die average.
+- Lower energy use: live gauges and animations pause while the panel is hidden.
+
 ## 1.3.0
 - **Temper**: a new tab for thermal monitoring and fan control. See live temperatures, CPU load, and macOS thermal pressure on any Mac, fanless models included.
 - Drive your fans where the hardware allows: Manual sliders, an adaptive Smart mode that ramps with heat and load, or a custom curve.

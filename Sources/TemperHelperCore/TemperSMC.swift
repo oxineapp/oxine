@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import TemperShared
 
 // MARK: - Low-level AppleSMC access (fan keys)
 //
@@ -219,15 +220,7 @@ extension TemperSMC {
     /// A pragmatic set of SMC temperature keys spanning Apple Silicon and Intel.
     /// Many won't exist on any given machine (Apple Silicon routes most per-core
     /// sensors through the HID sensor hub, not the SMC); we read whatever answers.
-    static let tempKeys: [(key: String, label: String)] = [
-        ("TC0P", "CPU"), ("TC0D", "CPU die"), ("TC0E", "CPU"), ("TC0F", "CPU"),
-        ("Tp09", "CPU perf"), ("Tp01", "CPU perf"), ("Tp05", "CPU eff"),
-        ("TG0P", "GPU"), ("TG0D", "GPU die"), ("Tg05", "GPU"), ("Tg0D", "GPU"),
-        ("TaLP", "Airflow L"), ("TaRP", "Airflow R"), ("TA0P", "Ambient"),
-        ("Ts0P", "Enclosure"), ("Ts1P", "Enclosure"),
-        ("TB0T", "Battery"), ("TB1T", "Battery"), ("TB2T", "Battery"),
-        ("TW0P", "Wi-Fi"), ("TH0x", "SSD"), ("Tm0P", "Mainboard"),
-    ]
+    static let tempKeys = TemperSensors.tempKeys
 
     /// Read every present temperature sensor (°C), de-duplicated by label with a
     /// plausibility filter so junk keys don't show up.
@@ -245,4 +238,16 @@ extension TemperSMC {
 
     /// The hottest readable SMC temperature, or 0 if none answer.
     func hottestC() -> Double { temperatures().map(\.celsius).max() ?? 0 }
+
+    // Extra control inputs for the Smart controller (all `flt`, read unprivileged).
+    /// The leading "load" signal for feedforward: heatpipe power `PHPC` (heat
+    /// actually reaching the cooling path - responsive and transport-aware) with
+    /// total system power `PSTR` as a fallback on machines without it.
+    func loadPowerW() -> Double {
+        let phpc = readNumber("PHPC") ?? 0
+        return phpc > 0 ? phpc : (readNumber("PSTR") ?? 0)
+    }
+    /// Ambient temperature (°C): the heat sink the fan works against. Virtual
+    /// ambient first, then the lid sensor.
+    func ambientC() -> Double { readNumber("TVA0") ?? readNumber("TAOL") ?? 0 }
 }

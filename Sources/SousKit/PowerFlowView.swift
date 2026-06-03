@@ -213,6 +213,7 @@ private struct RibbonLayer: View {
     let color: Color
     let watts: Double
     let period: Double          // shared, bucketed cadence (see PowerFlowView.pulsePeriod)
+    @ObservedObject private var visibility = PanelVisibility.shared
 
     private var shape: RibbonShape {
         RibbonShape(x0: x0, x1: x1, leftTop: leftTop, rightTop: rightTop, thickness: thickness)
@@ -251,7 +252,9 @@ private struct RibbonLayer: View {
     /// high power. The drop fades in at the left edge and out at the right, so it
     /// never pops in mid-ribbon or cuts off.
     private var flow: some View {
-        TimelineView(.animation) { ctx in
+        // Freeze the timeline while the panel is hidden; an off-screen
+        // `TimelineView(.animation)` otherwise redraws at the display refresh rate.
+        TimelineView(.animation(paused: !visibility.isOpen)) { ctx in
             Canvas { gc, _ in
                 let span = x1 - x0
                 guard span > 1 else { return }

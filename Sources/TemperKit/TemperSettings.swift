@@ -28,6 +28,16 @@ public struct TemperSettings: View {
             }
             Divider().overlay(Color.white.opacity(0.06))
 
+            toggleRow("Extended temperature view",
+                      "Show the full grouped sensor map - CPU clusters, GPU, SSD, power delivery and more - instead of the short list. Display only; never affects Smart.",
+                      Binding(get: { temper.extendedSensors }, set: { temper.extendedSensors = $0 }))
+            Divider().overlay(Color.white.opacity(0.06))
+
+            toggleRow("Verbose Smart output",
+                      "Add a diagram to the Temper tab showing what Smart is thinking: the temperature it controls on, the target it holds, and how it builds the fan demand.",
+                      Binding(get: { temper.verboseSmart }, set: { temper.verboseSmart = $0 }))
+            Divider().overlay(Color.white.opacity(0.06))
+
             if temper.capable {
                 Text("Set each fan's mode, manual speed and temperature curve in the Temper tab. The helper drives the fans in the background.")
                     .font(.caption2).foregroundColor(.white.opacity(0.5))
@@ -65,6 +75,21 @@ public struct TemperSettings: View {
                 Text("Temper shows temperatures, thermal pressure and CPU load in its tab. This Mac has no controllable fans.")
                     .font(.caption).foregroundColor(.white.opacity(0.5))
             }
+        }
+    }
+
+    private func toggleRow(_ title: String, _ subtitle: String, _ isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundColor(.white.opacity(0.85))
+                Text(subtitle)
+                    .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
         }
     }
 }
