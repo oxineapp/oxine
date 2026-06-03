@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import PanelKit
 
 /// The animated menu-bar mark: an open ring with a bead sitting in the gap.
 ///
@@ -15,6 +16,8 @@ final class OrbitStatusView: NSView {
     private let ring = CAShapeLayer()
     private let ringMask = CAShapeLayer() // knocks a clear moat around the bead
     private let bead = CAShapeLayer()
+    private let wave = CAGradientLayer()  // caffeine: tinted swell that rides the ring
+    private let waveMask = CAShapeLayer() // clips the wave to the ring stroke
 
     // ── Tunables ────────────────────────────────────────────────────────────
     /// Where the bead rests when opening the panel. Negative = clockwise, so the
@@ -41,6 +44,7 @@ final class OrbitStatusView: NSView {
         wantsLayer = true
         layer?.addSublayer(glyph)
         glyph.addSublayer(ring)
+        glyph.addSublayer(wave)   // above the ring, below the bead
         glyph.addSublayer(bead)
         ring.fillColor = nil
         ring.lineCap = .round
@@ -48,6 +52,15 @@ final class OrbitStatusView: NSView {
         // bead, leaving a transparent moat so the dot reads as separate.
         ringMask.fillRule = .evenOdd
         ring.mask = ringMask
+
+        wave.type = .conic
+        wave.startPoint = CGPoint(x: 0.5, y: 0.5)
+        wave.endPoint = CGPoint(x: 0.5, y: 0.0)
+        wave.isHidden = true
+        waveMask.fillColor = nil
+        waveMask.lineCap = .round
+        wave.mask = waveMask
+
         rebuild()
         applyColor()
     }
@@ -107,6 +120,18 @@ final class OrbitStatusView: NSView {
         ringMask.frame = CGRect(x: 0, y: 0, width: w, height: h)
         ringMask.path = maskPath
 
+        // Wave layer fills the glyph and is clipped to the ring stroke, so the
+        // tinted swell only paints along the ring. Centre it so its conic gradient
+        // (and the rotation that drives the swell) revolve about the glyph centre.
+        wave.frame = bounds
+        wave.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        wave.position = CGPoint(x: cx, y: cy)
+        wave.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+        waveMask.frame = bounds
+        waveMask.strokeColor = NSColor.black.cgColor   // mask uses alpha only
+        waveMask.lineWidth = sw
+        waveMask.path = path
+
         glyph.transform = CATransform3DMakeRotation(baseAngle, 0, 0, 1)
         CATransaction.commit()
     }
@@ -141,50 +166,71 @@ final class OrbitStatusView: NSView {
         pop()
     }
 
-    /// Caffeine (keep-awake) state. While active the bead wears a pulsing amber
-    /// "heartbeat" halo — the Mac is wired and won't rest. The halo is a shadow on
-    /// the bead, independent of its fill, so a Sous tint can still show through.
-    /// Turning on kicks a single celebratory spin.
-    private let caffeineGlow = NSColor(srgbRed: 1.0, green: 0.72, blue: 0.26, alpha: 1).cgColor
-    private var caffeinated = false
+    /// Caffeine (keep-awake) state. While active, an ocean-style swell in the
+    /// user's accent tint travels around the ring — the Mac is riding a wave and
+    /// won't settle. The swell is its own layer: its rotation *composes* with the
+    /// glyph's spring rotations (copy spin, panel open/close) rather than fighting
+    /// them, and it never touches the bead fill, so a Sous tint still shows.
+    private var waving = false
 
     func setCaffeinated(_ active: Bool) {
-        guard active != caffeinated else { return }
-        caffeinated = active
-        if active {
-            startHeartbeat()
-            spinOnce(stiffness: 150, damping: 13)
-        } else {
-            stopHeartbeat()
+        guard active != waving else { return }
+        waving = active
+        if active { startWave() } else { stopWave() }
+    }
+
+    private func startWave() {
+        let tint = currentTint()
+        let crest = tint.withAlphaComponent(0.85).cgColor
+        let trough = tint.withAlphaComponent(0).cgColor
+        // Two soft crests around the ring read as repeating swells. Clear at both
+        // ends so the conic gradient wraps seamlessly.
+        wave.colors = [trough, trough, crest, trough, trough, trough, crest, trough, trough]
+        wave.locations = [0.0, 0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88, 1.0]
+        wave.isHidden = false
+
+        // Steady travel = the wave rolling. Linear so swells move at constant pace.
+        let roll = CABasicAnimation(keyPath: "transform.rotation.z")
+        roll.fromValue = 0
+        roll.toValue = -2 * CGFloat.pi
+        roll.duration = 3.0
+        roll.repeatCount = .infinity
+        roll.isRemovedOnCompletion = false
+        wave.add(roll, forKey: "wave")
+
+        // Fade in via opacity only, so we never perturb the glyph's rotation.
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0
+        fade.toValue = 1
+        fade.duration = 0.45
+        wave.opacity = 1
+        wave.add(fade, forKey: "fade")
+    }
+
+    private func stopWave() {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = wave.presentation()?.opacity ?? 1
+        fade.toValue = 0
+        fade.duration = 0.35
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            guard let self, !self.waving else { return }
+            self.wave.isHidden = true
+            self.wave.removeAnimation(forKey: "wave")
         }
+        wave.opacity = 0
+        wave.add(fade, forKey: "fade")
+        CATransaction.commit()
     }
 
-    /// A double-thump (lub-dub) glow that loops while caffeinated.
-    private func startHeartbeat() {
-        bead.shadowColor = caffeineGlow
-        bead.shadowOffset = .zero
-        bead.masksToBounds = false
-
-        let keyTimes: [NSNumber] = [0, 0.10, 0.20, 0.30, 0.46, 1.0]
-        let radius = CAKeyframeAnimation(keyPath: "shadowRadius")
-        radius.values = [1.0, 4.2, 1.8, 3.2, 1.0, 1.0]
-        radius.keyTimes = keyTimes
-        let opacity = CAKeyframeAnimation(keyPath: "shadowOpacity")
-        opacity.values = [0.2, 0.95, 0.45, 0.8, 0.2, 0.2]
-        opacity.keyTimes = keyTimes
-
-        let beat = CAAnimationGroup()
-        beat.animations = [radius, opacity]
-        beat.duration = 1.5
-        beat.repeatCount = .infinity
-        beat.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        bead.shadowOpacity = 0.2   // resting model value the loop returns to
-        bead.add(beat, forKey: "heartbeat")
-    }
-
-    private func stopHeartbeat() {
-        bead.removeAnimation(forKey: "heartbeat")
-        bead.shadowOpacity = 0
+    /// Current app accent as an NSColor (the tint the user picked in Settings).
+    private func currentTint() -> NSColor {
+        let hex = ThemeManager.shared.resolvedHex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        var rgb: UInt64 = 0
+        guard hex.count == 6, Scanner(string: hex).scanHexInt64(&rgb) else { return .controlAccentColor }
+        return NSColor(srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
+                       green: CGFloat((rgb >> 8) & 0xFF) / 255,
+                       blue: CGFloat(rgb & 0xFF) / 255, alpha: 1)
     }
 
     /// Panel shown/hidden → the bead slides to the bottom-right on open, then
