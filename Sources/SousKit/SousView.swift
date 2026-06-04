@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// live control surface.
 public struct SousView: View {
     @ObservedObject var sous: SousManager
+    @ObservedObject private var conflicts = BatteryConflictDetector.shared
     @State private var alert: String?
     @State private var draggingWidget: SousManager.SousWidget?
     @State private var showCalibInfo = false
@@ -19,6 +20,7 @@ public struct SousView: View {
         ScrollView {
             VStack(spacing: 16) {
                 header
+                conflictBanner
                 switch sous.helper.installState {
                 case .unsupported: unsupportedCard
                 case .notInstalled, .failed: setupCard
@@ -32,7 +34,7 @@ public struct SousView: View {
             .padding(.top, 6)
             .padding(.bottom, 20)
         }
-        .onAppear { sous.setViewActive(true); sous.refreshNow() }
+        .onAppear { sous.setViewActive(true); sous.refreshNow(); conflicts.refresh() }
         .onDisappear { sous.setViewActive(false) }
         .alert("Not possible", isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } })) {
             Button("OK", role: .cancel) { }
@@ -108,6 +110,32 @@ public struct SousView: View {
                     .onDrop(of: [.text],
                             delegate: WidgetDropDelegate(item: widget, sous: sous, dragging: $draggingWidget))
             }
+        }
+    }
+
+    /// Warns only while another charge manager (e.g. AlDente) is *running* — the
+    /// two then fight over the SMC limit. A merely-installed competitor controls
+    /// nothing, so it shows no banner.
+    @ViewBuilder private var conflictBanner: some View {
+        if let other = conflicts.running {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(other) is running")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                    Text("Two charge managers will fight over your battery limit. Quit \(other) so Sous can control charging.")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.10)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.25), lineWidth: 0.5))
         }
     }
 

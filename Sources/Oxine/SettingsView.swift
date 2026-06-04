@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
     @AppStorage("swipeSensitivity", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSensitivity = 0.7
     @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
+    @AppStorage("swipeSingleStep", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSingleStep = false
     @ObservedObject private var sous = SousManager.shared
     @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
@@ -152,6 +153,18 @@ struct SettingsView: View {
                     Text("Higher means a shorter swipe flips the tab.")
                         .font(.caption2).foregroundColor(.white.opacity(0.4))
                 }
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $swipeSingleStep) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("One tab per swipe")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Each swipe moves a single tab instead of gliding through several.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
 
                 Divider().opacity(0.1)
 

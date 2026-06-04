@@ -27,9 +27,12 @@ extension AppDelegate {
         // driven by the Settings sensitivity slider (higher = shorter step = more
         // sensitive); default 0.7 lands near the original 70pt feel.
         let axisCommit: CGFloat = 16
-        let sensitivity = (UserDefaults(suiteName: "com.oxine.settings")?
-            .object(forKey: "swipeSensitivity") as? Double) ?? 0.7
+        let store = UserDefaults(suiteName: "com.oxine.settings")
+        let sensitivity = (store?.object(forKey: "swipeSensitivity") as? Double) ?? 0.7
         let step = 120 - CGFloat(sensitivity) * 80   // 40 (most) … 120 (least)
+        // "One tab per swipe": cap each gesture at a single step instead of letting
+        // a held swipe glide through several tabs.
+        let singleStep = (store?.object(forKey: "swipeSingleStep") as? Bool) ?? false
 
         // Trackpad only (mouse wheels get no tab nav), and only the live finger
         // gesture — never its inertia tail.
@@ -38,12 +41,12 @@ extension AppDelegate {
               event.momentumPhase.isEmpty else { return false }
 
         if event.phase.contains(.began) {
-            swipeAccumX = 0; swipeAccumY = 0; swipeHorizontal = false
+            swipeAccumX = 0; swipeAccumY = 0; swipeHorizontal = false; swipeStepped = false
             return false
         }
         if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
             let wasHorizontal = swipeHorizontal
-            swipeAccumX = 0; swipeAccumY = 0; swipeHorizontal = false
+            swipeAccumX = 0; swipeAccumY = 0; swipeHorizontal = false; swipeStepped = false
             return wasHorizontal     // eat the tail of a swipe we acted on
         }
 
@@ -68,8 +71,10 @@ extension AppDelegate {
         // Natural-scroll mapping: swipe right (deltaX > 0) goes to the previous
         // tab, swipe left advances — matching browser back/forward.
         while abs(swipeAccumX) >= step {
+            if singleStep && swipeStepped { break }   // one step only this gesture
             let dir: SwipeDirection = swipeAccumX < 0 ? .next : .previous
             swipeAccumX -= swipeAccumX < 0 ? -step : step
+            swipeStepped = true
             NotificationCenter.default.post(name: .swipeNavigate, object: dir)
         }
         return true

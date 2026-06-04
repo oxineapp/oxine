@@ -58,6 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var swipeAccumX: CGFloat = 0
     var swipeAccumY: CGFloat = 0
     var swipeHorizontal = false   // gesture committed to the horizontal axis
+    var swipeStepped = false      // already fired once this gesture (one-tab-per-swipe mode)
     @Published var isPinned: Bool = false
     var isAuthenticating = false
     var panelJustOpened = false

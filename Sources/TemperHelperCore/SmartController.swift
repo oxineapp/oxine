@@ -68,8 +68,14 @@ final class SmartController {
         let calm = bias < 0.2
         let aFast = 1 - exp(-tickDt / fastTau)
 
-        // --- temperatures: per-sensor model → hottest die + accumulation ---
+        // --- temperatures: per-sensor model → control die + accumulation ---
+        // Smart steers on the CPU die *average* (TemperSensors.smartControlKey), a
+        // calmer, representative signal — not the hottest core, which spikes and
+        // over-cools. We still track the hottest across all sensors as a fallback
+        // (Macs without the die-avg key) and keep accumulation aggregate so lasting
+        // heat anywhere still lifts demand.
         var hottest = 0.0, accNum = 0.0, accDen = 0.0
+        var controlEwma: Double?
         for (id, c) in readings where c > 0 {
             var s = sensors[id] ?? SensorState(ewma: c, baseline: c, vol: 0)
             let prev = s.ewma
@@ -79,17 +85,19 @@ final class SmartController {
             if calm, inst < 0.2 { s.baseline += 0.01 * (s.ewma - s.baseline) }
             sensors[id] = s
             hottest = max(hottest, s.ewma)
+            if id == TemperSensors.smartControlKey { controlEwma = s.ewma }
             let excess = max(0, s.ewma - s.baseline)
             let inertia = 1.0 / (s.vol + 0.05)
             accNum += excess * inertia; accDen += inertia
         }
         accumulation = accDen > 0 ? accNum / accDen : 0
+        let die = controlEwma ?? hottest
 
         if let f = fast {
-            risePerSec = (hottest - f) / tickDt
-            fast = hottest
-            slow = (slow ?? f) + (1 - exp(-tickDt / slowTau)) * (hottest - (slow ?? f))
-        } else { fast = hottest; slow = hottest; risePerSec = 0 }
+            risePerSec = (die - f) / tickDt
+            fast = die
+            slow = (slow ?? f) + (1 - exp(-tickDt / slowTau)) * (die - (slow ?? f))
+        } else { fast = die; slow = die; risePerSec = 0 }
 
         // --- power (leading signal) ---
         if power > 0 {

@@ -4,6 +4,10 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.4.2
+- **Smart fan mode now steers on the CPU die average, not the hottest core.** A single core spiking no longer over-revs the fans; Smart holds its setpoint against the calmer, representative temperature. (Updates the fan helper on first launch, one prompt.)
+- New **One tab per swipe** option (Settings under Navigation) for when you'd rather each swipe move exactly one tab instead of gliding through several.
+
 ## 1.4.1
 - **Swipe between tabs.** Two-finger swipe left or right across the panel to move through your tabs, with a trackpad tick as each one lands. Keep swiping to skip several at once.
 - Tune it in Settings under Navigation: swipe sensitivity, and haptic strength (light, medium, strong, or off).

@@ -8,8 +8,9 @@ import Foundation
 public enum TemperXPC {
     /// Bumped whenever the daemon binary or config contract changes so the app can
     /// detect a stale installed helper and re-register (one admin prompt). v2: the
-    /// config moved from a single global mode to per-fan `FanSetting`s.
-    public static let helperVersion = "3"
+    /// config moved from a single global mode to per-fan `FanSetting`s. v4: Smart
+    /// steers on the CPU die average instead of the hottest core.
+    public static let helperVersion = "4"
 }
 
 /// Per-brand identity for a Temper daemon: launchd label / Mach service, log
@@ -180,6 +181,14 @@ public enum TemperSmart {
 /// keys floor at a useless 40 °C at idle and must not win). The Virtual Memory
 /// keys are deliberately omitted: they read ~94 °C and would dominate `hottest`.
 public enum TemperSensors {
+    /// The sensor Smart steers on: the CPU **die average** (`TCMb`), not the CPU
+    /// max (`TCMz`). The max tracks whichever single core spikes, so it's jumpy and
+    /// over-cools; the die average is the representative, calmer signal to hold a
+    /// setpoint against. Smart falls back to the hottest sensor when this key is
+    /// absent (older / Intel Macs). The raw-max thermal cutout is separate and
+    /// still watches the true hottest reading.
+    public static let smartControlKey = "TCMb"
+
     public static let tempKeys: [(key: String, label: String)] = [
         ("TCMz", "CPU (max)"), ("TCMb", "CPU die avg"), ("TCHP", "CPU heatpipe"),
         ("TUDX", "SoC"),                                       // Uncore Die Max

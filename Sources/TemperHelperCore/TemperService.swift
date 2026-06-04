@@ -177,7 +177,7 @@ final class TemperService: NSObject, TemperXPCProtocol, @unchecked Sendable {
             let lo = smc.minRPM(i), hi = smc.maxRPM(i)
             return hi > lo ? min(max((smc.actualRPM(i) - lo) / (hi - lo), 0), 1) : 0
         }.max() ?? 0
-        smart.sample(sensors: temps.map { ($0.label, $0.celsius) },
+        smart.sample(sensors: temps.map { ($0.key, $0.celsius) },
                      power: smc.loadPowerW(), ambient: smc.ambientC(),
                      fanFraction: fanFraction, bias: bias, now: now)
         let targets: [Double?] = (0..<n).map { i in
