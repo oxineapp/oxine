@@ -21,6 +21,7 @@ public final class UpdaterManager: ObservableObject {
     public static let shared = UpdaterManager()
 
     private let driver: PanelUpdaterDriver
+    private let feedDelegate: FeedDelegate
     private let updater: SPUUpdater
 
     /// Mirrors Sparkle's "can a check start right now" so the button disables
@@ -36,8 +37,9 @@ public final class UpdaterManager: ObservableObject {
         // Custom user driver → Oxine's own dark update UI (see UpdaterUI.swift)
         // instead of Sparkle's stock AppKit windows.
         driver = PanelUpdaterDriver()
+        feedDelegate = FeedDelegate()
         updater = SPUUpdater(hostBundle: .main, applicationBundle: .main,
-                             userDriver: driver, delegate: nil)
+                             userDriver: driver, delegate: feedDelegate)
         automaticallyChecks = updater.automaticallyChecksForUpdates
         do {
             try updater.start()
@@ -74,5 +76,18 @@ public final class UpdaterManager: ObservableObject {
         store.set(Date(), forKey: lastOpenCheckKey)
         driver.silent = true
         updater.checkForUpdates()
+    }
+}
+
+/// Appends a cache-busting query to the appcast URL on every check. The feed is
+/// hosted on GitHub Pages behind a CDN with `max-age=600`, so a check fired in
+/// the first ~10 min after a release was being served the *previous* appcast and
+/// found nothing (the "I had to check by hand" bug). A unique query per check
+/// bypasses that edge cache.
+private final class FeedDelegate: NSObject, SPUUpdaterDelegate {
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        guard let base = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String else { return nil }
+        let sep = base.contains("?") ? "&" : "?"
+        return base + sep + "t=\(Int(Date().timeIntervalSince1970))"
     }
 }

@@ -37,7 +37,21 @@ public final class TemperHelperClient: ObservableObject {
     /// version than the one bundled in this app, re-bootstrap once.
     func refresh() async {
         if installState == .installing { return }
-        guard await ping() else { installState = .notInstalled; return }
+        guard await ping() else {
+            // Not answering. If the daemon's plist is on disk it IS installed but
+            // refusing us — almost always because the app's signing identity
+            // changed across an update (self-signed → Developer ID) and the running
+            // daemon still pins the old client requirement. Re-bootstrap once so the
+            // new binary + requirement take over, instead of making the user
+            // reinstall by hand. Otherwise it's simply not installed.
+            if !didAttemptUpgrade, FileManager.default.fileExists(atPath: plistPath) {
+                didAttemptUpgrade = true
+                await install()
+            } else {
+                installState = .notInstalled
+            }
+            return
+        }
         installState = .installed
         if !didAttemptUpgrade, let v = await fetchVersion(), v != TemperXPC.helperVersion {
             didAttemptUpgrade = true

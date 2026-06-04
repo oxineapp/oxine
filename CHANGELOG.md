@@ -4,6 +4,10 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.5.1
+- fix: updates show on open right after a release
+- fix: battery/fan helper relinks itself after an update
+
 ## 1.5
 - Now notarized by Apple.
 

@@ -331,13 +331,22 @@ if [ "$PUBLISH" = "1" ]; then
   git add docs/appcast.xml
   git commit -m "Release $TAG" >/dev/null 2>&1 || echo "  (appcast unchanged — nothing to commit)"
   git push
-  # Create the release (idempotent: if the tag exists, just upload assets).
+  # Release notes = this version's CHANGELOG section (raw markdown), so the
+  # GitHub release page shows the same changelog the in-app updater does.
+  NOTES_MD="$(mktemp -t oxine-relnotes-XXXX).md"
+  awk -v ver="$VERSION" '
+    $0 ~ "^## " ver "([ ]|$)" { grab=1; next }
+    grab && /^## / { exit }
+    grab { print }
+  ' CHANGELOG.md > "$NOTES_MD"
+  # Create the release (idempotent: if the tag exists, refresh assets + notes).
   if gh release view "$TAG" >/dev/null 2>&1; then
     gh release upload "$TAG" "$DMG" "$UPDATES/Oxine-$VERSION.zip" --clobber
+    gh release edit "$TAG" --title "Oxine $VERSION" --notes-file "$NOTES_MD"
   else
     gh release create "$TAG" "$DMG" "$UPDATES/Oxine-$VERSION.zip" \
-      --title "Oxine $VERSION" \
-      --notes "See the in-app updater or download the DMG. First launch: open System Settings → Privacy & Security and click \"Open Anyway\" to allow Oxine."
+      --title "Oxine $VERSION" --notes-file "$NOTES_MD"
   fi
+  rm -f "$NOTES_MD"
   echo "✓ published $TAG"
 fi
