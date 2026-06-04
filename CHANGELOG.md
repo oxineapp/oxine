@@ -6,7 +6,7 @@ updater.
 
 ## 1.5.1
 - fix: updates show on open right after a release
-- fix: battery/fan helper relinks itself after an update
+- fix: Sous/Temper helper relinks itself after an update
 
 ## 1.5
 - Now notarized by Apple.
