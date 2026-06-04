@@ -52,7 +52,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var panel: KeyablePanel?
     var monitor: Any?
     var globalMonitor: Any?
+    var scrollMonitor: Any?
     var resignObserver: Any?
+    // Per-gesture state for two-finger swipe tab nav (see handleSwipeScroll).
+    var swipeAccumX: CGFloat = 0
+    var swipeAccumY: CGFloat = 0
+    var swipeHorizontal = false   // gesture committed to the horizontal axis
     @Published var isPinned: Bool = false
     var isAuthenticating = false
     var panelJustOpened = false
@@ -281,6 +286,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
             }
             return event
+        }
+
+        // Two-finger horizontal swipe over the panel steps between tabs.
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self else { return event }
+            return self.handleSwipeScroll(event) ? nil : event
         }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in

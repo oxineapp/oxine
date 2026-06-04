@@ -22,6 +22,11 @@ struct MainView: View {
     @State var isPinned: Bool = false
     @State var didStart = false
     @State private var slideForward = true
+    /// Whether the last `switchTab` was driven by a swipe. Read by the Auth tab and
+    /// the user-locked Notes/History tabs so reaching them by swipe doesn't fire an
+    /// automatic Touch ID prompt (their manual unlock buttons still work). Owned by
+    /// `switchTab`: set for swipes, cleared for taps, so it can't leak.
+    @State private var navigatingBySwipe = false
     /// The panel owns the window size; the SwiftUI root is pinned to it with a *definite*
     /// frame. Without this, `.frame(maxWidth:.infinity)` lets SwiftUI's NSHostingView resolve
     /// an unbounded width against the screen and animate the window to a degenerate size,
@@ -39,7 +44,11 @@ struct MainView: View {
     /// Position of a tab within the current bar order (drives slide direction).
     private func position(of tab: TabID) -> Int { tabConfig.enabled.firstIndex(of: tab) ?? 0 }
 
-    func switchTab(to tab: TabID) {
+    func switchTab(to tab: TabID, bySwipe: Bool = false) {
+        // Remember how this switch was initiated so the destination can decide
+        // whether to auto-prompt for Touch ID. Set on every call (taps clear it,
+        // swipes set it) so a stale swipe flag can't leak into a later tap.
+        navigatingBySwipe = bySwipe
         // Coming back from Settings to the same tab still needs to dismiss Settings.
         guard tab != activeTab || showingSettings else { return }
         slideForward = position(of: tab) >= position(of: activeTab)
@@ -47,6 +56,36 @@ struct MainView: View {
             showingSettings = false
             activeTab = tab
         }
+    }
+
+    /// Move one tab in the bar order from a two-finger swipe. Stops at the ends
+    /// (no wrap), so the slide direction always reads naturally. While Settings is
+    /// open a back-swipe returns to the content tab, mirroring the back bar.
+    private func navigateBySwipe(_ dir: SwipeDirection) {
+        if showingSettings {
+            if dir == .previous { swipeHaptic(); switchTab(to: preSettingsTab, bySwipe: true) }
+            return
+        }
+        let tabs = tabConfig.enabled
+        guard let i = tabs.firstIndex(of: activeTab) else { return }
+        let j = dir == .next ? i + 1 : i - 1
+        guard tabs.indices.contains(j) else { return }   // no wrap: silent at the ends
+        swipeHaptic()
+        switchTab(to: tabs[j], bySwipe: true)
+    }
+
+    /// A trackpad tick confirming a swipe landed on a new tab, at the strength set
+    /// in Settings. The system offers three patterns — `.alignment` (light) through
+    /// `.levelChange` (firm) — plus off.
+    private func swipeHaptic() {
+        let pattern: NSHapticFeedbackManager.FeedbackPattern
+        switch swipeHapticStrength {
+        case 1: pattern = .alignment
+        case 2: pattern = .generic
+        case 3: pattern = .levelChange
+        default: return   // 0 = off
+        }
+        NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
     }
 
     /// Open Settings as an overlay route (Settings slides in from the right of
@@ -65,6 +104,8 @@ struct MainView: View {
     @AppStorage("panelCustomLocked", store: UserDefaults(suiteName: "com.oxine.settings")) var panelCustomLocked = false
     @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
+    /// Swipe haptic strength: 0 off, 1 light, 2 medium, 3 strong (see swipeHaptic).
+    @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
 
     /// Per-session unlock for tabs that require Touch ID. Reset whenever the user
     /// navigates away, so each visit re-authenticates.
@@ -120,7 +161,7 @@ struct MainView: View {
             appDelegate?.isAuthVisible = (!showingSettings && newTab == .auth)
             if newTab != .history { clipboardUnlocked = false }
             if newTab != .notes { notesUnlocked = false }
-            if oldTab != .auth && newTab == .auth {
+            if oldTab != .auth && newTab == .auth && !navigatingBySwipe {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
         }
@@ -138,6 +179,10 @@ struct MainView: View {
             // From the status-bar menu — navigable even if the tab is off the bar.
             guard let raw = note.object as? String, let tab = TabID(rawValue: raw) else { return }
             switchTab(to: tab)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .swipeNavigate)) { note in
+            guard let dir = note.object as? SwipeDirection else { return }
+            navigateBySwipe(dir)
         }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
             // Match the window's eased resize (see AppDelegate.applyPanelSize) so
@@ -179,6 +224,7 @@ struct MainView: View {
                     title: "Notes Locked",
                     subtitle: "Authenticate to view your notes.",
                     reason: "Unlock to view your notes",
+                    autoPrompt: !navigatingBySwipe,
                     onUnlock: { notesUnlocked = true }
                 )
             } else {
@@ -190,6 +236,7 @@ struct MainView: View {
                     title: "Clipboard Locked",
                     subtitle: "Authenticate to view your clipboard history.",
                     reason: "Unlock to view your clipboard history",
+                    autoPrompt: !navigatingBySwipe,
                     onUnlock: { clipboardUnlocked = true }
                 )
             } else {
@@ -208,7 +255,7 @@ struct MainView: View {
 
     var mainContent: some View {
         VStack(spacing: 0) {
-            TabBar(tabs: tabConfig.enabled, activeTab: activeTab, onSelect: switchTab)
+            TabBar(tabs: tabConfig.enabled, activeTab: activeTab, onSelect: { switchTab(to: $0) })
 
             Group {
                 if showingSettings {
@@ -489,6 +536,10 @@ struct BiometricLockView: View {
     let title: String
     let subtitle: String
     let reason: String
+    /// Auto-run Touch ID when the lock appears. False when the tab was reached by a
+    /// swipe, so a swipe past a locked tab doesn't throw up a system prompt — the
+    /// manual unlock button below still works.
+    var autoPrompt: Bool = true
     let onUnlock: () -> Void
     @State private var authing = false
     @State private var failed = false
@@ -531,7 +582,7 @@ struct BiometricLockView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
-        .onAppear(perform: authenticate)
+        .onAppear { if autoPrompt { authenticate() } }
     }
 
     private func authenticate() {

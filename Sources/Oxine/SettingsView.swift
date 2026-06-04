@@ -16,6 +16,8 @@ struct SettingsView: View {
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) var notesEditorBundleID = ""
     @AppStorage("notesFolderPath", store: UserDefaults(suiteName: "com.oxine.settings")) var notesFolderPath = ""
+    @AppStorage("swipeSensitivity", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSensitivity = 0.7
+    @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
     @ObservedObject private var sous = SousManager.shared
     @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
@@ -121,6 +123,53 @@ struct SettingsView: View {
                     TabBarPreview(tabs: tabConfig.enabled)
                     Text("Every tab stays reachable from the menu-bar icon's right-click menu, even when it's off the bar.")
                         .font(.caption2).foregroundColor(.white.opacity(0.4))
+                }
+            }
+        }
+    }
+
+    private var navigationSection: some View {
+        SettingSection(title: "Navigation") {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Two-finger swipe")
+                        .foregroundColor(.white.opacity(0.85))
+                    Text("Swipe left or right across the panel to move between tabs.")
+                        .font(.caption2).foregroundColor(.white.opacity(0.5))
+                }
+
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("Sensitivity")
+                            .foregroundColor(.white.opacity(0.8))
+                        Spacer()
+                        Text("\(Int(swipeSensitivity * 100))%")
+                            .foregroundColor(.white.opacity(0.4))
+                            .font(.caption)
+                    }
+                    Slider(value: $swipeSensitivity, in: 0.0...1.0, step: 0.05)
+                        .tint(Color.panelAccent)
+                    Text("Higher means a shorter swipe flips the tab.")
+                        .font(.caption2).foregroundColor(.white.opacity(0.4))
+                }
+
+                Divider().opacity(0.1)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Haptic feedback")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Trackpad tick each time a tab changes.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Picker("", selection: $swipeHapticStrength) {
+                        Text("Off").tag(0)
+                        Text("Light").tag(1)
+                        Text("Medium").tag(2)
+                        Text("Strong").tag(3)
+                    }
+                    .frame(width: 96)
                 }
             }
         }
@@ -241,6 +290,8 @@ struct SettingsView: View {
                     }
 
                     appearanceSection
+
+                    navigationSection
 
                     tabsSection
 

@@ -4,6 +4,11 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.4.1
+- **Swipe between tabs.** Two-finger swipe left or right across the panel to move through your tabs, with a trackpad tick as each one lands. Keep swiping to skip several at once.
+- Tune it in Settings under Navigation: swipe sensitivity, and haptic strength (light, medium, strong, or off).
+- Swiping past a Touch ID locked tab no longer pops the system prompt; it waits until you land and tap unlock.
+
 ## 1.4.0
 - **Smart fan mode is calmer and far better spread across the slider.** Each profile now holds a clear target temperature, eases the fans in instead of lurching, and truly idles to silence when nothing's going on.
 - New **Smart profile selector**: snap between Silent, Quiet, Balanced, Brisk and Cool, each showing the temperature it holds, with a live readout of what Smart is doing right now and a thumb that shifts colour as it works.
