@@ -352,7 +352,6 @@ public struct TemperView: View {
             TemperamentSelector(
                 value: Binding(get: { temperamentDraft ?? temper.temperament },
                                set: { temperamentDraft = $0 }),
-                activity: temper.smartActivity,
                 onCommit: {
                     if let v = temperamentDraft { temper.temperament = v; temperamentDraft = nil }
                 })
@@ -723,10 +722,6 @@ final class SpinStore { var phase = 0.0; var rate = 0.0; var last: TimeInterval?
 /// controller reads, and the aim temp comes straight from `TemperSmart.targetTempC`.
 struct TemperamentSelector: View {
     @Binding var value: Double
-    /// How hard Smart is working right now, 0–1, or nil = hands-off. Tints the
-    /// thumb's glow + the live status so the control reflects its *situation*, not
-    /// just its setting.
-    var activity: Double?
     var onCommit: () -> Void
 
     private let stops: [(v: Double, name: String)] = [
@@ -748,26 +743,6 @@ struct TemperamentSelector: View {
         stops.indices.min(by: { abs(stops[$0].v - f) < abs(stops[$1].v - f) }) ?? 0
     }
     private var active: Int { nearestIndex(to: value) }
-
-    /// Situation colour: calm blue when hands-off, then green → amber → red as Smart
-    /// works harder. Orthogonal to the spectrum (which shows *which* profile).
-    private func activityColor(_ a: Double?) -> Color {
-        guard let a else { return Color(red: 0.45, green: 0.62, blue: 0.95) }   // hands-off (calm)
-        let t = min(max(a, 0), 1)
-        let lo = (0.30, 0.82, 0.52), mid = (0.98, 0.72, 0.22), hi = (0.95, 0.32, 0.30)
-        let (r, g, b) = t < 0.5
-            ? (lo.0 + (mid.0 - lo.0) * t * 2, lo.1 + (mid.1 - lo.1) * t * 2, lo.2 + (mid.2 - lo.2) * t * 2)
-            : (mid.0 + (hi.0 - mid.0) * (t - 0.5) * 2, mid.1 + (hi.1 - mid.1) * (t - 0.5) * 2, mid.2 + (hi.2 - mid.2) * (t - 0.5) * 2)
-        return Color(red: r, green: g, blue: b)
-    }
-    /// Short live status for the caption.
-    private var status: (label: String, color: Color) {
-        let c = activityColor(activity)
-        guard let a = activity else { return ("idle", c) }
-        if a < 0.12 { return ("easing in", c) }
-        if a < 0.85 { return ("ramping \(Int((a * 100).rounded()))%", c) }
-        return ("near max", c)
-    }
 
     var body: some View {
         VStack(spacing: 9) {
@@ -809,23 +784,14 @@ struct TemperamentSelector: View {
                         .position(x: sx, y: cy)
                 }
 
-                // Liquid-glass thumb: spectrum-tinted (which profile), wrapped in a
-                // situation glow + ring (how hard Smart is working right now).
-                ZStack {
-                    Capsule()
-                        .fill(activityColor(activity))
-                        .frame(width: thumbW + 10, height: trackH + 18)
-                        .blur(radius: 7)
-                        .opacity(activity == nil ? 0 : 0.3 + 0.55 * min(max(activity ?? 0, 0), 1))
-                    Color.clear
-                        .frame(width: thumbW, height: trackH + 10)
-                        .glassEffect(.regular.tint(spectrum(value).opacity(0.7)), in: Capsule())
-                        .overlay(Capsule().stroke(activity == nil ? .white.opacity(0.5)
-                                                  : activityColor(activity).opacity(0.95), lineWidth: 1.2))
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                }
-                .animation(.easeInOut(duration: 0.45), value: activity)
-                .position(x: cx, y: cy)
+                // Liquid-glass thumb: spectrum-tinted (which profile), with a plain
+                // neutral ring — no situation glow.
+                Color.clear
+                    .frame(width: thumbW, height: trackH + 10)
+                    .glassEffect(.regular.tint(spectrum(value).opacity(0.7)), in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.5), lineWidth: 1.2))
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .position(x: cx, y: cy)
             }
             .frame(height: geo.size.height)
             .contentShape(Rectangle())
@@ -857,12 +823,6 @@ struct TemperamentSelector: View {
                 .font(.system(size: 9.5))
                 .foregroundColor(.white.opacity(0.4))
             Spacer()
-            Circle().fill(status.color).frame(width: 6, height: 6)
-                .animation(.easeInOut(duration: 0.45), value: activity)
-            Text(status.label)
-                .font(.system(size: 9, weight: .medium)).monospacedDigit()
-                .foregroundColor(status.color.opacity(0.9))
-                .contentTransition(.numericText())
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: active)
     }

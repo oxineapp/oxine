@@ -4,6 +4,10 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.4.3
+- **Updates show up on their own again.** Opening Oxine now reliably surfaces an available update, instead of only finding it when you pressed "Check for Updates" by hand.
+- Tidied the Smart fan slider: dropped the working-status dot and the thumb's glow for a calmer look.
+
 ## 1.4.2
 - **Smart fan mode now steers on the CPU die average, not the hottest core.** A single core spiking no longer over-revs the fans; Smart holds its setpoint against the calmer, representative temperature. (Updates the fan helper on first launch, one prompt.)
 - New **One tab per swipe** option (Settings under Navigation) for when you'd rather each swipe move exactly one tab instead of gliding through several.

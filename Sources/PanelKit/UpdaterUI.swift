@@ -12,6 +12,13 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
     let model = UpdaterUIModel()
     private var window: NSWindow?
 
+    /// Set by an automatic on-open check (see UpdaterManager.checkOnOpen). It runs
+    /// the *user-initiated* check — the only path Sparkle reliably surfaces — but we
+    /// keep the "checking…" spinner, the "up to date" notice, and transient errors
+    /// hidden, so the window only ever appears when an update is genuinely found.
+    /// Reset the moment a real result lands.
+    var silent = false
+
     private func present() {
         if window == nil {
             let host = NSHostingController(rootView: UpdaterView(model: model))
@@ -48,12 +55,16 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
         model.cancel = cancellation
+        // A silent on-open check shows nothing while it looks; only an actual
+        // update (showUpdateFound) opens the window.
+        guard !silent else { return }
         model.phase = .checking
         present()
     }
 
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState,
                          reply: @escaping (SPUUserUpdateChoice) -> Void) {
+        silent = false                 // we're about to show the update flow for real
         model.updateReply = reply
         // A critical update (tagged in the appcast) can't be skipped or deferred —
         // the view hides Skip/Later and we lock the window closed.
@@ -74,12 +85,14 @@ final class PanelUpdaterDriver: NSObject, SPUUserDriver {
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
 
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
+        if silent { silent = false; acknowledgement(); return }   // already current: stay quiet
         model.ack = acknowledgement
         model.phase = .upToDate
         present()
     }
 
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
+        if silent { silent = false; acknowledgement(); return }   // don't nag on a background hiccup
         model.ack = acknowledgement
         model.phase = .error(error.localizedDescription)
         present()

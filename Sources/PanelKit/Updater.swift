@@ -56,12 +56,14 @@ public final class UpdaterManager: ObservableObject {
         updater.checkForUpdates()
     }
 
-    /// Lightweight check fired when the panel opens. Uses Sparkle's *background*
-    /// check: it stays silent when we're current and only surfaces the update
-    /// window (via the user driver) when there's something to install — so the
-    /// popup appears right when the user opens the app. Throttled so opening the
-    /// panel repeatedly doesn't re-hit the feed; a found update still re-pops on
-    /// a later open until it's installed or skipped.
+    /// Lightweight check fired when the panel opens, so the update popup appears the
+    /// moment the user opens the app after a release. We run the *user-initiated*
+    /// check (`checkForUpdates`) rather than `checkForUpdatesInBackground` — the
+    /// latter is gated by Sparkle's own scheduling/permission state and routinely
+    /// fails to surface a found update (the "I had to check manually every time"
+    /// bug). The driver's `silent` flag suppresses the spinner / "up to date" /
+    /// transient-error UI, so this stays invisible unless there's a real update.
+    /// Throttled so opening the panel repeatedly doesn't re-hit the feed.
     private static let openCheckInterval: TimeInterval = 1800   // ≤ once / 30 min
     private let lastOpenCheckKey = "panelLastOpenUpdateCheck"
     public func checkOnOpen() {
@@ -70,6 +72,7 @@ public final class UpdaterManager: ObservableObject {
         let last = store.object(forKey: lastOpenCheckKey) as? Date ?? .distantPast
         guard Date().timeIntervalSince(last) > Self.openCheckInterval else { return }
         store.set(Date(), forKey: lastOpenCheckKey)
-        updater.checkForUpdatesInBackground()
+        driver.silent = true
+        updater.checkForUpdates()
     }
 }
