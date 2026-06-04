@@ -144,26 +144,74 @@ mkdir -p "$DIST/$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FW" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$DIST/$APP/Contents/MacOS/Oxine" 2>/dev/null || true
 
-SIGN_ID="Oxine"   # neutral self-signed identity (CN=Oxine); see SIGNING note above
-if ! security find-identity -v -p codesigning | grep -q "\"$SIGN_ID\""; then
+# Signing identity. Default: neutral self-signed "Oxine" (CN=Oxine; first launch
+# is quarantined → right-click Open). Opt into a clean, no-prompt install by
+# exporting a Developer ID:
+#   export OXINE_SIGN_ID="Developer ID Application: Your Name (TEAMID)"
+#   export OXINE_NOTARY_PROFILE="OxineNotary"   # an xcrun notarytool profile
+# With OXINE_SIGN_ID set we add hardened runtime + a secure timestamp (required
+# for notarization); with the notary profile too we upload to Apple and staple,
+# so even the first download opens with no Gatekeeper warning.
+SIGN_ID="${OXINE_SIGN_ID:-Oxine}"
+NOTARY_PROFILE="${OXINE_NOTARY_PROFILE:-}"
+case "$SIGN_ID" in
+  "Developer ID"*) HARDENED=(--options runtime --timestamp); DEV_ID=1 ;;
+  *)               HARDENED=(); DEV_ID=0 ;;
+esac
+
+if ! security find-identity -v -p codesigning | grep -qF -- "$SIGN_ID"; then
   echo "✗ '$SIGN_ID' is not a valid/trusted code-signing identity." >&2
-  echo "  Create it once (no personal name) with:" >&2
-  echo "    openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -keyout k.pem -out c.pem -subj '/CN=Oxine' \\" >&2
-  echo "      -addext 'extendedKeyUsage=critical,codeSigning' -addext 'keyUsage=critical,digitalSignature'" >&2
-  echo "    openssl pkcs12 -export -legacy -macalg sha1 -inkey k.pem -in c.pem -out o.p12 -passout pass:oxine -name Oxine" >&2
-  echo "    security import o.p12 -k ~/Library/Keychains/login.keychain-db -P oxine -T /usr/bin/codesign" >&2
-  echo "    security add-trusted-cert -r trustRoot -p codeSign -k ~/Library/Keychains/login.keychain-db c.pem" >&2
+  if [ "$DEV_ID" = "1" ]; then
+    echo "  Create a 'Developer ID Application' cert: Xcode → Settings → Accounts →" >&2
+    echo "  (your team) → Manage Certificates → + → Developer ID Application." >&2
+  else
+    echo "  Create the self-signed 'Oxine' cert once (no personal name) with:" >&2
+    echo "    openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -keyout k.pem -out c.pem -subj '/CN=Oxine' \\" >&2
+    echo "      -addext 'extendedKeyUsage=critical,codeSigning' -addext 'keyUsage=critical,digitalSignature'" >&2
+    echo "    openssl pkcs12 -export -legacy -macalg sha1 -inkey k.pem -in c.pem -out o.p12 -passout pass:oxine -name Oxine" >&2
+    echo "    security import o.p12 -k ~/Library/Keychains/login.keychain-db -P oxine -T /usr/bin/codesign" >&2
+    echo "    security add-trusted-cert -r trustRoot -p codeSign -k ~/Library/Keychains/login.keychain-db c.pem" >&2
+  fi
   exit 1
 fi
-echo "▸ signing with '$SIGN_ID'…"
-# Inside-out: helper first (own identifier), then the main binary, then seal the
-# whole bundle.
-codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
-codesign --force --sign "$SIGN_ID" --identifier "com.oxine.temperhelper" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
-codesign --force --sign "$SIGN_ID" "$DIST/$APP/Contents/MacOS/Oxine"
-codesign --force --sign "$SIGN_ID" "$DIST/$APP"
+
+echo "▸ signing with '$SIGN_ID'$([ "$DEV_ID" = 1 ] && echo ' (hardened runtime)')…"
+FW="$DIST/$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+if [ "$DEV_ID" = "1" ]; then
+  # Notarization requires every nested executable signed with a Developer ID,
+  # hardened + timestamped, inside-out. Re-sign Sparkle's components under our
+  # identity; the sandboxed Downloader keeps its own entitlements.
+  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" --preserve-metadata=entitlements "$FW/XPCServices/Downloader.xpc" 2>/dev/null \
+    || codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/XPCServices/Downloader.xpc"
+  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/XPCServices/Installer.xpc"
+  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/Autoupdate"
+  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/Updater.app"
+  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
+fi
+# Inside-out: helpers (own identifiers), main binary, then seal the whole bundle.
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --identifier "com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --identifier "com.oxine.temperhelper" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/MacOS/Oxine"
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP"
 codesign --verify --deep --strict "$DIST/$APP" && echo "  ✓ signature valid"
 echo "  binary: $(lipo -archs "$DIST/$APP/Contents/MacOS/Oxine")"
+
+# Notarize + staple the .app BEFORE it's zipped/DMG'd, so both the Sparkle .zip
+# and the human DMG carry the stapled ticket (clean first launch, even offline).
+if [ -n "$NOTARY_PROFILE" ]; then
+  if [ "$DEV_ID" != "1" ]; then
+    echo "✗ OXINE_NOTARY_PROFILE is set but OXINE_SIGN_ID isn't a Developer ID — notarization needs one." >&2
+    exit 1
+  fi
+  echo "▸ notarizing (uploads to Apple and waits — can take a few minutes)…"
+  NZ="$DIST/_notarize.zip"
+  ditto -c -k --keepParent "$DIST/$APP" "$NZ"
+  xcrun notarytool submit "$NZ" --keychain-profile "$NOTARY_PROFILE" --wait
+  rm -f "$NZ"
+  echo "▸ stapling ticket…"
+  xcrun stapler staple "$DIST/$APP"
+  spctl -a -vvv "$DIST/$APP" 2>&1 | sed 's/^/    /' || true
+fi
 
 # ── Sparkle update artifact (.zip) + signed appcast ───────────────────────────
 echo "▸ packaging Sparkle update (.zip) + appcast…"
@@ -258,6 +306,14 @@ sync
 hdiutil detach "$MOUNT" >/dev/null 2>&1 || hdiutil detach "$MOUNT" -force >/dev/null 2>&1
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
 rm -f "$RW"
+# Notarize + staple the DMG itself too (the app inside is already stapled; this
+# makes the .dmg verify offline before it's even opened). A DMG can only be
+# stapled once it has its own notarization ticket, so submit it as well.
+if [ -n "$NOTARY_PROFILE" ]; then
+  echo "▸ notarizing DMG…"
+  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait \
+    && xcrun stapler staple "$DMG" && echo "  ✓ DMG notarized + stapled"
+fi
 echo "✓ $DMG  ($(du -h "$DMG" | cut -f1))"
 
 echo ""

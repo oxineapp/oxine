@@ -48,7 +48,7 @@ public struct TemperHelperBranding: Sendable {
         machServiceName: "com.oxine.temperhelper",
         logSubsystem: "com.oxine.temperhelper",
         clientRequirement: "identifier \"com.oxine.app\" and "
-            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\" or (anchor apple generic and (certificate leaf[subject.OU] = \"TMF25D4TR4\" or certificate leaf[subject.OU] = \"3VSFGRSSZD\")))"
     )
 
     /// The standalone (future) sous-vide-style Temper app's daemon, kept here so
@@ -57,7 +57,7 @@ public struct TemperHelperBranding: Sendable {
         machServiceName: "com.temper.temperhelper",
         logSubsystem: "com.temper.temperhelper",
         clientRequirement: "identifier \"com.temper.app\" and "
-            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\" or (anchor apple generic and (certificate leaf[subject.OU] = \"TMF25D4TR4\" or certificate leaf[subject.OU] = \"3VSFGRSSZD\")))"
     )
 }
 

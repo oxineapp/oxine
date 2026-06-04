@@ -50,7 +50,7 @@ public struct HelperBranding: Sendable {
         machServiceName: "com.oxine.soushelper",
         logSubsystem: "com.oxine.soushelper",
         clientRequirement: "identifier \"com.oxine.app\" and "
-            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\" or (anchor apple generic and (certificate leaf[subject.OU] = \"TMF25D4TR4\" or certificate leaf[subject.OU] = \"3VSFGRSSZD\")))"
     )
 
     /// The standalone sous-vide app's daemon: its own launchd label so it can
@@ -59,7 +59,7 @@ public struct HelperBranding: Sendable {
         machServiceName: "com.sousvide.soushelper",
         logSubsystem: "com.sousvide.soushelper",
         clientRequirement: "identifier \"com.sousvide.app\" and "
-            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\")"
+            + "(certificate leaf[subject.CN] = \"Oxine\" or certificate leaf[subject.CN] = \"Oxine Dev\" or (anchor apple generic and (certificate leaf[subject.OU] = \"TMF25D4TR4\" or certificate leaf[subject.OU] = \"3VSFGRSSZD\")))"
     )
 }
 

@@ -96,6 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         _ = UpdaterManager.shared
         NSApplication.shared.setActivationPolicy(.accessory)
         Self.instance = self
+        setupGlobalHotKey()
         observeSous()
         observeTemper()
         observeCaffeine()
@@ -265,6 +266,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         PanelLayout.setCustomSize(panel.frame.size)
     }
 
+    /// Register the user's editable, system-wide toggle hotkey. The Carbon
+    /// dispatcher fires on the main thread; we still hop to the main actor to
+    /// satisfy isolation and avoid capturing self in the C handler.
+    private func setupGlobalHotKey() {
+        GlobalHotKey.shared.setHandler {
+            Task { @MainActor in AppDelegate.instance?.togglePanel() }
+        }
+        ShortcutManager.shared.apply()
+    }
+
     private func setupEventMonitoring() {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
@@ -274,10 +285,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self.closePanel()
                     return nil
                 }
-            }
-            if event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) && event.characters == "v" {
-                self.togglePanel()
-                return nil
             }
             // ⌘, opens Settings — the standard macOS preferences shortcut.
             if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "," {

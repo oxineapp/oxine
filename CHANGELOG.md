@@ -4,6 +4,9 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.5
+- Now notarized by Apple.
+
 ## 1.4.4
 - Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they're clean now.
 - Temper: a fan's blades stop turning when it's at 0 RPM, instead of drifting forever.

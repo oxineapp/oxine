@@ -259,13 +259,14 @@ struct MainView: View {
 
             Group {
                 if showingSettings {
-                    VStack(spacing: 0) {
-                        SettingsBackBar(onBack: { switchTab(to: preSettingsTab) })
-                        SettingsView(showSetup: Binding(
+                    SettingsView(
+                        showSetup: Binding(
                             get: { showSetup },
                             set: { showSetup = $0 }
-                        ), clipboardManager: clipboardManager)
-                    }
+                        ),
+                        clipboardManager: clipboardManager,
+                        onExit: { switchTab(to: preSettingsTab) }
+                    )
                 } else {
                     tabContent(activeTab)
                 }
@@ -283,31 +284,6 @@ struct MainView: View {
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// Thin header shown above Settings (which now opens from the footer gear, not a
-/// tab) giving an explicit way back to wherever you were.
-struct SettingsBackBar: View {
-    let onBack: () -> Void
-    var body: some View {
-        HStack(spacing: 6) {
-            Button(action: onBack) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("Settings")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundColor(.white.opacity(0.85))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
     }
 }
 
@@ -431,6 +407,7 @@ struct FooterView: View {
     var onToggleSettings: () -> Void
     @State private var focusEnabled = FocusModeManager.shared.isEnabled
     @ObservedObject private var caffeine = CaffeineManager.shared
+    @ObservedObject private var shortcut = ShortcutManager.shared
     private var accent: Color { .panelAccent }
 
     var body: some View {
@@ -503,7 +480,7 @@ struct FooterView: View {
 
             Spacer()
 
-            Text("\(Image(systemName: "command"))\u{21E7}V to open")
+            Text("\(shortcut.display) to open")
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.white.opacity(0.15))
         }
