@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.4.2</title>
+            <pubDate>Thu, 04 Jun 2026 11:51:23 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>142</sparkle:version>
+            <sparkle:shortVersionString>1.4.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.2</h2><ul><li><strong>Smart fan mode now steers on the CPU die average, not the hottest core.</strong> A single core spiking no longer over-revs the fans; Smart holds its setpoint against the calmer, representative temperature. (Updates the fan helper on first launch, one prompt.)</li><li>New <strong>One tab per swipe</strong> option (Settings under Navigation) for when you&#x27;d rather each swipe move exactly one tab instead of gliding through several.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.2/Oxine-1.4.2.zip" length="3171217" type="application/octet-stream" sparkle:edSignature="jzsw5klNWBsSTfF7AFHECONAKM3azd3/GF23fRt0aRmGpjbkaYSEBG/DVQVyui6r9xpWO74mNVCtF3sv3leIBg=="/>
+        </item>
+        <item>
             <title>1.4.1</title>
             <pubDate>Thu, 04 Jun 2026 03:04:47 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.0</h2><ul><li><strong>Smart fan mode is calmer and far better spread across the slider.</strong> Each profile now holds a clear target temperature, eases the fans in instead of lurching, and truly idles to silence when nothing&#x27;s going on.</li><li>New <strong>Smart profile selector</strong>: snap between Silent, Quiet, Balanced, Brisk and Cool, each showing the temperature it holds, with a live readout of what Smart is doing right now and a thumb that shifts colour as it works.</li><li>Fixed Smart running too hard: idle no longer spins the fans up, and the cooler profiles are now distinct instead of all pinning to maximum.</li><li><strong>Extended temperature view</strong> (Settings): see the full grouped sensor map - CPU clusters, GPU, SSD, power delivery and more - instead of the short list.</li><li><strong>Verbose Smart output</strong> (Settings): a diagram showing exactly what Smart is thinking - the temperature it controls on, the target it holds, and how it builds the fan demand.</li><li>The sensor list no longer briefly drops CPU sensors on a glitchy reading, and the &quot;CPU&quot; row is now clearly labelled &quot;CPU (max)&quot; beside the die average.</li><li>Lower energy use: live gauges and animations pause while the panel is hidden.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.0/Oxine-1.4.0.zip" length="3155990" type="application/octet-stream" sparkle:edSignature="Niz1894Q2PKpqlHBbcTXFKqu0RFT+I5Uh5wYAGitX1ibsCKncfCAwTz/6v4RB7TChqiGd9vr5GuXW9XWgu/WDA=="/>
-        </item>
-        <item>
-            <title>1.3.0</title>
-            <pubDate>Wed, 03 Jun 2026 04:30:48 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>130</sparkle:version>
-            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.3.0</h2><ul><li><strong>Temper</strong>: a new tab for thermal monitoring and fan control. See live temperatures, CPU load, and macOS thermal pressure on any Mac, fanless models included.</li><li>Drive your fans where the hardware allows: Manual sliders, an adaptive Smart mode that ramps with heat and load, or a custom curve.</li><li>Link fans to move them together, pick which sensor drives the readout, and switch between Celsius and Fahrenheit in Settings.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.3.0/Oxine-1.3.0.zip" length="3046708" type="application/octet-stream" sparkle:edSignature="6uvkR9xrYqfjUY8rHT2KX5g1w0Y/z0tqmiO2Cs1ehxi8Y7njIqIUOMQ+zzhxAUbZQ28BAu2CVx/5k/o/MWqwBw=="/>
         </item>
     </channel>
 </rss>
