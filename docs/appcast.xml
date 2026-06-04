@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.4.3</title>
+            <pubDate>Thu, 04 Jun 2026 12:27:50 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>143</sparkle:version>
+            <sparkle:shortVersionString>1.4.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.3</h2><ul><li><strong>Updates show up on their own again.</strong> Opening Oxine now reliably surfaces an available update, instead of only finding it when you pressed &quot;Check for Updates&quot; by hand.</li><li>Tidied the Smart fan slider: dropped the working-status dot and the thumb&#x27;s glow for a calmer look.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.3/Oxine-1.4.3.zip" length="3167497" type="application/octet-stream" sparkle:edSignature="xtro+5TjWVB66vjBDRZl8M0wN8zuSkfPoDJmKcKtetZBLPTliX7jYnvHJJKTlhxCjfiM0OfTyT1tJgTmg4LWAw=="/>
+        </item>
+        <item>
             <title>1.4.2</title>
             <pubDate>Thu, 04 Jun 2026 11:51:23 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.1</h2><ul><li><strong>Swipe between tabs.</strong> Two-finger swipe left or right across the panel to move through your tabs, with a trackpad tick as each one lands. Keep swiping to skip several at once.</li><li>Tune it in Settings under Navigation: swipe sensitivity, and haptic strength (light, medium, strong, or off).</li><li>Swiping past a Touch ID locked tab no longer pops the system prompt; it waits until you land and tap unlock.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.1/Oxine-1.4.1.zip" length="3163412" type="application/octet-stream" sparkle:edSignature="gRsUQ4vxGQ4H83HDIRjJJd8bP1xo+8ZR7st0YI/WyHHgCSnfwXYwY8JJI1CXZe93x9Y006cDflzP9tftDborDA=="/>
-        </item>
-        <item>
-            <title>1.4.0</title>
-            <pubDate>Thu, 04 Jun 2026 01:12:10 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>140</sparkle:version>
-            <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.0</h2><ul><li><strong>Smart fan mode is calmer and far better spread across the slider.</strong> Each profile now holds a clear target temperature, eases the fans in instead of lurching, and truly idles to silence when nothing&#x27;s going on.</li><li>New <strong>Smart profile selector</strong>: snap between Silent, Quiet, Balanced, Brisk and Cool, each showing the temperature it holds, with a live readout of what Smart is doing right now and a thumb that shifts colour as it works.</li><li>Fixed Smart running too hard: idle no longer spins the fans up, and the cooler profiles are now distinct instead of all pinning to maximum.</li><li><strong>Extended temperature view</strong> (Settings): see the full grouped sensor map - CPU clusters, GPU, SSD, power delivery and more - instead of the short list.</li><li><strong>Verbose Smart output</strong> (Settings): a diagram showing exactly what Smart is thinking - the temperature it controls on, the target it holds, and how it builds the fan demand.</li><li>The sensor list no longer briefly drops CPU sensors on a glitchy reading, and the &quot;CPU&quot; row is now clearly labelled &quot;CPU (max)&quot; beside the die average.</li><li>Lower energy use: live gauges and animations pause while the panel is hidden.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.0/Oxine-1.4.0.zip" length="3155990" type="application/octet-stream" sparkle:edSignature="Niz1894Q2PKpqlHBbcTXFKqu0RFT+I5Uh5wYAGitX1ibsCKncfCAwTz/6v4RB7TChqiGd9vr5GuXW9XWgu/WDA=="/>
         </item>
     </channel>
 </rss>
