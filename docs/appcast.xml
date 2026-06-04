@@ -3,6 +3,16 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.5.2</title>
+            <pubDate>Thu, 04 Jun 2026 20:26:40 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>152</sparkle:version>
+            <sparkle:shortVersionString>1.5.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5.2</h2><ul><li>fix: &quot;update failed&quot; when installing an update</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5.2/Oxine-1.5.2.zip" length="5991746" type="application/octet-stream" sparkle:edSignature="Lk5RH0eBfJI/ZSqslhws3ocZOYhBrg9Gw2RtM6Rf2PGD3Nbn3XjC2tnO6lVxynnw4uuOncghSlMAWPle9aIRCg=="/>
+        </item>
+        <item>
             <title>1.5.1</title>
             <pubDate>Thu, 04 Jun 2026 20:09:30 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
