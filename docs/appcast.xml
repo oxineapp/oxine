@@ -3,6 +3,16 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.5</title>
+            <pubDate>Thu, 04 Jun 2026 19:42:59 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>150</sparkle:version>
+            <sparkle:shortVersionString>1.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5</h2><ul><li>Now notarized by Apple.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5/Oxine-1.5.zip" length="5985007" type="application/octet-stream" sparkle:edSignature="1Fq8X5Hz7GbeQRMpvZ5B11G3LuwZNKlG/bT3hiEji9bflYG+6PHCJI4WxYzLWIlfpKxC6G4n/MKMfGO1k5Y0DQ=="/>
+        </item>
+        <item>
             <title>1.4.4</title>
             <pubDate>Thu, 04 Jun 2026 12:44:48 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -11,7 +21,7 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.4</h2><ul><li>Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they&#x27;re clean now.</li><li>Temper: a fan&#x27;s blades stop turning when it&#x27;s at 0 RPM, instead of drifting forever.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.4/Oxine-1.4.4.zip" length="3169143" type="application/octet-stream" sparkle:edSignature="ZttvQlOruiyLhes50bUChmNqDShkc4KqxqdXT/ZOUcWBfoC1oFP+GAMPYnevOL9i1k/ZRLFKFqo3Ki2f6UM7AA=="/>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.4/Oxine-1.4.4.zip" length="3355042" type="application/octet-stream" sparkle:edSignature="jg64gUsw/02IlfrntRTlsD5RNQz2b6F1+CEyxYhpNOaWEH8oGMCmgDGVOxoJ511Z/TDSao77QuJ8M2xIEAmLBg=="/>
         </item>
         <item>
             <title>1.4.3</title>
