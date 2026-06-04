@@ -180,12 +180,14 @@ FW="$DIST/$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [ "$DEV_ID" = "1" ]; then
   # Notarization requires every nested executable signed with a Developer ID,
   # hardened + timestamped, inside-out. Re-sign Sparkle's components under our
-  # identity; the sandboxed Downloader keeps its own entitlements.
-  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" --preserve-metadata=entitlements "$FW/XPCServices/Downloader.xpc" 2>/dev/null \
-    || codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/XPCServices/Downloader.xpc"
-  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/XPCServices/Installer.xpc"
-  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/Autoupdate"
-  codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$FW/Updater.app"
+  # identity. CRITICAL: --preserve-metadata=entitlements on EVERY component —
+  # Sparkle's XPC services and Autoupdate carry entitlements (e.g. Autoupdate's
+  # application-identifier) that they need at runtime. Re-signing without
+  # preserving them wipes the entitlements and the updater dies with "An error
+  # occurred while running the updater" (the 1.5/1.5.1 regression).
+  for comp in "XPCServices/Downloader.xpc" "XPCServices/Installer.xpc" "Autoupdate" "Updater.app"; do
+    codesign -f -s "$SIGN_ID" "${HARDENED[@]}" --preserve-metadata=entitlements "$FW/$comp"
+  done
   codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 fi
 # Inside-out: helpers (own identifiers), main binary, then seal the whole bundle.
