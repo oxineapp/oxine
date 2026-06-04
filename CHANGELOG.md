@@ -4,6 +4,9 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.5.3
+- fix: Sous/Temper helper no longer adds the developer name to the background-items notice
+
 ## 1.5.2
 - fix: "update failed" when installing an update
 

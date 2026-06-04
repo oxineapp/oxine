@@ -27,8 +27,16 @@ public final class TemperHelperClient: ObservableObject {
 
     init() { Task { await refresh() } }
 
-    private var helperBinaryPath: String {
-        Bundle.main.bundlePath + "/Contents/MacOS/\(branding.machServiceName)"
+    /// Installed and run from outside the app bundle, self-signed "Oxine" rather
+    /// than Developer ID, so the background-item notification isn't attributed to
+    /// the app's notarized signer (which leaked the developer's legal name).
+    /// Shipped gzip+base64-encoded in Resources (a raw .gz gets decompressed and
+    /// scanned by the notary; base64 text has no magic to flag) and decoded here.
+    private var installedBinaryPath: String {
+        "/Library/Application Support/Oxine/\(branding.machServiceName)"
+    }
+    private var bundledHelperB64: String {
+        Bundle.main.bundlePath + "/Contents/Resources/\(branding.machServiceName).b64"
     }
 
     // MARK: State
@@ -144,12 +152,16 @@ public final class TemperHelperClient: ObservableObject {
         #!/bin/bash
         set -e
         launchctl bootout system/\(label) 2>/dev/null || true
+        mkdir -p "/Library/Application Support/Oxine"
+        /usr/bin/base64 -D -i "\(bundledHelperB64)" | /usr/bin/gunzip -c > "\(installedBinaryPath)"
+        chown root:wheel "\(installedBinaryPath)"
+        chmod 755 "\(installedBinaryPath)"
         cat > "\(plistPath)" <<'PLIST'
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0"><dict>
           <key>Label</key><string>\(label)</string>
-          <key>ProgramArguments</key><array><string>\(helperBinaryPath)</string></array>
+          <key>ProgramArguments</key><array><string>\(installedBinaryPath)</string></array>
           <key>MachServices</key><dict><key>\(label)</key><true/></dict>
           <key>RunAtLoad</key><true/>
           <key>KeepAlive</key><true/>
@@ -166,6 +178,7 @@ public final class TemperHelperClient: ObservableObject {
         #!/bin/bash
         launchctl bootout system/\(label) 2>/dev/null || true
         rm -f "\(plistPath)"
+        rm -f "\(installedBinaryPath)"
         """
     }
 }

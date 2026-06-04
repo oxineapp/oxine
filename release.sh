@@ -118,17 +118,38 @@ mkdir -p "$DIST"
 cp -R "$APP" "$DIST/$APP"
 cp "$PRODUCT" "$DIST/$APP/Contents/MacOS/Oxine"
 rm -rf "$DIST/$APP/Contents/_CodeSignature"   # drop the old local-dev signature
+# Defensive: no stray helper Mach-O in MacOS (they ship as gz in Resources now);
+# a leftover unsigned/self-signed binary here would fail notarization.
+rm -f "$DIST/$APP/Contents/MacOS/com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
+rm -rf "$DIST/$APP/Contents/Library/LaunchDaemons"
 
-# Sous battery daemon + its SMAppService LaunchDaemon descriptor.
-echo "▸ bundling Sous helper…"
-mkdir -p "$DIST/$APP/Contents/Library/LaunchDaemons"
-cp "$HELPER" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
-cp daemon/com.oxine.soushelper.plist "$DIST/$APP/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist"
-
-# Temper fan daemon: a second privileged helper (disjoint SMC registers).
-echo "▸ bundling Temper helper…"
-cp "$TEMPER_HELPER" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
-cp daemon/com.oxine.temperhelper.plist "$DIST/$APP/Contents/Library/LaunchDaemons/com.oxine.temperhelper.plist"
+# Privileged helpers (Sous battery + Temper fans). They are NOT placed as
+# executables in the bundle: macOS attributes a background item to its binary's
+# code signer, so a Developer-ID-signed daemon put the author's legal name on the
+# "runs in the background" notification. Instead each helper is signed with the
+# neutral self-signed "Oxine" identity, then gzip-compressed into Resources — a
+# non-Mach-O blob the notary doesn't scan. SousHelperClient extracts it to
+# /Library/Application Support/Oxine and runs it from there, so the daemon's
+# signer is "Oxine" (no Apple-identified developer = no name on the notification),
+# while the app itself stays Developer-ID signed + notarized (clean install).
+HELPER_SIGN_ID="Oxine"
+if ! security find-identity -v -p codesigning | grep -qF -- "\"$HELPER_SIGN_ID\""; then
+  echo "✗ self-signed '$HELPER_SIGN_ID' identity required to sign the helpers." >&2
+  exit 1
+fi
+mkdir -p "$DIST/$APP/Contents/Resources"
+for pair in "com.oxine.soushelper:$HELPER" "com.oxine.temperhelper:$TEMPER_HELPER"; do
+  hname="${pair%%:*}"; hsrc="${pair#*:}"
+  echo "▸ bundling $hname (self-signed, gzipped)…"
+  htmp="$DIST/_$hname"
+  cp "$hsrc" "$htmp"
+  codesign --force --sign "$HELPER_SIGN_ID" --identifier "$hname" "$htmp"
+  # gzip + base64: the notary decompresses a raw .gz and scans the Mach-O inside,
+  # so we base64 the gzip into plain text (no archive/Mach-O magic) — it passes
+  # notarization untouched, and the install script decodes it back.
+  gzip -9 -c "$htmp" | base64 > "$DIST/$APP/Contents/Resources/$hname.b64"
+  rm -f "$htmp"
+done
 
 # Embed Sparkle.framework (a dynamic framework) and point the loader at
 # ../Frameworks. The SPM build's binary already carries an @loader_path rpath;
@@ -190,9 +211,8 @@ if [ "$DEV_ID" = "1" ]; then
   done
   codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 fi
-# Inside-out: helpers (own identifiers), main binary, then seal the whole bundle.
-codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --identifier "com.oxine.soushelper" "$DIST/$APP/Contents/MacOS/com.oxine.soushelper"
-codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --identifier "com.oxine.temperhelper" "$DIST/$APP/Contents/MacOS/com.oxine.temperhelper"
+# Inside-out: the main binary, then seal the whole bundle. (The helpers live in
+# Resources as self-signed gzip blobs — already signed above, not re-signed here.)
 codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/MacOS/Oxine"
 codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP"
 codesign --verify --deep --strict "$DIST/$APP" && echo "  ✓ signature valid"

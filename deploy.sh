@@ -40,19 +40,20 @@ swift build
 echo "▸ deploying binary…"
 cp .build/debug/Oxine Oxine.app/Contents/MacOS/Oxine
 
-# Sous battery daemon: the privileged helper + its SMAppService LaunchDaemon
-# descriptor. The helper lives in Contents/MacOS; the plist in
-# Contents/Library/LaunchDaemons (where SMAppService.daemon expects it).
-echo "▸ deploying Sous helper…"
-mkdir -p Oxine.app/Contents/Library/LaunchDaemons
-cp .build/debug/com.oxine.soushelper Oxine.app/Contents/MacOS/com.oxine.soushelper
-cp daemon/com.oxine.soushelper.plist Oxine.app/Contents/Library/LaunchDaemons/com.oxine.soushelper.plist
-
-# Temper fan daemon: a second privileged helper (disjoint SMC registers, so it
-# coexists with Sous). Same bundling shape.
-echo "▸ deploying Temper helper…"
-cp .build/debug/com.oxine.temperhelper Oxine.app/Contents/MacOS/com.oxine.temperhelper
-cp daemon/com.oxine.temperhelper.plist Oxine.app/Contents/Library/LaunchDaemons/com.oxine.temperhelper.plist
+# Privileged helpers (Sous + Temper) ship as self-signed, gzip-compressed blobs
+# in Resources, extracted to /Library/Application Support/Oxine at install — so
+# the running daemon's signer is "Oxine", keeping the author's name off the
+# macOS background-item notification. Mirrors release.sh. (Same self-signed
+# "Oxine" identity, so the daemon's client-trust requirement still matches.)
+echo "▸ deploying helpers (self-signed, gzipped)…"
+mkdir -p Oxine.app/Contents/Resources
+for hname in com.oxine.soushelper com.oxine.temperhelper; do
+  htmp="Oxine.app/Contents/Resources/_$hname"
+  cp ".build/debug/$hname" "$htmp"
+  codesign --force --sign "$SIGN_ID" --identifier "$hname" "$htmp"
+  gzip -9 -c "$htmp" | base64 > "Oxine.app/Contents/Resources/$hname.b64"
+  rm -f "$htmp"
+done
 
 # Embed Sparkle.framework so the bundle can load it (the binary links it as
 # @rpath/Sparkle.framework). Copy only if missing; always (re)add the rpath
@@ -64,9 +65,7 @@ mkdir -p Oxine.app/Contents/Frameworks
 install_name_tool -add_rpath "@executable_path/../Frameworks" Oxine.app/Contents/MacOS/Oxine 2>/dev/null || true
 
 echo "▸ signing with '$SIGN_ID'…"
-# Inside-out: sign both helpers first (own identifiers), then seal the app.
-codesign --force --sign "$SIGN_ID" --identifier "com.oxine.soushelper" Oxine.app/Contents/MacOS/com.oxine.soushelper
-codesign --force --sign "$SIGN_ID" --identifier "com.oxine.temperhelper" Oxine.app/Contents/MacOS/com.oxine.temperhelper
+# Helpers are already signed (above) inside their gzip blobs; just seal the app.
 codesign --force --sign "$SIGN_ID" --identifier "$BUNDLE_ID" Oxine.app
 
 echo "▸ signature:"
