@@ -385,6 +385,22 @@ private struct ReleaseNotesView: NSViewRepresentable {
                 ? NSFont.systemFont(ofSize: size, weight: .semibold)
                 : NSFont.systemFont(ofSize: size), range: range)
         }
+        // The HTML importer gives each <li> BOTH an NSTextList (TextKit draws a
+        // "•") AND a literal "\t•\t" in the text, so every bullet renders twice
+        // under a fat 36pt indent. Drop the text list to kill the duplicate marker
+        // and set a tight hanging indent so the in-string bullet sits with its text.
+        s.enumerateAttribute(.paragraphStyle, in: full) { value, range, _ in
+            guard let p = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle,
+                  !p.textLists.isEmpty else { return }
+            p.textLists = []
+            p.firstLineHeadIndent = 2
+            p.headIndent = 16
+            p.defaultTabInterval = 16
+            p.tabStops = [NSTextTab(textAlignment: .left, location: 8),
+                          NSTextTab(textAlignment: .left, location: 16)]
+            p.paragraphSpacing = 4
+            s.addAttribute(.paragraphStyle, value: p, range: range)
+        }
         s.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.8), range: full)
         return s
     }

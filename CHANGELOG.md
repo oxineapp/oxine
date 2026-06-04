@@ -4,6 +4,10 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 1.4.4
+- Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they're clean now.
+- Temper: a fan's blades stop turning when it's at 0 RPM, instead of drifting forever.
+
 ## 1.4.3
 - **Updates show up on their own again.** Opening Oxine now reliably surfaces an available update, instead of only finding it when you pressed "Check for Updates" by hand.
 - Tidied the Smart fan slider: dropped the working-status dot and the thumb's glow for a calmer look.

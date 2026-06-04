@@ -447,7 +447,7 @@ public struct TemperView: View {
         let commanded = temper.commandedPercent(for: fan)
         let knobPercent = commanded ?? fan.fraction * 100
         return HStack(spacing: 12) {
-            SpinningFan(revsPerSecond: 0.1 + fan.fraction * 2.4, color: accent.opacity(0.85), size: 18)
+            SpinningFan(revsPerSecond: fan.actualRPM > 0 ? 0.1 + fan.fraction * 2.4 : 0, color: accent.opacity(0.85), size: 18)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -684,18 +684,27 @@ struct SpinningFan: View {
     @State private var store = SpinStore()
     @ObservedObject private var visibility = PanelVisibility.shared
 
+    /// A stopped fan (0 RPM) shouldn't keep turning. Freeze the blades and pause the
+    /// timeline so it costs nothing, exactly like the offscreen case.
+    private var isStopped: Bool { revsPerSecond <= 0 }
+
     var body: some View {
-        // Pause the timeline when the panel is hidden: `TimelineView(.animation)`
-        // otherwise redraws at the display refresh rate forever, even off-screen.
-        TimelineView(.animation(paused: !visibility.isOpen)) { ctx in
+        // Pause the timeline when the panel is hidden or the fan is stopped:
+        // `TimelineView(.animation)` otherwise redraws at the display refresh rate
+        // forever, even off-screen or for a motionless fan.
+        TimelineView(.animation(paused: !visibility.isOpen || isStopped)) { ctx in
             let now = ctx.date.timeIntervalSinceReferenceDate
             // Integrate angle over real elapsed time and ease the rate toward its
             // target, so a new RPM reading changes the *speed* smoothly and never
             // jumps the *position* (which is what made it look jittery).
             let dt = min(max(store.last.map { now - $0 } ?? 0, 0), 0.1)   // clamp across sleeps
             store.last = now
-            store.rate += (revsPerSecond - store.rate) * min(dt * 4, 1)
-            store.phase = (store.phase + dt * store.rate).truncatingRemainder(dividingBy: 1)
+            if isStopped {
+                store.rate = 0                         // hold position; spin up smoothly later
+            } else {
+                store.rate += (revsPerSecond - store.rate) * min(dt * 4, 1)
+                store.phase = (store.phase + dt * store.rate).truncatingRemainder(dividingBy: 1)
+            }
             return Image(systemName: "fanblades.fill")
                 .font(.system(size: size))
                 .foregroundStyle(color)
