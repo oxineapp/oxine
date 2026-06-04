@@ -3,6 +3,16 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.5.3</title>
+            <pubDate>Thu, 04 Jun 2026 22:52:33 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>153</sparkle:version>
+            <sparkle:shortVersionString>1.5.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5.3</h2><ul><li>fix: Sous/Temper helper no longer adds the developer name to the background-items notice</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5.3/Oxine-1.5.3.zip" length="5970411" type="application/octet-stream" sparkle:edSignature="nfYmt+qhS2m/pDHBt9nquooFRlrAnZAn0V9r5Ti4JkB4VvMd6jhrD9/LrCUe8pNp18yDNChIsBPYtaXAq3hCBA=="/>
+        </item>
+        <item>
             <title>1.5.2</title>
             <pubDate>Thu, 04 Jun 2026 20:26:40 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -21,16 +31,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5.1</h2><ul><li>fix: updates show on open right after a release</li><li>fix: Sous/Temper helper relinks itself after an update</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5.1/Oxine-1.5.1.zip" length="5991040" type="application/octet-stream" sparkle:edSignature="O3L00hTFNXNIhHbZDdWXpeE5LTV3BHtCvUuNbwPIJVm90YnoMfDbF/KmMd2HdNYk8KajfGYcMGDVyGioCuK/Dw=="/>
-        </item>
-        <item>
-            <title>1.5</title>
-            <pubDate>Thu, 04 Jun 2026 19:42:59 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>150</sparkle:version>
-            <sparkle:shortVersionString>1.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5</h2><ul><li>Now notarized by Apple.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5/Oxine-1.5.zip" length="5985007" type="application/octet-stream" sparkle:edSignature="1Fq8X5Hz7GbeQRMpvZ5B11G3LuwZNKlG/bT3hiEji9bflYG+6PHCJI4WxYzLWIlfpKxC6G4n/MKMfGO1k5Y0DQ=="/>
         </item>
         <item>
             <title>1.4.4</title>
