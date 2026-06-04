@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>1.4.4</title>
+            <pubDate>Thu, 04 Jun 2026 12:44:48 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>144</sparkle:version>
+            <sparkle:shortVersionString>1.4.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.4</h2><ul><li>Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they&#x27;re clean now.</li><li>Temper: a fan&#x27;s blades stop turning when it&#x27;s at 0 RPM, instead of drifting forever.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.4/Oxine-1.4.4.zip" length="3169143" type="application/octet-stream" sparkle:edSignature="ZttvQlOruiyLhes50bUChmNqDShkc4KqxqdXT/ZOUcWBfoC1oFP+GAMPYnevOL9i1k/ZRLFKFqo3Ki2f6UM7AA=="/>
+        </item>
+        <item>
             <title>1.4.3</title>
             <pubDate>Thu, 04 Jun 2026 12:27:50 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.2</h2><ul><li><strong>Smart fan mode now steers on the CPU die average, not the hottest core.</strong> A single core spiking no longer over-revs the fans; Smart holds its setpoint against the calmer, representative temperature. (Updates the fan helper on first launch, one prompt.)</li><li>New <strong>One tab per swipe</strong> option (Settings under Navigation) for when you&#x27;d rather each swipe move exactly one tab instead of gliding through several.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.2/Oxine-1.4.2.zip" length="3171217" type="application/octet-stream" sparkle:edSignature="jzsw5klNWBsSTfF7AFHECONAKM3azd3/GF23fRt0aRmGpjbkaYSEBG/DVQVyui6r9xpWO74mNVCtF3sv3leIBg=="/>
-        </item>
-        <item>
-            <title>1.4.1</title>
-            <pubDate>Thu, 04 Jun 2026 03:04:47 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>141</sparkle:version>
-            <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.1</h2><ul><li><strong>Swipe between tabs.</strong> Two-finger swipe left or right across the panel to move through your tabs, with a trackpad tick as each one lands. Keep swiping to skip several at once.</li><li>Tune it in Settings under Navigation: swipe sensitivity, and haptic strength (light, medium, strong, or off).</li><li>Swiping past a Touch ID locked tab no longer pops the system prompt; it waits until you land and tap unlock.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.1/Oxine-1.4.1.zip" length="3163412" type="application/octet-stream" sparkle:edSignature="gRsUQ4vxGQ4H83HDIRjJJd8bP1xo+8ZR7st0YI/WyHHgCSnfwXYwY8JJI1CXZe93x9Y006cDflzP9tftDborDA=="/>
         </item>
     </channel>
 </rss>
