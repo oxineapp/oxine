@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>2.0.2</title>
+            <pubDate>Sat, 06 Jun 2026 19:57:34 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>202</sparkle:version>
+            <sparkle:shortVersionString>2.0.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.0.2</h2><ul><li>fix: now playing now works in the released build, including system wide (browsers and other apps), not just Music and Spotify.</li><li>fix: the agent status grid stops hogging the side after a turn finishes. The tick shows briefly, then the side goes back to music. Stuck states also clear on their own if the CLI is closed.</li><li>fix: clearer agent states. The pixel &quot;?&quot; shows for a real permission prompt; the idle &quot;waiting&quot; notice no longer latches it.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.0.2/Oxine-2.0.2.zip" length="4209980" type="application/octet-stream" sparkle:edSignature="kEpc7iphuoZmFASHxddNDfsxPjisS2PFklJISH1EGcAgNHprbdsHeU0VaenTC0nEzEEsNisj05fRcXyktnpyAg=="/>
+        </item>
+        <item>
             <title>2.0.1</title>
             <pubDate>Sat, 06 Jun 2026 19:29:48 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -53,17 +64,6 @@
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.5.1</h2><ul><li>fix: updates show on open right after a release</li><li>fix: Sous/Temper helper relinks itself after an update</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.5.1/Oxine-1.5.1.zip" length="5991040" type="application/octet-stream" sparkle:edSignature="O3L00hTFNXNIhHbZDdWXpeE5LTV3BHtCvUuNbwPIJVm90YnoMfDbF/KmMd2HdNYk8KajfGYcMGDVyGioCuK/Dw=="/>
-        </item>
-        <item>
-            <title>1.4.4</title>
-            <pubDate>Thu, 04 Jun 2026 12:44:48 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>144</sparkle:version>
-            <sparkle:shortVersionString>1.4.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.4</h2><ul><li>Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they&#x27;re clean now.</li><li>Temper: a fan&#x27;s blades stop turning when it&#x27;s at 0 RPM, instead of drifting forever.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.4/Oxine-1.4.4.zip" length="3355042" type="application/octet-stream" sparkle:edSignature="jg64gUsw/02IlfrntRTlsD5RNQz2b6F1+CEyxYhpNOaWEH8oGMCmgDGVOxoJ511Z/TDSao77QuJ8M2xIEAmLBg=="/>
         </item>
     </channel>
 </rss>
