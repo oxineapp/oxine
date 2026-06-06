@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>2.0.1</title>
+            <pubDate>Sat, 06 Jun 2026 19:29:48 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>201</sparkle:version>
+            <sparkle:shortVersionString>2.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.0.1</h2><ul><li>fix: the notch no longer jumps back to Home on its own. It stays on the tab you picked.</li><li>fix: the glanceable calendar loads much faster, and no longer asks for permission you already gave.</li><li>New: a Permissions panel in Settings (Notch) to re-check or re-ask for Calendar, Location, and Camera, handy after an update.</li><li>fix: the agent status grid no longer gets stuck on the &quot;waiting&quot; glyph after a turn finishes. (Re-install the hooks from Settings to pick this up.)</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.0.1/Oxine-2.0.1.zip" length="4120533" type="application/octet-stream" sparkle:edSignature="46Jrz2WHOC7OklNE9p4vJV/c2s7T3X9mG2HZB4XMBoMKUjmampQMs7xkDNDP8xxrd7GlJ8ULVxmhAy2YRR5nCw=="/>
+        </item>
+        <item>
             <title>2.0</title>
             <pubDate>Sat, 06 Jun 2026 19:09:18 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -53,17 +64,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.4</h2><ul><li>Fixed the release notes in the update window rendering with doubled bullets and a deep indent; they&#x27;re clean now.</li><li>Temper: a fan&#x27;s blades stop turning when it&#x27;s at 0 RPM, instead of drifting forever.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.4/Oxine-1.4.4.zip" length="3355042" type="application/octet-stream" sparkle:edSignature="jg64gUsw/02IlfrntRTlsD5RNQz2b6F1+CEyxYhpNOaWEH8oGMCmgDGVOxoJ511Z/TDSao77QuJ8M2xIEAmLBg=="/>
-        </item>
-        <item>
-            <title>1.4.3</title>
-            <pubDate>Thu, 04 Jun 2026 12:27:50 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>143</sparkle:version>
-            <sparkle:shortVersionString>1.4.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 1.4.3</h2><ul><li><strong>Updates show up on their own again.</strong> Opening Oxine now reliably surfaces an available update, instead of only finding it when you pressed &quot;Check for Updates&quot; by hand.</li><li>Tidied the Smart fan slider: dropped the working-status dot and the thumb&#x27;s glow for a calmer look.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v1.4.3/Oxine-1.4.3.zip" length="3167497" type="application/octet-stream" sparkle:edSignature="xtro+5TjWVB66vjBDRZl8M0wN8zuSkfPoDJmKcKtetZBLPTliX7jYnvHJJKTlhxCjfiM0OfTyT1tJgTmg4LWAw=="/>
         </item>
     </channel>
 </rss>
