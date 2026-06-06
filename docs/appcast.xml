@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>2.0.3</title>
+            <pubDate>Sat, 06 Jun 2026 20:22:18 +0200</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>203</sparkle:version>
+            <sparkle:shortVersionString>2.0.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.0.3</h2><ul><li>fix: Calendar, Location (Weather), Camera (Mirror), and now playing permissions can actually be granted now. The release build was missing the entitlements the hardened runtime needs, so the permission prompt never appeared. If a permission looks stuck, use Settings → Notch → Permissions to re-check.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.0.3/Oxine-2.0.3.zip" length="4210390" type="application/octet-stream" sparkle:edSignature="lqPKDybUIcnU+FKkU5sjlIt45VFrBYsACWAlc7L+6aGAO/uPQogc4YZtUSVB4gW6dZW25nrYYaeyfdTUSdcEAQ=="/>
+        </item>
+        <item>
             <title>2.0.2</title>
             <pubDate>Sat, 06 Jun 2026 19:57:34 +0200</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.0.1</h2><ul><li>fix: the notch no longer jumps back to Home on its own. It stays on the tab you picked.</li><li>fix: the glanceable calendar loads much faster, and no longer asks for permission you already gave.</li><li>New: a Permissions panel in Settings (Notch) to re-check or re-ask for Calendar, Location, and Camera, handy after an update.</li><li>fix: the agent status grid no longer gets stuck on the &quot;waiting&quot; glyph after a turn finishes. (Re-install the hooks from Settings to pick this up.)</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.0.1/Oxine-2.0.1.zip" length="4120533" type="application/octet-stream" sparkle:edSignature="46Jrz2WHOC7OklNE9p4vJV/c2s7T3X9mG2HZB4XMBoMKUjmampQMs7xkDNDP8xxrd7GlJ8ULVxmhAy2YRR5nCw=="/>
-        </item>
-        <item>
-            <title>2.0</title>
-            <pubDate>Sat, 06 Jun 2026 19:09:18 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>200</sparkle:version>
-            <sparkle:shortVersionString>2.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.0</h2><ul><li><strong>New: the Notch.</strong> Oxine now lives in your MacBook&#x27;s notch too. Hover to expand it, move away to collapse. It has its own tabs you can pick and reorder.</li><li><strong>Now Playing</strong> with album art, a scrolling title, transport controls, and a live visualizer beside the cutout. Reads any app system wide, or just Music and Spotify, your choice.</li><li><strong>Shelf</strong> for drag and drop. Drop files in to stash them, drag them back out (it moves, not copies), or drop them on the AirDrop tile to send.</li><li><strong>Glanceable Calendar</strong>, a waveform timeline of your next hour. Each event takes its calendar&#x27;s colour, overlapping meetings both show, and a cursor rides across &quot;now&quot;.</li><li><strong>Weather</strong>, local conditions with an hourly strip plus feels like, humidity, AQI, wind, and UV. No account or key needed.</li><li><strong>Mirror</strong>, a quick front camera preview when you need it.</li><li><strong>Volume and brightness in the notch.</strong> Change either and the level shows right in the cutout, with a rolling number.</li><li><strong>Agent monitoring.</strong> Keep an eye on Claude Code and Codex while you work. A little pixel grid beside the notch shows when an agent is working, finished, or waiting on you. Install the hooks in one tap from Settings.</li><li><strong>Configurable notch sides.</strong> Pick what each side shows (album art, visualizer, agent status, CPU), or leave it on Smart to blend them by what&#x27;s happening.</li><li><strong>Optional notch outline</strong> that traces the cutout and glows with activity.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.0/Oxine-2.0.zip" length="4095994" type="application/octet-stream" sparkle:edSignature="eI20G1b1X6Ug3RMAzfVJN3ax07DvqH8syik0EDzvlO1CgsifORJK+fn9MzM2DS3IyTHscNt5RSKnKydRXzoHBQ=="/>
         </item>
         <item>
             <title>1.5.3</title>
