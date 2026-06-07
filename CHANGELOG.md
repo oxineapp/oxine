@@ -4,6 +4,15 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.1.1
+- New: split the notch bar to show two metrics at once (Settings → Notch) — each half fills inward from its edge.
+- New: Home "player only" layout (Settings → Notch → Home widget → None) gives the player the full width.
+- fix: the notch bar now hugs the real ear sizes on both sides, collapses cleanly when a side is empty, and stays hidden until the notch is fully closed.
+- fix: now playing shows video apps like QuickTime and browser video, with a working scrubber, and falls back to the app's name and icon when there's no track artwork.
+- fix: drag and drop is no longer blocked in the area beneath the notch.
+- fix: the notch bar no longer hides itself wrongly on multi-monitor setups (removed a faulty fullscreen check).
+- perf: lighter, smoother notch — the bar refreshes at a fixed cadence instead of on every system update, and artwork is downsampled, cutting stutter.
+
 ## 2.1.0
 - New: a notch bar that fills left to right with a live metric. Pick CPU, GPU, fan speed, or your Claude 5 hour usage in Settings → Notch. It hugs the notch and ears, and steps aside when you open the notch.
 - fix: the now playing visualizer winds down smoothly when you pause instead of cutting out, and starts cleanly on play.
