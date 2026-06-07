@@ -165,6 +165,19 @@ mkdir -p "$DIST/$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FW" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$DIST/$APP/Contents/MacOS/Oxine" 2>/dev/null || true
 
+# System-wide now playing: the mediaremote-adapter perl shim (Resources) + its
+# framework (Frameworks). Unlike deploy.sh — which keeps the upstream ad-hoc
+# signature because it never notarizes — a notarized release MUST re-sign the
+# framework with our Developer ID + hardened runtime (in the signing block below)
+# or the notary rejects it. /usr/bin/perl does not enforce library validation (it
+# loads the ad-hoc build fine), so a valid Developer-ID signature loads the same.
+# Without this the released app has no system-wide now playing (browsers etc.) and
+# only ScriptingBridge (Music/Spotify) works.
+echo "▸ embedding mediaremote-adapter…"
+mkdir -p "$DIST/$APP/Contents/Resources"
+cp vendor/mediaremote-adapter/mediaremote-adapter.pl "$DIST/$APP/Contents/Resources/mediaremote-adapter.pl"
+cp -R vendor/mediaremote-adapter/MediaRemoteAdapter.framework "$DIST/$APP/Contents/Frameworks/MediaRemoteAdapter.framework"
+
 # Signing identity. Default: neutral self-signed "Oxine" (CN=Oxine; first launch
 # is quarantined → right-click Open). Opt into a clean, no-prompt install by
 # exporting a Developer ID:
@@ -210,11 +223,20 @@ if [ "$DEV_ID" = "1" ]; then
     codesign -f -s "$SIGN_ID" "${HARDENED[@]}" --preserve-metadata=entitlements "$FW/$comp"
   done
   codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/Frameworks/Sparkle.framework"
+  # Re-sign the now-playing adapter framework under our Developer ID + hardened
+  # runtime so the notary accepts it (it ships with an upstream ad-hoc signature).
+  if [ -d "$DIST/$APP/Contents/Frameworks/MediaRemoteAdapter.framework" ]; then
+    codesign -f -s "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/Frameworks/MediaRemoteAdapter.framework"
+  fi
 fi
 # Inside-out: the main binary, then seal the whole bundle. (The helpers live in
 # Resources as self-signed gzip blobs — already signed above, not re-signed here.)
-codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP/Contents/MacOS/Oxine"
-codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" "$DIST/$APP"
+# --entitlements: under hardened runtime, tccd refuses to even PROMPT for a TCC
+# permission unless the app declares the matching resource entitlement
+# (calendars/location/camera/apple-events). Without this the notarized release
+# silently can't request any of them ("requires entitlement … but it is missing").
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --entitlements Oxine.entitlements "$DIST/$APP/Contents/MacOS/Oxine"
+codesign --force --sign "$SIGN_ID" "${HARDENED[@]}" --entitlements Oxine.entitlements "$DIST/$APP"
 codesign --verify --deep --strict "$DIST/$APP" && echo "  ✓ signature valid"
 echo "  binary: $(lipo -archs "$DIST/$APP/Contents/MacOS/Oxine")"
 

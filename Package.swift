@@ -19,10 +19,16 @@ let package = Package(
         // Temper (thermal/performance + fan control) as reusable products too.
         .library(name: "TemperKit", targets: ["TemperKit"]),
         .library(name: "TemperShared", targets: ["TemperShared"]),
-        .library(name: "TemperHelperCore", targets: ["TemperHelperCore"])
+        .library(name: "TemperHelperCore", targets: ["TemperHelperCore"]),
+        // NotchKit: the brand-neutral notch-companion engine + built-in modules,
+        // built on PanelKit chrome. Reusable like the other kits.
+        .library(name: "NotchKit", targets: ["NotchKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
+        // The proven notch presentation layer (window, shape, geometry, fluid
+        // expand/compact + hover). NotchKit wraps this and contributes modules.
+        .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.1.0")
     ],
     targets: [
         // Types shared verbatim across the app↔daemon XPC boundary.
@@ -79,6 +85,16 @@ let package = Package(
             name: "TemperKit",
             dependencies: ["TemperShared", "PanelKit"]
         ),
+        // The notch companion as a reusable module: the notch window/geometry/
+        // state engine, the module protocol, and the built-in modules (now playing,
+        // mirror, shelf, calendar). Built on PanelKit chrome + theme.
+        .target(
+            name: "NotchKit",
+            dependencies: [
+                "PanelKit",
+                .product(name: "DynamicNotchKit", package: "DynamicNotchKit")
+            ]
+        ),
         .executableTarget(
             name: "Oxine",
             dependencies: [
@@ -87,6 +103,7 @@ let package = Package(
                 "SousKit",
                 "TemperShared",
                 "TemperKit",
+                "NotchKit",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: []

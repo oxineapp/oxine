@@ -2,6 +2,7 @@ import SwiftUI
 import PanelKit
 import SousKit
 import TemperKit
+import NotchKit
 import AppKit
 import Combine
 
@@ -100,6 +101,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         observeSous()
         observeTemper()
         observeCaffeine()
+        // The notch companion: its own top-of-screen surface, independent of the
+        // dropdown panel. Safe to start late — it brings itself up if enabled.
+        NotchCoordinator.shared.start()
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()
     }
@@ -270,10 +274,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// dispatcher fires on the main thread; we still hop to the main actor to
     /// satisfy isolation and avoid capturing self in the C handler.
     private func setupGlobalHotKey() {
-        GlobalHotKey.shared.setHandler {
+        GlobalHotKey.shared.setHandler(id: ShortcutManager.shared.id) {
             Task { @MainActor in AppDelegate.instance?.togglePanel() }
         }
-        ShortcutManager.shared.apply()
+        GlobalHotKey.shared.setHandler(id: ShortcutManager.notch.id) {
+            Task { @MainActor in NotchCoordinator.shared.toggle() }
+        }
+        ShortcutManager.all.forEach { $0.apply() }
     }
 
     private func setupEventMonitoring() {

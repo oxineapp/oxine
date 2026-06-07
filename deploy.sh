@@ -11,6 +11,13 @@
 set -e
 cd "$(dirname "$0")"
 
+# DynamicNotchKit (the notch presentation layer) uses the SwiftUI @Entry/#Preview
+# macros, whose plugins ship with Xcode but NOT the bare CommandLineTools. Prefer
+# the full Xcode toolchain when it's installed so the build resolves those macros.
+if [ -z "$DEVELOPER_DIR" ] && [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+fi
+
 SIGN_ID="Oxine Dev"          # self-signed code-signing identity (see README/setup)
 BUNDLE_ID="com.oxine.app"    # must stay stable; part of the keychain trust anchor
 
@@ -63,6 +70,15 @@ SPARKLE_FW=$(find .build/artifacts -path "*macos-arm64_x86_64/Sparkle.framework"
 mkdir -p Oxine.app/Contents/Frameworks
 [ -d "Oxine.app/Contents/Frameworks/Sparkle.framework" ] || cp -R "$SPARKLE_FW" Oxine.app/Contents/Frameworks/Sparkle.framework
 install_name_tool -add_rpath "@executable_path/../Frameworks" Oxine.app/Contents/MacOS/Oxine 2>/dev/null || true
+
+# System-wide now playing: the mediaremote-adapter perl shim (Resources) + its
+# framework (Frameworks). Embedded AS-IS with its upstream signature — exactly
+# like Sparkle — NOT re-signed: the system /usr/bin/perl that dlopen's it enforces
+# library validation, which a re-sign with our self-signed dev cert fails.
+echo "▸ embedding mediaremote-adapter…"
+cp vendor/mediaremote-adapter/mediaremote-adapter.pl Oxine.app/Contents/Resources/mediaremote-adapter.pl
+rm -rf Oxine.app/Contents/Frameworks/MediaRemoteAdapter.framework
+cp -R vendor/mediaremote-adapter/MediaRemoteAdapter.framework Oxine.app/Contents/Frameworks/MediaRemoteAdapter.framework
 
 echo "▸ signing with '$SIGN_ID'…"
 # Helpers are already signed (above) inside their gzip blobs; just seal the app.

@@ -4,6 +4,38 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.1.0
+- New: a notch bar that fills left to right with a live metric. Pick CPU, GPU, fan speed, or your Claude 5 hour usage in Settings → Notch. It hugs the notch and ears, and steps aside when you open the notch.
+- fix: the now playing visualizer winds down smoothly when you pause instead of cutting out, and starts cleanly on play.
+- fix: the collapsed now playing sides stay up while paused (album art and bars), and clear only when playback stops.
+- fix: weather loads instantly now. It shows your last reading and refreshes in the background instead of waiting on a fresh location fix.
+
+## 2.0.3
+- fix: Calendar, Location (Weather), Camera (Mirror), and now playing permissions can actually be granted now. The release build was missing the entitlements the hardened runtime needs, so the permission prompt never appeared. If a permission looks stuck, use Settings → Notch → Permissions to re-check.
+
+## 2.0.2
+- fix: now playing now works in the released build, including system wide (browsers and other apps), not just Music and Spotify.
+- fix: the agent status grid stops hogging the side after a turn finishes. The tick shows briefly, then the side goes back to music. Stuck states also clear on their own if the CLI is closed.
+- fix: clearer agent states. The pixel "?" shows for a real permission prompt; the idle "waiting" notice no longer latches it.
+
+## 2.0.1
+- fix: the notch no longer jumps back to Home on its own. It stays on the tab you picked.
+- fix: the glanceable calendar loads much faster, and no longer asks for permission you already gave.
+- New: a Permissions panel in Settings (Notch) to re-check or re-ask for Calendar, Location, and Camera, handy after an update.
+- fix: the agent status grid no longer gets stuck on the "waiting" glyph after a turn finishes. (Re-install the hooks from Settings to pick this up.)
+
+## 2.0
+- **New: the Notch.** Oxine now lives in your MacBook's notch too. Hover to expand it, move away to collapse. It has its own tabs you can pick and reorder.
+  - **Now Playing** with album art, a scrolling title, transport controls, and a live visualizer beside the cutout. Reads any app system wide, or just Music and Spotify, your choice.
+  - **Shelf** for drag and drop. Drop files in to stash them, drag them back out (it moves, not copies), or drop them on the AirDrop tile to send.
+  - **Glanceable Calendar**, a waveform timeline of your next hour. Each event takes its calendar's colour, overlapping meetings both show, and a cursor rides across "now".
+  - **Weather**, local conditions with an hourly strip plus feels like, humidity, AQI, wind, and UV. No account or key needed.
+  - **Mirror**, a quick front camera preview when you need it.
+- **Volume and brightness in the notch.** Change either and the level shows right in the cutout, with a rolling number.
+- **Agent monitoring.** Keep an eye on Claude Code and Codex while you work. A little pixel grid beside the notch shows when an agent is working, finished, or waiting on you. Install the hooks in one tap from Settings.
+- **Configurable notch sides.** Pick what each side shows (album art, visualizer, agent status, CPU), or leave it on Smart to blend them by what's happening.
+- **Optional notch outline** that traces the cutout and glows with activity.
+
 ## 1.5.3
 - fix: Sous/Temper helper no longer adds the developer name to the background-items notice
 

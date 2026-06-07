@@ -2,6 +2,7 @@ import SwiftUI
 import PanelKit
 import SousKit
 import TemperKit
+import NotchKit
 import ServiceManagement
 
 /// One row in the Settings root. Settings is a two-level route: the root shows
@@ -10,7 +11,7 @@ import ServiceManagement
 /// flat list so related settings live together (e.g. the editor moved under
 /// Notes, Focus + Caffeine pair up).
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, tabs, notes, clipboard, focus, sous, temper, integrations, shortcuts, about
+    case general, tabs, notes, clipboard, focus, sous, temper, notch, integrations, shortcuts, about
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .focus:        return "Focus & Caffeine"
         case .sous:         return "Sous · Battery"
         case .temper:       return "Temper · Thermal"
+        case .notch:        return "Notch"
         case .integrations: return "Integrations"
         case .shortcuts:    return "Shortcuts"
         case .about:        return "About & Updates"
@@ -38,6 +40,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .focus:        return "moon.stars"
         case .sous:         return "heart.badge.bolt"
         case .temper:       return "fanblades.fill"
+        case .notch:        return "macbook.gen2"
         case .integrations: return "link"
         case .shortcuts:    return "command"
         case .about:        return "info.circle"
@@ -54,6 +57,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .focus:        return "Dimming and keep-awake"
         case .sous:         return "Charge limits & battery health"
         case .temper:       return "Temperatures & fans"
+        case .notch:        return "Media, mirror, shelf at the notch"
         case .integrations: return "justtype sync"
         case .shortcuts:    return "Keyboard shortcuts"
         case .about:        return "Version, updates, setup"
@@ -71,6 +75,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .focus:        return ["focus", "dim", "blur", "caffeine", "awake", "sleep"]
         case .sous:         return ["sous", "battery", "charge", "limit", "health", "power"]
         case .temper:       return ["temper", "thermal", "temperature", "fan", "heat", "cpu"]
+        case .notch:        return ["notch", "dynamic", "island", "media", "now playing", "music", "mirror", "camera", "shelf", "airdrop", "drop"]
         case .integrations: return ["integration", "justtype", "sync", "connect", "account"]
         case .shortcuts:    return ["shortcut", "keyboard", "hotkey", "popup"]
         case .about:        return ["about", "version", "update", "software", "quit", "setup"]
@@ -148,6 +153,9 @@ enum SettingIndex {
         SettingEntry("Fan speed / curve", .temper, ["fan", "speed", "rpm", "cooling", "curve", "manual", "mode", "blades", "loud", "quiet"]),
         SettingEntry("Reinstall / repair fan helper", .temper, ["reinstall", "repair", "helper", "daemon", "fix", "fan", "privileged", "smc", "broken"]),
         SettingEntry("Remove fan helper", .temper, ["remove", "uninstall", "delete", "helper", "fan", "daemon"]),
+        // Notch
+        SettingEntry("Show the notch companion", .notch, ["notch", "dynamic", "island", "companion", "enable", "media", "music"]),
+        SettingEntry("Show on displays without a notch", .notch, ["faux", "external", "monitor", "display", "synthesised", "fake"]),
         // Integrations
         SettingEntry("justtype sync", .integrations, ["justtype", "sync", "account", "connect", "sign", "login", "cloud"]),
         // Shortcuts
@@ -308,6 +316,20 @@ struct SettingsView: View {
     @AppStorage("swipeSensitivity", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSensitivity = 0.7
     @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
     @AppStorage("swipeSingleStep", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSingleStep = false
+    @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) var notchEnabled = true
+    @AppStorage("notchFauxOnExternal", store: UserDefaults(suiteName: "com.oxine.settings")) var notchFauxOnExternal = false
+    @AppStorage("notchSneakPeek", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSneakPeek = true
+    @AppStorage("notchHomeSlot", store: UserDefaults(suiteName: "com.oxine.settings")) var notchHomeSlot = "camera"
+    @AppStorage("notchNowPlayingSource", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNowPlayingSource = "system"
+    @AppStorage("notchSystemHUD", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSystemHUD = true
+    @AppStorage("notchLeftEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchLeftEar = "smart"
+    @AppStorage("notchRightEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchRightEar = "smart"
+    @AppStorage("notchBar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBar = false
+    @AppStorage("notchBarMetric", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetric = "cpu"
+    @AppStorage("notchBarSplit", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarSplit = false
+    @AppStorage("notchBarMetricRight", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetricRight = "gpu"
+    @State private var agentHookStatus = ""
+    @StateObject private var permissions = NotchPermissions()
     @ObservedObject private var sous = SousManager.shared
     @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
@@ -708,6 +730,8 @@ struct SettingsView: View {
             anchored("Sous · Battery", sousSection)
         case .temper:
             anchored("Temper · Thermal & Fans", temperSection)
+        case .notch:
+            anchored("Notch", notchSection)
         case .integrations:
             anchored("Integrations", justtypeSection)
         case .shortcuts:
@@ -1173,7 +1197,11 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         SettingSection(title: "Keyboard Shortcuts") {
-            ShortcutRecorder()
+            VStack(alignment: .leading, spacing: 10) {
+                ShortcutRecorder(.shared)
+                Divider().opacity(0.1)
+                ShortcutRecorder(.notch)
+            }
         }
     }
 
@@ -1187,6 +1215,293 @@ struct SettingsView: View {
         SettingSection(title: "Temper · Thermal & Fans") {
             TemperSettings(temper: temper)
         }
+    }
+
+    private var notchSection: some View {
+        SettingSection(title: "Notch") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: $notchEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show the notch companion")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Media, a webcam mirror, and a file shelf at the top of the screen.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .onChange(of: notchEnabled) { _, _ in
+                    NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                }
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $notchFauxOnExternal) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show on displays without a notch")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Draws a synthesised notch, centred at the top, on external monitors.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+                .onChange(of: notchFauxOnExternal) { _, _ in
+                    NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                }
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $notchSneakPeek) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sneak peek on track change")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Briefly shows the new song's title beside the notch.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $notchSystemHUD) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Volume & brightness HUD")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Shows the level in the notch when you change volume or brightness.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+                .onChange(of: notchSystemHUD) { _, _ in
+                    NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                }
+
+                Divider().opacity(0.1)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Now playing source")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(notchNowPlayingSource == "system"
+                             ? "System-wide — reads any app, including browsers."
+                             : "Music and Spotify only.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Picker("", selection: $notchNowPlayingSource) {
+                        Text("System-wide").tag("system")
+                        Text("Music & Spotify").tag("apps")
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                    .onChange(of: notchNowPlayingSource) { _, _ in
+                        NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                    }
+                }
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                HStack {
+                    Text("Home widget")
+                        .foregroundColor(.white.opacity(0.85))
+                    Spacer()
+                    Picker("", selection: $notchHomeSlot) {
+                        Text("Camera").tag("camera")
+                        Text("Calendar").tag("calendar")
+                        Text("Weather").tag("weather")
+                        Text("Shelf").tag("shelf")
+                        Text("None (player only)").tag("none")
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                    .onChange(of: notchHomeSlot) { _, _ in
+                        NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                    }
+                }
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                earPicker("Left side", $notchLeftEar)
+                earPicker("Right side", $notchRightEar)
+
+                Toggle(isOn: $notchBar) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notch bar")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("A progress bar hugging the notch that fills with a live metric.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+                .onChange(of: notchBar) { _, _ in
+                    NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                }
+
+                if notchBar {
+                    HStack {
+                        Text(notchBarSplit ? "Left metric" : "Bar metric").foregroundColor(.white.opacity(0.85))
+                        Spacer()
+                        Picker("", selection: $notchBarMetric) {
+                            ForEach(BarMetric.allCases) { Text($0.label).tag($0.rawValue) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                        .onChange(of: notchBarMetric) { _, _ in
+                            NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                        }
+                    }
+                    .disabled(!notchEnabled)
+
+                    Toggle(isOn: $notchBarSplit) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Split the bar")
+                                .foregroundColor(.white.opacity(0.85))
+                            Text("Show two metrics: each half fills from its outer edge in toward the notch.")
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                    .disabled(!notchEnabled)
+                    .onChange(of: notchBarSplit) { _, _ in
+                        NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                    }
+
+                    if notchBarSplit {
+                        HStack {
+                            Text("Right metric").foregroundColor(.white.opacity(0.85))
+                            Spacer()
+                            Picker("", selection: $notchBarMetricRight) {
+                                ForEach(BarMetric.allCases) { Text($0.label).tag($0.rawValue) }
+                            }
+                            .labelsHidden()
+                            .frame(width: 150)
+                            .onChange(of: notchBarMetricRight) { _, _ in
+                                NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                            }
+                        }
+                        .disabled(!notchEnabled)
+                    }
+                }
+
+                Divider().opacity(0.1)
+
+                permissionsBlock
+
+                Divider().opacity(0.1)
+
+                agentsBlock
+            }
+        }
+    }
+
+    /// Re-check / re-ask the permissions the notch modules need. Useful after an
+    /// update, or when a grant didn't take. Refreshes when Settings appears.
+    private var permissionsBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Permissions")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                Spacer()
+                Button("Re-check") { permissions.refresh() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            permissionRow("Calendar", "calendar", permissions.calendar) { permissions.requestCalendar() }
+            permissionRow("Location (Weather)", "location.fill", permissions.location) { permissions.requestLocation() }
+            permissionRow("Camera (Mirror)", "camera.fill", permissions.camera) { permissions.requestCamera() }
+        }
+        .disabled(!notchEnabled)
+        .onAppear { permissions.refresh() }
+    }
+
+    private func permissionRow(_ title: String, _ icon: String,
+                               _ state: NotchPermissions.Access,
+                               _ action: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.6))
+                .frame(width: 16)
+            Text(title).foregroundColor(.white.opacity(0.85))
+            Spacer()
+            switch state {
+            case .granted:
+                Label("Granted", systemImage: "checkmark.circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption)
+                    .foregroundColor(.green)
+            case .notDetermined:
+                Button("Grant", action: action)
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+            case .denied:
+                Button("Open Settings", action: action)
+                    .buttonStyle(.bordered).controlSize(.small)
+            }
+        }
+    }
+
+    /// A left/right ear content picker bound to the given setting.
+    private func earPicker(_ title: String, _ binding: Binding<String>) -> some View {
+        HStack {
+            Text(title).foregroundColor(.white.opacity(0.85))
+            Spacer()
+            Picker("", selection: binding) {
+                ForEach(PeekContent.allCases) { Text($0.label).tag($0.rawValue) }
+            }
+            .labelsHidden()
+            .frame(width: 150)
+            .onChange(of: binding.wrappedValue) { _, _ in
+                NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+            }
+        }
+        .disabled(!notchEnabled)
+    }
+
+    /// Agent monitoring: install the hooks that feed the status grid.
+    private var agentsBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Agents")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                Text("Keep an eye on your agents while you work. Installs hooks so the notch can show Claude Code / Codex status.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            HStack(spacing: 8) {
+                Button("Install Claude Code hooks") { runHook { try AgentHookInstaller.installClaude(); return "Claude Code hooks installed." } }
+                    .buttonStyle(.borderedProminent)
+                Button("Codex") { runHook { try AgentHookInstaller.installCodex(); return "Codex notify installed." } }
+                    .buttonStyle(.bordered)
+                Button("Remove") { runHook { try AgentHookInstaller.uninstallClaude(); return "Claude Code hooks removed." } }
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.small)
+            if !agentHookStatus.isEmpty {
+                Text(agentHookStatus)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.6))
+            }
+        }
+        .disabled(!notchEnabled)
+    }
+
+    private func runHook(_ action: () throws -> String) {
+        do { agentHookStatus = try action() }
+        catch { agentHookStatus = error.localizedDescription }
     }
 
     private var updateSection: some View {
@@ -1322,16 +1637,18 @@ private struct SectionFlash: View {
 /// ⌘/⌃/⌥); Esc cancels. While armed it swallows keystrokes and suspends the live
 /// hotkey so the old combo can't fire mid-capture (see `ShortcutManager`).
 struct ShortcutRecorder: View {
-    @ObservedObject private var manager = ShortcutManager.shared
+    @ObservedObject var manager: ShortcutManager
     @State private var monitor: Any?
+
+    init(_ manager: ShortcutManager = .shared) { self.manager = manager }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Toggle Oxine")
+                    Text(manager.title)
                         .foregroundColor(.white.opacity(0.85))
-                    Text(manager.isRecording ? "Press a key combo…" : "Opens the panel from any app")
+                    Text(manager.isRecording ? "Press a key combo…" : manager.subtitle)
                         .font(.caption2)
                         .foregroundColor(.white.opacity(0.5))
                 }
@@ -1340,7 +1657,7 @@ struct ShortcutRecorder: View {
             }
             if !manager.isDefault && !manager.isRecording {
                 Button(action: { manager.reset() }) {
-                    Text("Reset to ⇧⌘V")
+                    Text("Reset to \(manager.defaultDisplay)")
                         .font(.caption2)
                         .foregroundColor(.white.opacity(0.5))
                 }

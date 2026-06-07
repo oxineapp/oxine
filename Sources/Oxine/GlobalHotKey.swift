@@ -2,123 +2,153 @@ import AppKit
 import Carbon.HIToolbox
 import Combine
 
-/// A genuine system-wide hotkey via Carbon's `RegisterEventHotKey`. Unlike an
-/// `NSEvent` local monitor (which only fires while Oxine is the focused app, so
-/// it never worked for a menu-bar accessory), this fires *and consumes* the key
-/// no matter what's frontmost, and needs no Accessibility permission. Re-register
-/// to change the combo.
+/// Genuine system-wide hotkeys via Carbon's `RegisterEventHotKey`. Unlike an
+/// `NSEvent` local monitor (which only fires while Oxine is focused, so it never
+/// worked for a menu-bar accessory), these fire *and consume* the key no matter
+/// what's frontmost, and need no Accessibility permission.
+///
+/// Supports several independent hotkeys, each keyed by a small integer id. One
+/// shared Carbon event handler dispatches by reading the fired hotkey's id.
 @MainActor
 final class GlobalHotKey {
     static let shared = GlobalHotKey()
 
-    private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
-    private var onFire: (() -> Void)?
-    private let signature: OSType = 0x4F584E45   // 'OXNE'
+    private var refs: [UInt32: EventHotKeyRef] = [:]      // id → registration
+    private var handlers: [UInt32: () -> Void] = [:]      // id → action
+    private let signature: OSType = 0x4F584E45            // 'OXNE'
 
     private init() {}
 
-    /// Set the action once (installs the dispatcher). Idempotent.
-    func setHandler(_ handler: @escaping () -> Void) {
-        onFire = handler
+    /// Set the action for an id (installs the shared dispatcher once). Idempotent.
+    func setHandler(id: UInt32, _ handler: @escaping () -> Void) {
+        handlers[id] = handler
         installHandlerIfNeeded()
     }
 
-    /// Called by the C dispatcher (on the main thread) when the hotkey fires.
-    fileprivate func fire() { onFire?() }
+    /// Called by the C dispatcher (on the main thread) when a hotkey fires.
+    fileprivate func fire(id: UInt32) { handlers[id]?() }
 
     private func installHandlerIfNeeded() {
         guard handlerRef == nil else { return }
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
                                  eventKind: OSType(kEventHotKeyPressed))
-        InstallEventHandler(GetEventDispatcherTarget(), { _, _, _ -> OSStatus in
-            // Carbon posts hotkey events on the main thread, so asserting main-
-            // actor isolation here is valid. No captured context: the singleton
-            // holds the action.
-            MainActor.assumeIsolated { GlobalHotKey.shared.fire() }
+        InstallEventHandler(GetEventDispatcherTarget(), { _, event, _ -> OSStatus in
+            // Read which hotkey fired so we can dispatch to the right action.
+            var hkID = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject),
+                              EventParamType(typeEventHotKeyID), nil,
+                              MemoryLayout<EventHotKeyID>.size, nil, &hkID)
+            let id = hkID.id
+            // Carbon posts hotkey events on the main thread.
+            MainActor.assumeIsolated { GlobalHotKey.shared.fire(id: id) }
             return noErr
         }, 1, &spec, nil, &handlerRef)
     }
 
-    /// (Re)register with a Carbon virtual key code + Carbon modifier mask
-    /// (`cmdKey`/`shiftKey`/`optionKey`/`controlKey`). A zero modifier mask or a
-    /// failed registration just leaves the hotkey unbound.
+    /// (Re)register one hotkey id with a Carbon virtual key code + Carbon modifier
+    /// mask. A zero modifier mask or a failed registration leaves it unbound.
     @discardableResult
-    func update(keyCode: UInt32, modifiers: UInt32) -> Bool {
-        unregister()
+    func update(id: UInt32, keyCode: UInt32, modifiers: UInt32) -> Bool {
+        unregister(id: id)
         guard modifiers != 0 else { return false }
         var ref: EventHotKeyRef?
-        let id = EventHotKeyID(signature: signature, id: 1)
-        let status = RegisterEventHotKey(keyCode, modifiers, id,
+        let hkid = EventHotKeyID(signature: signature, id: id)
+        let status = RegisterEventHotKey(keyCode, modifiers, hkid,
                                          GetEventDispatcherTarget(), 0, &ref)
         guard status == noErr else { return false }
-        hotKeyRef = ref
+        refs[id] = ref
         return true
     }
 
-    func unregister() {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
+    func unregister(id: UInt32) {
+        if let ref = refs[id] {
+            UnregisterEventHotKey(ref)
+            refs[id] = nil
         }
     }
 }
 
-/// The user's editable global toggle shortcut: persists the Carbon key code +
-/// modifier mask (plus a display label), publishes changes so the recorder UI
-/// updates live, and drives `GlobalHotKey`. While recording, the live hotkey is
-/// suspended so pressing the old combo doesn't toggle the panel mid-capture.
+/// One editable global shortcut: persists its Carbon key code + modifier mask
+/// (plus a display label) under a key prefix, publishes changes so the recorder
+/// UI updates live, and drives one `GlobalHotKey` id. While recording, the live
+/// hotkey is suspended so the old combo can't fire mid-capture.
 @MainActor
 final class ShortcutManager: ObservableObject {
-    static let shared = ShortcutManager()
+    /// Toggle the Oxine panel (the original shipped shortcut; keeps its keys).
+    static let shared = ShortcutManager(
+        id: 1, prefix: "hotkey",
+        defaultKeyCode: UInt32(kVK_ANSI_V), defaultModifiers: UInt32(cmdKey | shiftKey), defaultLabel: "V",
+        title: "Toggle Oxine", subtitle: "Opens the panel from any app")
+    /// Toggle the notch open/closed.
+    static let notch = ShortcutManager(
+        id: 2, prefix: "notchHotkey",
+        defaultKeyCode: UInt32(kVK_ANSI_N), defaultModifiers: UInt32(controlKey | cmdKey), defaultLabel: "N",
+        title: "Toggle Notch", subtitle: "Open or close the notch")
+
+    /// Every binding, for "apply all at launch" and the settings list.
+    static var all: [ShortcutManager] { [shared, notch] }
+
+    let id: UInt32
+    let title: String
+    let subtitle: String
 
     @Published private(set) var keyCode: UInt32
     @Published private(set) var carbonModifiers: UInt32
     @Published private(set) var keyLabel: String
     @Published var isRecording = false
 
+    private let prefix: String
+    private let defaultKeyCode: UInt32
+    private let defaultModifiers: UInt32
+    private let defaultLabel: String
     private let store = UserDefaults(suiteName: "com.oxine.settings")
 
-    /// Default: ⇧⌘V (matches what shipped, even though it never fired globally).
-    static let defaultKeyCode = UInt32(kVK_ANSI_V)
-    static let defaultModifiers = UInt32(cmdKey | shiftKey)
-    static let defaultLabel = "V"
-
-    private init() {
-        if let kc = store?.object(forKey: "hotkeyKeyCode") as? Int,
-           let mods = store?.object(forKey: "hotkeyModifiers") as? Int {
+    private init(id: UInt32, prefix: String,
+                 defaultKeyCode: UInt32, defaultModifiers: UInt32, defaultLabel: String,
+                 title: String, subtitle: String) {
+        self.id = id
+        self.prefix = prefix
+        self.defaultKeyCode = defaultKeyCode
+        self.defaultModifiers = defaultModifiers
+        self.defaultLabel = defaultLabel
+        self.title = title
+        self.subtitle = subtitle
+        if let kc = store?.object(forKey: "\(prefix)KeyCode") as? Int,
+           let mods = store?.object(forKey: "\(prefix)Modifiers") as? Int {
             keyCode = UInt32(kc)
             carbonModifiers = UInt32(mods)
-            keyLabel = store?.string(forKey: "hotkeyLabel") ?? Self.defaultLabel
+            keyLabel = store?.string(forKey: "\(prefix)Label") ?? defaultLabel
         } else {
-            keyCode = Self.defaultKeyCode
-            carbonModifiers = Self.defaultModifiers
-            keyLabel = Self.defaultLabel
+            keyCode = defaultKeyCode
+            carbonModifiers = defaultModifiers
+            keyLabel = defaultLabel
         }
     }
 
-    /// Register the current combo with the system. Called at launch and after any
-    /// change. No-op effect if a recording is in progress.
+    /// Register the current combo with the system. No-op while recording.
     func apply() {
         guard !isRecording else { return }
-        GlobalHotKey.shared.update(keyCode: keyCode, modifiers: carbonModifiers)
+        GlobalHotKey.shared.update(id: id, keyCode: keyCode, modifiers: carbonModifiers)
     }
 
     var isDefault: Bool {
-        keyCode == Self.defaultKeyCode && carbonModifiers == Self.defaultModifiers
+        keyCode == defaultKeyCode && carbonModifiers == defaultModifiers
     }
+
+    var defaultDisplay: String { Self.modifierSymbols(defaultModifiers) + defaultLabel }
 
     /// Human-readable combo, e.g. "⇧⌘V" — modifier glyphs in macOS order.
     var display: String { Self.modifierSymbols(carbonModifiers) + keyLabel }
 
     func reset() {
-        persist(keyCode: Self.defaultKeyCode, modifiers: Self.defaultModifiers, label: Self.defaultLabel)
+        persist(keyCode: defaultKeyCode, modifiers: defaultModifiers, label: defaultLabel)
         apply()
     }
 
     func beginRecording() {
         isRecording = true
-        GlobalHotKey.shared.unregister()   // don't let the old combo fire mid-capture
+        GlobalHotKey.shared.unregister(id: id)   // don't let the old combo fire mid-capture
     }
 
     func cancelRecording() {
@@ -127,8 +157,7 @@ final class ShortcutManager: ObservableObject {
     }
 
     /// Capture a key event as the new shortcut. Returns false (and keeps
-    /// recording) if it lacks a "hard" modifier — ⌘/⌃/⌥ — since a global hotkey
-    /// needs one (shift alone, or a bare key, would be far too greedy).
+    /// recording) if it lacks a "hard" modifier — ⌘/⌃/⌥.
     func commit(_ event: NSEvent) -> Bool {
         let cocoa = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         var mods: UInt32 = 0
@@ -150,9 +179,9 @@ final class ShortcutManager: ObservableObject {
         self.keyCode = keyCode
         self.carbonModifiers = modifiers
         self.keyLabel = label
-        store?.set(Int(keyCode), forKey: "hotkeyKeyCode")
-        store?.set(Int(modifiers), forKey: "hotkeyModifiers")
-        store?.set(label, forKey: "hotkeyLabel")
+        store?.set(Int(keyCode), forKey: "\(prefix)KeyCode")
+        store?.set(Int(modifiers), forKey: "\(prefix)Modifiers")
+        store?.set(label, forKey: "\(prefix)Label")
     }
 
     // MARK: - Display helpers
@@ -166,7 +195,7 @@ final class ShortcutManager: ObservableObject {
         return s
     }
 
-    /// A short label for the keyed key — named glyphs for the common non-printing
+    /// A short label for the keyed key — named glyphs for common non-printing
     /// keys, otherwise the upper-cased character the key produces.
     static func label(for event: NSEvent) -> String {
         if let named = namedKeys[Int(event.keyCode)] { return named }

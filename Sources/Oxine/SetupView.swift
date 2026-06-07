@@ -10,9 +10,13 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous, Temper, Tabs. Last index = stepCount − 1.
-    static let stepCount = 6
-    private var lastStep: Int { SetupView.stepCount - 1 }
+    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Tabs. The Notch step is
+    /// inserted only on Macs that have a hardware notch (for now).
+    static let baseStepCount = 6
+    /// Only offer the notch on Macs that physically have one.
+    private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
+    private var stepCount: Int { hasNotch ? SetupView.baseStepCount + 1 : SetupView.baseStepCount }
+    private var lastStep: Int { stepCount - 1 }
 
     /// Steps slide along the nav direction: Next enters from the right, Back from the left.
     private var stepTransition: AnyTransition {
@@ -59,8 +63,12 @@ struct SetupView: View {
                     Step3JustType().transition(stepTransition)
                 } else if currentStep == 3 {
                     Step4Sous().transition(stepTransition)
-                } else {
+                } else if currentStep == 4 {
                     Step5Temper().transition(stepTransition)
+                } else {
+                    // Step 5, reached only on notch Macs (else the leak/Tabs step
+                    // is last). Enable or disable the notch companion.
+                    Step6Notch().transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -116,7 +124,7 @@ struct SetupView: View {
 
     private var progressDots: some View {
         HStack(spacing: 6) {
-            ForEach(0..<SetupView.stepCount, id: \.self) { step in
+            ForEach(0..<stepCount, id: \.self) { step in
                 Capsule()
                     .fill(step <= currentStep ? Color.panelAccent : Color.white.opacity(0.12))
                     .frame(height: 3)
@@ -653,6 +661,62 @@ struct Step5Tabs: View {
             // the composer fits the step.
             TabEditor().padding(.top, 4)
             Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+    }
+}
+
+/// Notch companion step (notch Macs only): a single enable/disable choice for
+/// the media + mirror + shelf surface at the top of the screen.
+struct Step6Notch: View {
+    @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) private var notchEnabled = true
+    private var accent: Color { .panelAccent }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "macbook.gen2")
+                .font(.system(size: 34))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("The Notch")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("A companion at your Mac's notch: now playing, a webcam mirror, and a drop shelf, all on hover.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                Text("OPTIONAL")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(.white.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .padding(.top, 2)
+            }
+
+            Toggle(isOn: $notchEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(notchEnabled ? "Notch enabled" : "Notch disabled")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("You can change this any time in Settings › Notch.")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+            }
+            .toggleStyle(SwitchToggleStyle(tint: accent))
+            .padding(12)
+            .background(Color.white.opacity(0.035))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+            .onChange(of: notchEnabled) { _, _ in
+                NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+            }
+
+            FeatureRow(icon: "music.note", title: "Now Playing", desc: "Artwork, scrubber, transport")
+            FeatureRow(icon: "camera", title: "Mirror", desc: "A quick webcam self-view")
+            FeatureRow(icon: "tray.and.arrow.down", title: "Shelf", desc: "Drag files in, AirDrop out")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)

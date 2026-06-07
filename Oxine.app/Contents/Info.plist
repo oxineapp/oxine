@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5.3</string>
+	<string>2.1.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -30,11 +30,23 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>153</string>
+	<string>210</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Oxine reads now playing from Music and Spotify to show it in the notch.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Oxine shows your next events on the notch's glanceable calendar timeline.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Oxine shows your next events on the notch's glanceable calendar timeline.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Oxine uses the camera for the notch Mirror, a quick webcam preview.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Oxine uses your location to show local weather in the notch.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Oxine uses your location to show local weather in the notch.</string>
 	<key>NSMainStoryboardFile</key>
 	<string></string>
 	<key>NSPrincipalClass</key>
