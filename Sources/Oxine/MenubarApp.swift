@@ -1,3 +1,4 @@
+import GestureKit
 import SwiftUI
 import PanelKit
 import SousKit
@@ -29,12 +30,12 @@ struct Oxine: App {
         Settings {
             EmptyView()
         }
-        // SwiftUI's Settings scene auto-adds a "Settings…" menu item bound to ⌘,
-        // that opens this empty window — and that menu shortcut shadows our own
-        // ⌘, handler. Remove the item so ⌘, reaches us and opens the panel's
-        // Settings tab instead of a blank window.
+        // Route the standard menu command into the real settings panel.
         .commands {
-            CommandGroup(replacing: .appSettings) { }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { AppDelegate.instance?.openSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }
@@ -104,6 +105,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The notch companion: its own top-of-screen surface, independent of the
         // dropdown panel. Safe to start late — it brings itself up if enabled.
         NotchCoordinator.shared.start()
+        GestureService.shared.start()
+        if Bundle.main.object(forInfoDictionaryKey: "OxineBeta") as? Bool == true,
+           !UserDefaults.standard.bool(forKey: "betaWelcomeShown") {
+            UserDefaults.standard.set(true, forKey: "betaWelcomeShown")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.openSettings() }
+        }
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()
     }
@@ -190,7 +197,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel?.isMovable = false
         panel?.isMovableByWindowBackground = false
         panel?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel?.title = ""
+        panel?.title = "Oxine Settings & Tools"
         let hostingController = NSHostingController(rootView: MainView(appDelegate: self))
         hostingController.sizingOptions = []
         panel?.contentViewController = hostingController
@@ -425,6 +432,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         tabsItem.submenu = tabsMenu
         menu.addItem(tabsItem)
+
+        let gestures = NSMenuItem(title: "Fn Gestures & Middle Click", action: nil, keyEquivalent: "")
+        gestures.submenu = GestureService.shared.menu()
+        menu.addItem(gestures)
 
         menu.addItem(withTitle: "Settings\u{2026}", action: #selector(menuSettings), keyEquivalent: ",")
         menu.addItem(.separator())

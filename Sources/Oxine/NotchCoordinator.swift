@@ -32,6 +32,9 @@ final class NotchCoordinator {
         NotificationCenter.default.addObserver(
             self, selector: #selector(settingsChanged),
             name: .notchSettingsChanged, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(settingsChanged),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil)
         apply()
     }
 

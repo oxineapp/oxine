@@ -20,6 +20,8 @@ import Sparkle
 public final class UpdaterManager: ObservableObject {
     public static let shared = UpdaterManager()
 
+    private let isPersonalBeta = Bundle.main.object(forInfoDictionaryKey: "OxineBeta") as? Bool ?? false
+
     private let driver: PanelUpdaterDriver
     private let feedDelegate: FeedDelegate
     private let updater: SPUUpdater
@@ -30,7 +32,7 @@ public final class UpdaterManager: ObservableObject {
 
     /// User-facing toggle for scheduled background checks (Sparkle persists it).
     @Published public var automaticallyChecks: Bool {
-        didSet { updater.automaticallyChecksForUpdates = automaticallyChecks }
+        didSet { updater.automaticallyChecksForUpdates = !isPersonalBeta && automaticallyChecks }
     }
 
     private init() {
@@ -41,6 +43,11 @@ public final class UpdaterManager: ObservableObject {
         updater = SPUUpdater(hostBundle: .main, applicationBundle: .main,
                              userDriver: driver, delegate: feedDelegate)
         automaticallyChecks = updater.automaticallyChecksForUpdates
+        if isPersonalBeta {
+            automaticallyChecks = false
+            canCheckForUpdates = false
+            return
+        }
         do {
             try updater.start()
         } catch {
@@ -54,6 +61,7 @@ public final class UpdaterManager: ObservableObject {
     /// Manual check. Brings the app forward first — an accessory app's Sparkle
     /// dialogs would otherwise open behind whatever's frontmost.
     public func checkForUpdates() {
+        guard !isPersonalBeta else { return }
         NSApp.activate(ignoringOtherApps: true)
         updater.checkForUpdates()
     }
@@ -69,7 +77,7 @@ public final class UpdaterManager: ObservableObject {
     private static let openCheckInterval: TimeInterval = 1800   // ≤ once / 30 min
     private let lastOpenCheckKey = "panelLastOpenUpdateCheck"
     public func checkOnOpen() {
-        guard automaticallyChecks else { return }
+        guard !isPersonalBeta, automaticallyChecks else { return }
         let store = PanelKit.settingsDefaults
         let last = store.object(forKey: lastOpenCheckKey) as? Date ?? .distantPast
         guard Date().timeIntervalSince(last) > Self.openCheckInterval else { return }

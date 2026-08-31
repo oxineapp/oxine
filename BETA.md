@@ -1,0 +1,74 @@
+# Oxine personal beta
+
+Branch: `beta`. Build with `./build-beta.sh`, then copy `dist/Oxine Beta.app` to
+`/Applications`. This leaves `/Applications/Oxine.app` intact. The source checkout
+on this Mac is `/Users/mert/oxine-beta`.
+
+## ScreenLyrics
+
+Open Oxine Settings → Notch → **ScreenLyrics below the notch**. Opting in sends
+song title, artist, album and duration to [LRCLIB](https://lrclib.net) for synced
+lyrics. No account or API key is needed. Not every recording has synced lyrics.
+The overlay shares the notch's Now Playing source (system-wide adapter, or the
+Music/Spotify fallback), follows playback, and hides when paused, during gaps,
+or while the notch is expanded. No extra Spotify polling process is started.
+
+- Text size: 12–48 pt; overlay width: 240–1000 pt, clamped to the display.
+- Horizontal offset: −1500…1500 pt; distance below the notch: 0…1500 pt.
+- Timing: −10…+10 seconds, in 0.1 second steps. Positive = earlier, negative = later.
+- Preview lets you adjust placement without music; leaving Settings turns it off.
+- The overlay is click-through, so it never blocks the app underneath.
+- All adjustments persist, including an exact zero timing adjustment.
+
+The timestamp parser/overlay are adapted from the user's local ScreenLyrics
+project. Track requests are cancelled on track changes; completed results
+(including missing lyrics) are cached in memory and transient failures back off.
+
+## FnGestures and middle click
+
+Right-click the Oxine menu-bar icon → **Fn Gestures & Middle Click**, or open
+Settings → Integrations → **Configure gestures & middle click**.
+
+The integrated engine is adapted from [Sha-Dox/FnGestures](https://github.com/Sha-Dox/FnGestures).
+Hold Fn for configured scroll, swipe, pinch, rotation, tap and click actions.
+Each gesture has action presets and 0.5×–4× sensitivity, plus custom key combos
+and shell commands. Middle Click is available as a preset. Fresh configurations
+also map Fn+left-click to middle click; imported configurations keep their mappings.
+Three-finger tap without Fn is enabled by default and has a separate toggle.
+Long holds, movement, fourth fingers and physical clicks cancel that tap.
+
+One touch reader handles both features; it does not restart any other app.
+Quit standalone FnGestures/MiddleClick before enabling this integration to avoid
+duplicate actions. The old FnGestures config is copied on first launch, never
+modified. Oxine's copy lives at
+`~/Library/Application Support/Oxine/Gestures/config.json`.
+
+macOS requires **Input Monitoring** for the event tap and **Accessibility** for
+middle click and click suppression. Grant these to **Oxine Beta**, using the
+permission buttons in Integrations. An active event tap is rebuilt automatically
+when permission changes; a watchdog re-enables a timed-out tap. macOS may require
+a restart after a permission grant. System trackpad gestures can still intercept
+Mission Control/Spaces gestures; change their bindings if needed.
+
+## Installation and rollback
+
+This local build is ad-hoc signed (`com.oxine.beta`), not notarized. You can use
+`OXINE_BETA_SIGN_ID='Your trusted signing identity' ./build-beta.sh` for a stable
+local signature. The installed signed stable Oxine is not changed. The beta
+shares Oxine's existing settings/data stores, so edits are shared. Permission and
+Keychain grants belong to the new app identity and may need reapproval after
+rebuilding. Stable-channel Sparkle updates are disabled for this beta.
+
+No privileged battery/fan helper is installed or replaced by the beta build.
+Existing helper trust checks may reject a locally signed beta; use stable Oxine
+for those features if so. Do not reinstall helpers just to test lyrics/gestures.
+
+To roll back: quit Oxine Beta and open `/Applications/Oxine.app`; reopen
+MiddleClick/FnGestures if desired. No source data or stable installation is deleted.
+
+## Validation
+
+Run `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`.
+Tests cover LRC ordering, Unicode, repeated timestamps, source/user timing offsets,
+blank lines, and three-finger contact recognition and rejection. Hardware gestures
+must also be checked on the Mac after the permission grants.

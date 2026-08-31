@@ -31,6 +31,10 @@ let package = Package(
         .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.1.0")
     ],
     targets: [
+        .target(name: "LyricsCore"),
+        .target(name: "GestureKit", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "LyricsCoreTests", dependencies: ["LyricsCore"]),
+        .testTarget(name: "GestureKitTests", dependencies: ["GestureKit"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Types shared verbatim across the app↔daemon XPC boundary.
         .target(
             name: "SousShared"
@@ -91,6 +95,7 @@ let package = Package(
         .target(
             name: "NotchKit",
             dependencies: [
+                "LyricsCore",
                 "PanelKit",
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit")
             ]
@@ -98,6 +103,7 @@ let package = Package(
         .executableTarget(
             name: "Oxine",
             dependencies: [
+                "GestureKit",
                 "SousShared",
                 "PanelKit",
                 "SousKit",

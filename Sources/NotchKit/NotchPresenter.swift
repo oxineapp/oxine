@@ -39,6 +39,7 @@ public final class NotchPresenter {
     private var systemHUD: SystemHUDMonitor?
     private var peekHub: PeekHub?
     private var barOverlay: NotchBarOverlay?
+    private var lyrics: NotchLyrics?
 
     private var wantExpanded = false
     private var reconciling = false
@@ -71,6 +72,11 @@ public final class NotchPresenter {
         let layout = self.layout
         // Live data for the collapsed ears (now-playing + agents + CPU).
         let home = controller.modules.compactMap { $0 as? HomeModule }.first
+        if let home {
+            let lyrics = NotchLyrics(player: home.nowPlaying)
+            lyrics.start()
+            self.lyrics = lyrics
+        }
         let hub = PeekHub(nowPlaying: home?.nowPlaying)
         hub.start()
         self.peekHub = hub
@@ -148,6 +154,7 @@ public final class NotchPresenter {
     }
 
     public func hide() {
+        lyrics?.stop(); lyrics = nil
         hoverTimer?.invalidate(); hoverTimer = nil
         systemHUD?.stop(); systemHUD = nil
         barOverlay?.stop(); barOverlay = nil
@@ -331,6 +338,7 @@ public final class NotchPresenter {
     // MARK: reconcile toward desired state
 
     private func reconcile() {
+        lyrics?.setExpanded(wantExpanded)
         // The bar traces the *collapsed* island. Hide it the instant the notch
         // starts opening; it stays hidden through the whole open and only returns
         // once a collapse has fully settled back to compact (revealed below, after
