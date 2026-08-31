@@ -51,6 +51,13 @@ also map Fn+left-click to middle click; imported configurations keep their mappi
 Three-finger tap without Fn is enabled by default and has a separate toggle.
 Long holds, movement, fourth fingers and physical clicks cancel that tap.
 
+The gesture menu includes a live **Fn: held / released** indicator. Hold and release
+Fn/Globe while that menu is open to check detection. Tracking uses physical system
+modifier/key state as well as Fn transitions; missing flags on scroll/click events
+no longer cancel Fn, and arrow-key flags cannot activate it. A 50 ms check recovers
+missed presses/releases, including while menus are open. Releasing Fn stops smooth
+volume/brightness adjustment. No keyboard contents are recorded.
+
 One touch reader handles both features; it does not restart any other app.
 Quit standalone FnGestures/MiddleClick before enabling this integration to avoid
 duplicate actions. The old FnGestures config is copied on first launch, never
@@ -87,4 +94,5 @@ Tests cover LRC ordering, Unicode, repeated timestamps, source/user timing offse
 blank lines, lyric area clamping/anchoring on offset and small displays, and three-finger contact recognition and rejection. Hardware gestures
 must also be checked on the Mac after the permission grants. NotchKit regression
 tests cover live font/size changes, animation cancellation, timing adjustments,
-and preserving wrapped lyric lines.
+and preserving wrapped lyric lines. Fn regression tests cover missing/stale event
+flags, physical-state recovery, synthetic shortcuts, other modifiers, and tap resets.

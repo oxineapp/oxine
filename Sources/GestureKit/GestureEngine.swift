@@ -22,12 +22,14 @@ final class FnState {
     func setHeld(_ v: Bool) {
         lock.lock()
         _held = v
+        if v { _flags.insert(.maskSecondaryFn) } else { _flags.remove(.maskSecondaryFn) }
         lock.unlock()
     }
 
     func setFlags(_ v: CGEventFlags) {
         lock.lock()
         _flags = v
+        if _held { _flags.insert(.maskSecondaryFn) } else { _flags.remove(.maskSecondaryFn) }
         lock.unlock()
     }
 }
@@ -37,14 +39,35 @@ final class GestureEngine {
     let configManager: ConfigManager
     let debug: Bool
 
-    // fired on real fn held<->released transitions (used to share the MTS callback)
+    // Fired on actual Fn state changes, including recovery after a missed event.
     var onFnChanged: ((Bool) -> Void)?
 
     private func setFnHeld(_ v: Bool) {
         let old = fnState.held
         fnState.setHeld(v)
         if old != v {
+            if !v {
+                scrollDX = 0; scrollDY = 0; scrollFired = false
+                disengageContinuous()
+            }
             onFnChanged?(v)
+        }
+    }
+
+    /// The physical HID state is independent of flags attached to a scroll, click,
+    /// or generated shortcut. Also recovers a press/release missed by the event tap.
+    func synchronizeModifiers(flags: CGEventFlags, fnKeyDown: Bool = false) {
+        setFnHeld(fnKeyDown || flags.contains(.maskSecondaryFn))
+        fnState.setFlags(flags)
+    }
+
+    func resetInputState() {
+        synchronizeModifiers(flags: [])
+        scrollDX = 0; scrollDY = 0; scrollFired = false
+        disengageContinuous()
+        mtQueue.async {
+            self.mtStates.removeAll()
+            self.middleTaps.removeAll()
         }
     }
 
@@ -100,45 +123,31 @@ final class GestureEngine {
     }
 
     // returns true if the event should be consumed
-    func handle(type: CGEventType, event: CGEvent, swallow: Bool) -> Bool {
+    func handle(type: CGEventType, event: CGEvent, swallow: Bool, physicalFlags: CGEventFlags? = nil) -> Bool {
         if event.getIntegerValueField(.eventSourceUserData) == ActionRunner.magic {
             return false
         }
+        if let physicalFlags { synchronizeModifiers(flags: physicalFlags) }
+        else { fnState.setFlags(event.flags) }
         if type == .leftMouseUp || type == .rightMouseUp {
             let down: CGEventType = type == .leftMouseUp ? .leftMouseDown : .rightMouseDown
             return consumedButtons.remove(down) != nil
         }
         switch type {
-        case .keyDown:
-            let code = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-            if code == 63 {
-                setFnHeld(true)
-                log("fn DOWN")
-            } else {
-                setFnHeld(event.flags.contains(.maskSecondaryFn))
+        case .keyDown, .keyUp:
+            // Fn/Globe is key code 63. Ordinary keys (especially arrows/F-keys)
+            // may carry a function flag of their own; they are not Fn transitions.
+            if event.getIntegerValueField(.keyboardEventKeycode) == 63 {
+                setFnHeld(type == .keyDown)
             }
-            fnState.setFlags(event.flags)
-        case .keyUp:
-            let code = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-            if code == 63 {
-                setFnHeld(false)
-                log("fn UP")
-            } else {
-                setFnHeld(event.flags.contains(.maskSecondaryFn))
-            }
-            fnState.setFlags(event.flags)
         case .flagsChanged:
-            let newHeld = event.flags.contains(.maskSecondaryFn)
-            if fnState.held != newHeld {
-                log("fn state -> \(newHeld) (flagsChanged)")
+            // Only the Fn transition itself can override the HID snapshot.
+            // Some keyboards omit Fn from another modifier's event flags.
+            if physicalFlags == nil || event.getIntegerValueField(.keyboardEventKeycode) == 63 {
+                setFnHeld(event.flags.contains(.maskSecondaryFn))
+                fnState.setFlags(event.flags)
             }
-            setFnHeld(newHeld)
-            fnState.setFlags(event.flags)
         case .scrollWheel:
-            if fnState.held && !event.flags.contains(.maskSecondaryFn) {
-                setFnHeld(false)
-                log("fn state healed (scroll event without fn flag)")
-            }
             return handleScroll(event: event, swallow: swallow)
         case .leftMouseDown, .rightMouseDown:
             mtQueue.async {
@@ -146,17 +155,13 @@ final class GestureEngine {
             }
             guard configManager.current.enabled, swallow else { return false }
             let name = type == .leftMouseDown ? "leftClick" : "rightClick"
-            if fnState.held && !event.flags.contains(.maskSecondaryFn) {
-                setFnHeld(false)
-                log("fn state healed (mouse event without fn flag)")
-            }
-            let hasAction = configManager.hasAction(name: name, flags: event.flags)
+            let hasAction = configManager.hasAction(name: name, flags: fnState.flags)
             if debug {
                 log("CLICK \(name) secFn=\(event.flags.contains(.maskSecondaryFn)) fnTracked=\(fnState.held) hasAction=\(hasAction)")
             }
-            if (fnState.held || event.flags.contains(.maskSecondaryFn)), hasAction {
+            if fnState.held, hasAction {
                 log("gesture: \(name)")
-                configManager.dispatch(name: name, flags: event.flags)
+                configManager.dispatch(name: name, flags: fnState.flags)
                 consumedButtons.insert(type)
                 return true
             }
@@ -183,7 +188,7 @@ final class GestureEngine {
             log("SCROLL ignored: enabled=\(configManager.current.enabled) hasScroll=\(configManager.hasScrollGestures()) gestures=\(configManager.current.gestures.filter { $0.gesture.hasPrefix("scroll") }.count)")
             return false
         }
-        let fnActive = fnState.held || event.flags.contains(.maskSecondaryFn)
+        let fnActive = fnState.held
         let now = Date().timeIntervalSinceReferenceDate
         if !fnActive {
             scrollDX = 0
@@ -206,7 +211,7 @@ final class GestureEngine {
             return handleContinuousScroll(dx: dx, dy: dy, momentum: momentum,
                                           binding: binding, now: now, swallow: swallow,
                                           natural: configManager.current.naturalScroll,
-                                          flags: event.flags, prevScrollTime: prevScrollTime)
+                                          flags: fnState.flags, prevScrollTime: prevScrollTime)
         }
         let natural = configManager.current.naturalScroll
         if scrollFired {
@@ -224,7 +229,7 @@ final class GestureEngine {
         let name: String = abs(ey) >= abs(ex)
             ? (ey > 0 ? "scrollUp" : "scrollDown")
             : (ex < 0 ? "scrollLeft" : "scrollRight")
-        let sens = configManager.sensitivity(for: name, flags: event.flags)
+        let sens = configManager.sensitivity(for: name, flags: fnState.flags)
         if max(abs(scrollDX), abs(scrollDY)) < scrollThreshold / sens {
             if debug { log("SCROLL below threshold: \(name) acc=(\(scrollDX),\(scrollDY))") }
             return false
@@ -233,7 +238,7 @@ final class GestureEngine {
         scrollDY = 0
         scrollFired = true
         log("scroll gesture: \(name)")
-        configManager.dispatch(name: name, flags: event.flags)
+        configManager.dispatch(name: name, flags: fnState.flags)
         return swallow
     }
 
@@ -308,6 +313,12 @@ final class GestureEngine {
     private func continuousTick(_ c: ContinuousState) {
         contLock.lock()
         let now = Date().timeIntervalSinceReferenceDate
+        guard continuousState === c, fnState.held, configManager.current.enabled else {
+            c.timer?.cancel(); c.timer = nil
+            if continuousState === c { continuousState = nil }
+            contLock.unlock()
+            return
+        }
         if now - c.lastScroll > 1.0 {
             c.timer?.cancel()
             c.timer = nil

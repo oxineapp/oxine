@@ -21,6 +21,7 @@ public final class GestureService {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var watchdog: Timer?
+    private var modifierTimer: Timer?
     private var activeTap = false
     private var started = false
     private var permissionState = ""
@@ -41,6 +42,7 @@ public final class GestureService {
         configManager = ConfigManager(url: url)
         engine = GestureEngine(fnState: FnState(), configManager: configManager, debug: false)
         menuController = MenuController(configManager: configManager, onReload: { [weak self] in self?.configure() })
+        engine.onFnChanged = { held in menuController?.updateFnIndicator(held: held) }
         Multitouch.setFrameHandler { device, touches in engine.mtFrame(device: device, touches: touches) }
         configure()
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
@@ -49,6 +51,8 @@ public final class GestureService {
             if state != self.permissionState || (self.tap == nil && CGPreflightListenEventAccess() && configManager.current.enabled) {
                 self.configure()
             } else if let tap = self.tap, !CGEvent.tapIsEnabled(tap: tap) {
+                engine.resetInputState()
+                self.synchronizeFn()
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
         }
@@ -90,6 +94,8 @@ public final class GestureService {
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         source = nil; tap = nil; activeTap = false
+        modifierTimer?.invalidate(); modifierTimer = nil
+        engine?.resetInputState()
     }
 
     private func configure() {
@@ -101,7 +107,10 @@ public final class GestureService {
             if multitouchRef == nil { multitouchRef = Multitouch() }
             multitouchRef?.setActive(true)
         } else { multitouchRef?.disable() }
-        guard cfg.enabled, CGPreflightListenEventAccess() else { refreshMenu(); return }
+        guard cfg.enabled, CGPreflightListenEventAccess() else {
+            appLog("input status: enabled=\(cfg.enabled) monitoring=\(CGPreflightListenEventAccess()) accessibility=\(AXIsProcessTrusted())")
+            refreshMenu(); return
+        }
         let types: [CGEventType] = [.keyDown, .keyUp, .flagsChanged, .scrollWheel,
                                     .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
@@ -109,13 +118,15 @@ public final class GestureService {
         let callback: CGEventTapCallBack = { _, type, event, _ in
             let service = GestureService.shared
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                engine.resetInputState()
+                service.synchronizeFn()
                 if let tap = service.tap { CGEvent.tapEnable(tap: tap, enable: true) }
                 return Unmanaged.passUnretained(event)
             }
             // Click remapping needs an active tap even when scroll swallowing is off.
             let scroll = type == .scrollWheel
             let consume = service.activeTap && (!scroll || configManager.current.swallowScroll)
-            let handled = engine.handle(type: type, event: event, swallow: consume)
+            let handled = engine.handle(type: type, event: event, swallow: consume, physicalFlags: service.physicalModifiers())
             return consume && handled ? nil : Unmanaged.passUnretained(event)
         }
         tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
@@ -125,7 +136,24 @@ public final class GestureService {
             self.source = source
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: true)
+            synchronizeFn()
+            let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in self?.synchronizeFn() }
+            modifierTimer = timer
+            // Keep tracking even while a menu is open or a slider is being dragged.
+            RunLoop.main.add(timer, forMode: .common)
         }
+        appLog("input status: monitoring=\(CGPreflightListenEventAccess()) accessibility=\(AXIsProcessTrusted()) tap=\(tap != nil)")
         refreshMenu()
+    }
+
+    private func physicalModifiers() -> CGEventFlags {
+        var flags = CGEventSource.flagsState(.hidSystemState)
+        if CGEventSource.keyState(.hidSystemState, key: 63) { flags.insert(.maskSecondaryFn) }
+        return flags
+    }
+
+    private func synchronizeFn() {
+        engine?.synchronizeModifiers(flags: physicalModifiers())
+        menuController?.updateFnIndicator(held: engine?.fnState.held ?? false)
     }
 }

@@ -92,11 +92,16 @@ final class MenuController: NSObject {
     private let configManager: ConfigManager
     private let onReload: () -> Void
     let menu = NSMenu()
+    private let fnIndicator = NSMenuItem(title: "Fn: released", action: nil, keyEquivalent: "")
 
     init(configManager: ConfigManager, onReload: @escaping () -> Void) {
         self.configManager = configManager
         self.onReload = onReload
         super.init()
+    }
+
+    func updateFnIndicator(held: Bool) {
+        fnIndicator.title = held ? "Fn: held ✓" : "Fn: released — hold Fn to test"
     }
 
     func build(tapStatus: String) {
@@ -107,6 +112,9 @@ final class MenuController: NSObject {
         enabled.target = self
         enabled.state = cfg.enabled ? .on : .off
         menu.addItem(enabled)
+        fnIndicator.isEnabled = false
+        updateFnIndicator(held: engine?.fnState.held ?? false)
+        menu.addItem(fnIndicator)
 
         menu.addItem(.separator())
 

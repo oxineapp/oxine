@@ -7,4 +7,4 @@ Oxine integration replaces the standalone app lifecycle, launch agent and extern
 MiddleClick restart workaround with an embedded service/shared touch callback.
 It adds middle-click settings, tap validation, paired click suppression, callback
 cleanup, permission recovery, null zero-contact handling, stable touch ordering,
-and a continuous-scroll lock fix. The original user's config is left untouched.
+a continuous-scroll lock fix, physical Fn-state recovery, and a live Fn indicator. The original user's config is left untouched.
