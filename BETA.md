@@ -6,7 +6,10 @@ on this Mac is `/Users/mert/oxine-beta`.
 
 ## ScreenLyrics
 
-Open Oxine Settings → Notch → **ScreenLyrics below the notch**. Opting in sends
+Toggle lyrics directly with the speech-bubble button beside the playback controls
+on the notch Home/song page, or use Settings → Notch → **ScreenLyrics below the notch**.
+The highlighted button means lyrics are on; the overlay appears when the notch closes.
+Both controls share the same saved setting and do not interrupt playback. Opting in sends
 song title, artist, album and duration to [LRCLIB](https://lrclib.net) for synced
 lyrics. No account or API key is needed. Not every recording has synced lyrics.
 The overlay shares the notch's Now Playing source (system-wide adapter, or the
@@ -22,9 +25,12 @@ or while the notch is expanded. No extra Spotify polling process is started.
   zero is fully transparent. Text shadows keep the lyrics legible without a background.
 - Text appearance: None, Fade, Slide up, Pop, or Typewriter; duration 0.1–2 seconds.
   Effects respect macOS Reduce Motion and cancel cleanly when the line changes.
+  Editing settings keeps the current line fully readable; changed animations begin
+  with the next line, rather than restarting for every slider movement.
 - Horizontal offset: −1500…1500 pt; distance below the notch: 0…1500 pt.
 - Timing: −10…+10 seconds, in 0.1 second steps. Positive = earlier, negative = later.
-- Preview cycles sample lines every three seconds to test fonts, placement and animations without music; leaving Settings turns it off.
+- Preview uses real lyrics during playback. When paused or not playing, it cycles
+  sample lines every three seconds; leaving Settings turns it off.
 - The overlay is click-through, so it never blocks the app underneath.
 - All adjustments persist, including an exact zero timing adjustment.
 
@@ -79,4 +85,6 @@ MiddleClick/FnGestures if desired. No source data or stable installation is dele
 Run `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`.
 Tests cover LRC ordering, Unicode, repeated timestamps, source/user timing offsets,
 blank lines, lyric area clamping/anchoring on offset and small displays, and three-finger contact recognition and rejection. Hardware gestures
-must also be checked on the Mac after the permission grants.
+must also be checked on the Mac after the permission grants. NotchKit regression
+tests cover live font/size changes, animation cancellation, timing adjustments,
+and preserving wrapped lyric lines.

@@ -15,6 +15,7 @@ final class NotchLyrics {
     private var cache: [TrackKey: [LyricLine]] = [:]
     private var retryAt: Date?
     private var expanded = false
+    private var lastTimingAdjustment: Double?
     private let defaults = NotchKit.settingsDefaults
 
     private struct TrackKey: Hashable {
@@ -88,9 +89,14 @@ final class NotchLyrics {
         let guide = defaults.bool(forKey: "notchLyricsShowBounds")
         let samples = ["Your lyrics, just below the notch", "Choose a font. Let the words move.",
                        "A little more room for the lines you want to sing along to."]
-        let text = preview ? samples[Int(Date().timeIntervalSinceReferenceDate / 3) % samples.count] :
+        // Adjusting settings while listening must never substitute demo lyrics for the song.
+        let showingSample = preview && !player.isPlaying
+        let timing = number("notchLyricsOffset", fallback: 0.3, range: -10...10)
+        let timingChanged = lastTimingAdjustment.map { $0 != timing } ?? false
+        lastTimingAdjustment = timing
+        let text = showingSample ? samples[Int(Date().timeIntervalSinceReferenceDate / 3) % samples.count] :
             (player.isPlaying ? LRC.line(in: lines, position: player.position(at: Date()),
-                                        adjustment: number("notchLyricsOffset", fallback: 0.3, range: -10...10)) : nil)
+                                        adjustment: timing) : nil)
         guard text != nil || guide else { hide(); return }
         let width = number("notchLyricsWidth", fallback: 520, range: 240...1000)
         let height = number("notchLyricsHeight", fallback: 160, range: 100...500)
@@ -99,7 +105,8 @@ final class NotchLyrics {
                                        width: width, height: height,
                                        xOffset: number("notchLyricsX", fallback: 0, range: -1500...1500),
                                        yOffset: number("notchLyricsY", fallback: 8, range: 0...1500))
-        if panel.frame != frame { panel.setFrame(frame, display: true) }
+        let frameChanged = panel.frame != frame
+        if frameChanged { panel.setFrame(frame, display: true) }
         let style = LyricCanvas.Style(
             fontFamily: defaults.string(forKey: "notchLyricsFontFamily") ?? "system",
             fontSize: number("notchLyricsFont", fallback: 22, range: 12...48),
@@ -109,8 +116,9 @@ final class NotchLyrics {
             showTrack: defaults.object(forKey: "notchLyricsTrackInfo") as? Bool ?? true,
             animation: defaults.string(forKey: "notchLyricsAnimation") ?? "fade",
             animationDuration: number("notchLyricsAnimationDuration", fallback: 0.25, range: 0.1...2))
-        let track = preview ? "ScreenLyrics · preview" : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
-        canvas.render(text: text, track: track, style: style, appearing: !panel.isVisible)
+        let track = showingSample ? "ScreenLyrics · preview" : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
+        canvas.render(text: text, track: track, style: style, appearing: !panel.isVisible,
+                      animateChanges: !timingChanged && (!panel.isVisible || !frameChanged))
         if !panel.isVisible { panel.orderFrontRegardless() }
     }
 

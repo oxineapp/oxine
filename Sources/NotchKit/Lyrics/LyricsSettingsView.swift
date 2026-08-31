@@ -27,7 +27,7 @@ public struct LyricsSettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if enabled {
                 Toggle("Preview lyrics & animations", isOn: $preview)
-                Text("Preview cycles through sample lines every three seconds. It turns off when you leave Settings.")
+                Text("During playback, preview keeps the real lyrics. When nothing is playing, it cycles sample lines every three seconds. It turns off when you leave Settings.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show maximum lyric area outline", isOn: $showBounds)
                 Text("The dashed box shows the exact maximum area on screen, even without music. It stays visible until you switch this off. Text wraps inside it; extra lines are truncated.")
@@ -71,7 +71,7 @@ public struct LyricsSettingsView: View {
                         Text(String(format: "%.2f s", duration)).monospacedDigit()
                     }
                     Slider(value: $duration, in: 0.1...2, step: 0.05)
-                    Text("Shorter is faster. Respects macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)
+                    Text("Shorter is faster. Changes apply to the next lyric line. Respects macOS Reduce Motion.").font(.caption).foregroundStyle(.secondary)
                 }
 
                 Divider().opacity(0.15)

@@ -18,6 +18,8 @@ final class LyricCanvas: NSView {
 
     private let background = NSView()
     private let label = NSTextField(wrappingLabelWithString: "")
+    private let measuringLabel = NSTextField(wrappingLabelWithString: "")
+    private let layoutManager = NSLayoutManager()
     private let caption = NSTextField(labelWithString: "")
     private let guideLabel = NSTextField(labelWithString: "")
     private let outline = CAShapeLayer()
@@ -41,6 +43,7 @@ final class LyricCanvas: NSView {
         }
         label.maximumNumberOfLines = 0
         label.lineBreakMode = .byWordWrapping
+        measuringLabel.lineBreakMode = .byWordWrapping
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .white.withAlphaComponent(0.65)
         guideLabel.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
@@ -73,31 +76,41 @@ final class LyricCanvas: NSView {
         }
     }
 
-    func render(text: String?, track: String, style: Style, appearing: Bool = false) {
+    func render(text: String?, track: String, style: Style, appearing: Bool = false, animateChanges: Bool = true) {
         let newText = text ?? ""
-        let effectChanged = style.animation != lastStyle?.animation || style.animationDuration != lastStyle?.animationDuration
-        let changed = newText != fullText || appearing || effectChanged
-        let needsLayout = changed || style != lastStyle || bounds.size != lastSize
-        let previousDisplay = label.stringValue
+        let contentChanged = newText != fullText
+        let presentationChanged = !animateChanges || (lastStyle != nil && (style != lastStyle || bounds.size != lastSize))
+        let needsLayout = contentChanged || appearing || presentationChanged || style != lastStyle || bounds.size != lastSize
+        // Live controls should update the current line in place, not replay its entrance
+        // on every slider tick or leave an old transform running against a new frame.
+        if contentChanged || appearing || presentationChanged { cancelAnimation() }
+        fullText = newText
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         if needsLayout {
             label.font = Self.font(for: style)
-            // Measure the final string, not a partially revealed typewriter prefix.
             label.stringValue = newText
-            label.maximumNumberOfLines = 0
+            // Measure offscreen, without temporarily replacing an animated visible string.
+            measuringLabel.font = label.font
+            measuringLabel.stringValue = newText
+            measuringLabel.maximumNumberOfLines = 0
             let innerWidth = max(1, bounds.width - 32)
             let footer: CGFloat = style.showTrack ? 38 : 20
             let maxHeight = max(1, bounds.height - footer)
-            let measured = label.sizeThatFits(NSSize(width: innerWidth, height: 10000)).height
-            let lineHeight = ceil((label.font?.ascender ?? 22) - (label.font?.descender ?? -5) + (label.font?.leading ?? 0))
-            // Only reserve complete lines; the maximum box never clips a half line.
-            let available = max(lineHeight, floor(maxHeight / lineHeight) * lineHeight)
-            let labelHeight = min(max(measured, lineHeight), min(maxHeight, available))
+            let measured = measuringLabel.sizeThatFits(NSSize(width: innerWidth, height: 10000)).height
+            let lineHeight = layoutManager.defaultLineHeight(for: label.font!)
+            // Derive the line limit from available space, never from a measured text
+            // height rounded down by a different font metric (which dropped whole lines).
+            let capacity = max(1, Int(floor(maxHeight / lineHeight)))
+            let available = min(maxHeight, CGFloat(capacity) * lineHeight)
+            let labelHeight = min(max(ceil(measured), lineHeight), available)
             let height = min(bounds.height, labelHeight + footer)
             let bottom = bounds.height - height
             background.frame = NSRect(x: 0, y: bottom, width: bounds.width, height: height)
             label.frame = NSRect(x: 16, y: bottom + (style.showTrack ? 28 : 10), width: innerWidth, height: labelHeight)
             caption.frame = NSRect(x: 16, y: bottom + 8, width: innerWidth, height: 16)
-            label.maximumNumberOfLines = max(1, Int(floor(labelHeight / lineHeight)))
+            label.maximumNumberOfLines = capacity
             caption.isHidden = !style.showTrack || newText.isEmpty
             label.isHidden = newText.isEmpty
             background.isHidden = !style.backgroundEnabled || newText.isEmpty || style.backgroundOpacity == 0
@@ -109,25 +122,18 @@ final class LyricCanvas: NSView {
                 textField.layer?.shadowRadius = 3
                 textField.layer?.shadowOffset = CGSize(width: 0, height: -1)
             }
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
             outline.frame = bounds
             outline.path = CGPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), cornerWidth: 14, cornerHeight: 14, transform: nil)
             outline.isHidden = !style.showBounds
-            CATransaction.commit()
             guideLabel.isHidden = !style.showBounds || (!newText.isEmpty && bottom < 22)
             guideLabel.stringValue = "MAX LYRIC AREA · \(Int(bounds.width)) × \(Int(bounds.height)) pt"
             guideLabel.frame = NSRect(x: 12, y: 3, width: max(1, bounds.width - 24), height: 14)
-            if !changed, typingTimer != nil { label.stringValue = previousDisplay }
         }
         caption.stringValue = track
         lastStyle = style
         lastSize = bounds.size
-        guard changed else { return }
-        cancelAnimation()
-        fullText = newText
-        label.stringValue = newText
-        guard !newText.isEmpty, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        guard contentChanged || appearing, !presentationChanged, !newText.isEmpty,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
         animate(style)
     }
 

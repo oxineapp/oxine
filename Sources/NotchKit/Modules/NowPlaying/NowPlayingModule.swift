@@ -5,6 +5,7 @@ import PanelKit
 /// a fluid backdrop derived from the album art (a blurred, darkened fill of the
 /// artwork itself, so the card's colour follows the music).
 struct NowPlayingPlayer: View {
+    @AppStorage("notchLyricsEnabled", store: NotchKit.settingsDefaults) private var lyricsEnabled = false
     @ObservedObject var manager: NowPlayingManager
 
     var body: some View {
@@ -43,16 +44,21 @@ struct NowPlayingPlayer: View {
                 Text("Nothing playing")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
+                LyricsToggleButton(isEnabled: $lyricsEnabled)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var transport: some View {
-        HStack(spacing: 22) {
-            transportButton("backward.fill", size: 13) { manager.previous() }
-            transportButton(manager.isPlaying ? "pause.fill" : "play.fill", size: 16) { manager.playPause() }
-            transportButton("forward.fill", size: 13) { manager.next() }
+        HStack(spacing: 8) {
+            HStack(spacing: 12) {
+                transportButton("backward.fill", size: 13) { manager.previous() }
+                transportButton(manager.isPlaying ? "pause.fill" : "play.fill", size: 16) { manager.playPause() }
+                transportButton("forward.fill", size: 13) { manager.next() }
+            }
+            .frame(maxWidth: .infinity)
+            LyricsToggleButton(isEnabled: $lyricsEnabled)
         }
         .frame(maxWidth: .infinity)
     }
@@ -66,6 +72,27 @@ struct NowPlayingPlayer: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The same saved switch as Settings → Notch; does not rebuild the player or seek.
+struct LyricsToggleButton: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        Button { isEnabled.toggle() } label: {
+            Image(systemName: isEnabled ? "quote.bubble.fill" : "quote.bubble")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.panelAccent : .white.opacity(0.65))
+                .frame(width: 28, height: 26)
+                .background(Color.panelAccent.opacity(isEnabled ? 0.16 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isEnabled ? "Hide lyrics" : "Show lyrics below the notch when it closes")
+        .accessibilityLabel("Lyrics")
+        .accessibilityValue(isEnabled ? "On" : "Off")
+        .accessibilityAddTraits(isEnabled ? .isSelected : [])
     }
 }
 
