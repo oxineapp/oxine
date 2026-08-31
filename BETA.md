@@ -21,6 +21,10 @@ and player changes are handled without carrying an old song's clock forward.
 A late startup snapshot cannot overwrite newer stream events. Lyrics wait when a
 new track has no known playback position. Incorrect timestamps in the lyric file
 itself can still require a timing adjustment or a different lyric source.
+Artwork follows the adapter's independent diff updates: unchanged covers survive
+song/metadata changes, including consecutive songs on one album. Explicit removal
+or a full snapshot without artwork clears the cover. Late artwork also refreshes
+the player tint without resetting the lyric clock.
 
 - Text size: 12–48 pt; choose System, Rounded, Serif, Monospaced, or an installed font family.
 - Maximum lyric area: 240–1000 pt wide and 100–500 pt high, clamped to the display.

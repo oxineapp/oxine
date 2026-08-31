@@ -39,10 +39,12 @@ public final class NowPlayingManager: ObservableObject {
             guard let self else { return }
             let track = incoming
             let titleChanged = track?.title != self.track?.title || track?.artist != self.track?.artist
+            let artworkChanged = track?.artwork !== self.track?.artwork
             self.track = track
             self.elapsedAt = track?.elapsedAt ?? Date()
-            // Only recompute the (relatively costly) tint when the track changes.
-            if titleChanged {
+            // Artwork can arrive after the title or be removed independently.
+            // Retained image identity avoids recalculating tint on clock updates.
+            if titleChanged || artworkChanged {
                 let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
                 withAnimation(.easeInOut(duration: 0.5)) { self.tint = newTint }
             }

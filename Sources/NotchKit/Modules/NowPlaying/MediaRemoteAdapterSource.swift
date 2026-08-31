@@ -182,7 +182,6 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
             (!previous.identifier.isEmpty && !merged.identifier.isEmpty && merged.identifier != previous.identifier)
         if changedTrack {
             merged.elapsed = 0; merged.elapsedAt = nil; merged.rawElapsed = nil; merged.rawTimestamp = nil
-            merged.artwork = nil
         }
         if let duration = seconds("duration") { merged.duration = max(0, duration) }
         else if payload["duration"] is NSNull || payload["durationMicros"] is NSNull { merged.duration = 0 }
@@ -221,6 +220,10 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
             merged.elapsedAt = receivedAt
         }
 
+        // Artwork follows the adapter's diff contract independently of the clock:
+        // omission means unchanged, even across songs sharing a cover. Clearing it
+        // on metadata/identity changes loses the image until the adapter sends a
+        // different one. Explicit null and full snapshots still remove old art.
         if let b64 = (payload["artworkData"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !b64.isEmpty, let data = Data(base64Encoded: b64) {
             merged.artwork = downsampledArtwork(data)
