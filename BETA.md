@@ -4,6 +4,21 @@ Branch: `beta`. Build with `./build-beta.sh`, then copy `dist/Oxine Beta.app` to
 `/Applications`. This leaves `/Applications/Oxine.app` intact. The source checkout
 on this Mac is `/Users/mert/oxine-beta`.
 
+## Playback source switch
+
+Use the **two rectangles with arrows** button beside the lyrics toggle on the
+notch Home/song page to choose **Automatic**, **Spotify**, or **Apple Music**.
+Automatic uses the existing system-wide source (including browser media). Manual
+choices pin observation, artwork, lyrics, play/pause, skip and seeking to that app.
+Choosing a source does not pause, play, or launch the player. The choice persists
+across restarts; the menu remains available when the selected app has no track.
+Late updates from a previous source are ignored and its clock is discarded.
+
+The first manual app selection may require macOS **Automation** permission for
+Oxine Beta to read/control that app. Individual browser tabs and arbitrary
+background media sessions are not listed separately; use Automatic for them.
+Apple Music cover bytes and Spotify artwork URLs are read from the selected app.
+
 ## ScreenLyrics
 
 Toggle lyrics directly with the speech-bubble button beside the playback controls

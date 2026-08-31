@@ -41,10 +41,11 @@ struct NowPlayingPlayer: View {
                 Image(systemName: "music.note")
                     .font(.system(size: 20))
                     .foregroundColor(.white.opacity(0.35))
-                Text("Nothing playing")
+                Text(manager.selectedPlayer == .automatic ? "Nothing playing" : "Nothing playing in \(manager.selectedPlayer.name)")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                 LyricsToggleButton(isEnabled: $lyricsEnabled)
+                PlaybackPlayerButton(manager: manager)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -59,6 +60,7 @@ struct NowPlayingPlayer: View {
             }
             .frame(maxWidth: .infinity)
             LyricsToggleButton(isEnabled: $lyricsEnabled)
+            PlaybackPlayerButton(manager: manager)
         }
         .frame(maxWidth: .infinity)
     }
@@ -72,6 +74,43 @@ struct NowPlayingPlayer: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Available even with no track, so a stopped/closed pinned app is never a trap.
+struct PlaybackPlayerButton: View {
+    @ObservedObject var manager: NowPlayingManager
+
+    var body: some View {
+        Menu {
+            Picker("Playback source", selection: Binding(
+                get: { manager.selectedPlayer },
+                set: { manager.selectPlayer($0) }
+            )) {
+                ForEach(PlaybackPlayer.allCases) { player in
+                    Text(player.name).tag(player)
+                }
+            }
+            .pickerStyle(.inline)
+            Divider()
+            if let track = manager.track {
+                Text("\(nowPlayingAppName(track.app)): \(track.title)")
+            }
+            Text("Automatic follows macOS, including browser playback.")
+            Text("Separate browser tabs are not selectable.")
+        } label: {
+            Image(systemName: "rectangle.2.swap")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(manager.selectedPlayer == .automatic ? .white.opacity(0.65) : Color.panelAccent)
+                .frame(width: 28, height: 26)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Switch playback source — \(manager.selectedPlayer.name)")
+        .accessibilityLabel("Switch playback source")
+        .accessibilityValue(manager.selectedPlayer.name)
     }
 }
 

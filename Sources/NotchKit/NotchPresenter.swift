@@ -182,7 +182,10 @@ public final class NotchPresenter {
         // Hysteresis: when open, test the larger open region so small movements
         // don't snap it shut; when collapsed, test the small notch region.
         let region = wantExpanded ? openRegion(screen) : closedRegion(screen)
-        let want = controller.pinned || region.contains(NSEvent.mouseLocation)
+        // Native source menus extend outside the card. Keep their anchor alive
+        // while AppKit tracks a menu/drag, then resume normal hover dismissal.
+        let trackingInteraction = wantExpanded && RunLoop.current.currentMode == .eventTracking
+        let want = controller.pinned || trackingInteraction || region.contains(NSEvent.mouseLocation)
         if want != wantExpanded {
             // A firm tap as it springs open — DynamicNotchKit fires this from its
             // own hover, which we bypass, so we do it here. `.levelChange` is the

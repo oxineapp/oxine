@@ -13,10 +13,21 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     /// The app that reported the current track — transport targets it.
     private var activeApp = "Spotify"
     private var artworkURL: String?
+    private let player: PlaybackPlayer
+    private let executeScript: (String) -> NSAppleEventDescriptor?
 
-    public init() {}
+    public convenience init(player: PlaybackPlayer = .automatic) {
+        self.init(player: player, executeScript: Self.execute)
+    }
+
+    init(player: PlaybackPlayer, executeScript: @escaping (String) -> NSAppleEventDescriptor?) {
+        self.player = player
+        self.executeScript = executeScript
+        self.activeApp = player.scriptingApp ?? "Spotify"
+    }
 
     public func start() {
+        guard timer == nil else { return }
         poll()
         let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
@@ -25,7 +36,10 @@ public final class ScriptingBridgeSource: NowPlayingSource {
         timer = t
     }
 
-    public func stop() { timer?.invalidate(); timer = nil }
+    public func stop() {
+        timer?.invalidate(); timer = nil
+        last = nil; artworkURL = nil
+    }
 
     // MARK: transport
 
@@ -40,6 +54,12 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     // MARK: polling
 
     private func poll() {
+        if let app = player.scriptingApp {
+            // A pinned player never falls through to a different playing app.
+            activeApp = app
+            emit(query(app))
+            return
+        }
         // Prefer whichever is actively playing; Spotify first, then Music.
         if let s = query("Spotify"), s.isPlaying { activeApp = "Spotify"; emit(s); return }
         if let m = query("Music"), m.isPlaying { activeApp = "Music"; emit(m); return }
@@ -54,11 +74,24 @@ public final class ScriptingBridgeSource: NowPlayingSource {
         // While playing, always push (the scrubber needs fresh position); when
         // paused, only push on a real metadata change.
         if let track, let last, track.sameMeta(as: last), !track.isPlaying, track.elapsed == last.elapsed { return }
-        let titleChanged = track?.title != last?.title
+        let titleChanged = track?.title != last?.title || track?.artist != last?.artist ||
+            track?.album != last?.album || track?.app != last?.app
         last = track
         onChange?(track)
         if let track, track.app == "Spotify", titleChanged, let url = artworkURL {
             fetchArtwork(url, into: track)
+        } else if var track, track.app == "Music", titleChanged {
+            // Apple Music exposes image bytes directly, rather than an artwork URL.
+            let script = """
+            if application "Music" is running then
+              tell application "Music" to get raw data of artwork 1 of current track
+            end if
+            """
+            if let data = executeScript(script)?.data, let image = downsampledArtwork(data) {
+                track.artwork = image
+                last = track
+                onChange?(track)
+            }
         }
     }
 
@@ -88,7 +121,7 @@ public final class ScriptingBridgeSource: NowPlayingSource {
         if app == "Spotify" { duration /= 1000 }
         return NowPlayingTrack(
             title: parts[1], artist: parts[2], album: parts[3],
-            artwork: last?.app == app ? last?.artwork : nil,
+            artwork: last?.app == app && last?.title == parts[1] && last?.artist == parts[2] && last?.album == parts[3] ? last?.artwork : nil,
             isPlaying: parts[0].contains("playing"), app: app,
             elapsed: elapsed, duration: duration, elapsedAt: Date(),
             hasPlaybackPosition: Double(parts[4]) != nil
@@ -97,10 +130,14 @@ public final class ScriptingBridgeSource: NowPlayingSource {
 
     @discardableResult
     private func run(_ source: String) -> String? {
+        executeScript(source)?.stringValue
+    }
+
+    private static func execute(_ source: String) -> NSAppleEventDescriptor? {
         var err: NSDictionary?
         let result = NSAppleScript(source: source)?.executeAndReturnError(&err)
         if let err { notchLog("AppleScript error: \(err)") ; return nil }
-        return result?.stringValue
+        return result
     }
 
     private func fetchArtwork(_ urlString: String, into track: NowPlayingTrack) {

@@ -2,9 +2,8 @@ import SwiftUI
 import CoreImage
 
 /// Owns the chosen now-playing source and republishes its track for the views.
-/// Prefers the system-wide adapter when its resources are bundled; otherwise the
-/// ScriptingBridge baseline. Both conform to `NowPlayingSource`, so swapping is
-/// a one-line decision here.
+/// Automatic prefers the system-wide adapter; explicit choices use app-directed
+/// observation and transport. The same selected feed drives artwork and lyrics.
 @MainActor
 public final class NowPlayingManager: ObservableObject {
     @Published public private(set) var track: NowPlayingTrack?
@@ -15,49 +14,92 @@ public final class NowPlayingManager: ObservableObject {
     /// smoothly between the (coarse) source updates.
     @Published public private(set) var elapsedAt: Date = .init()
 
-    private let source: NowPlayingSource
+    @Published public private(set) var selectedPlayer: PlaybackPlayer
+    private var source: NowPlayingSource
+    private let makeSource: ((PlaybackPlayer) -> NowPlayingSource)?
+    private let saveSelection: ((PlaybackPlayer) -> Void)?
+    private var sourceGeneration = UUID()
+    private var started = false
 
     public convenience init() {
-        // "system" = system-wide via the mediaremote-adapter (any app, incl.
-        // browsers); "apps" = Music & Spotify only via ScriptingBridge. Defaults
-        // to system-wide when the adapter is bundled, else the app baseline.
-        let pref = NotchKit.settingsDefaults.string(forKey: "notchNowPlayingSource") ?? "system"
-        let source: NowPlayingSource
-        if pref == "system", MediaRemoteAdapterSource.isAvailable {
-            source = MediaRemoteAdapterSource()
-            notchLog("now playing: mediaremote-adapter (system-wide)")
-        } else {
-            source = ScriptingBridgeSource()
-            notchLog("now playing: ScriptingBridge (Music/Spotify)")
-        }
-        self.init(source: source)
-    }
-
-    init(source: NowPlayingSource) {
-        self.source = source
-        source.onChange = { [weak self] incoming in
-            guard let self else { return }
-            let track = incoming
-            let titleChanged = track?.title != self.track?.title || track?.artist != self.track?.artist
-            let artworkChanged = track?.artwork !== self.track?.artwork
-            self.track = track
-            self.elapsedAt = track?.elapsedAt ?? Date()
-            // Artwork can arrive after the title or be removed independently.
-            // Retained image identity avoids recalculating tint on clock updates.
-            if titleChanged || artworkChanged {
-                let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
-                withAnimation(.easeInOut(duration: 0.5)) { self.tint = newTint }
+        let defaults = NotchKit.settingsDefaults
+        let selection = PlaybackPlayer(rawValue: defaults.string(forKey: "notchPlaybackPlayer") ?? "") ?? .automatic
+        let preferSystem = (defaults.string(forKey: "notchNowPlayingSource") ?? "system") == "system"
+        let factory: (PlaybackPlayer) -> NowPlayingSource = { player in
+            if player == .automatic, preferSystem, MediaRemoteAdapterSource.isAvailable {
+                return MediaRemoteAdapterSource()
             }
+            return ScriptingBridgeSource(player: player)
+        }
+        self.init(source: factory(selection), selectedPlayer: selection, makeSource: factory,
+                  saveSelection: { defaults.set($0.rawValue, forKey: "notchPlaybackPlayer") })
+    }
+
+    init(source: NowPlayingSource, selectedPlayer: PlaybackPlayer = .automatic,
+         makeSource: ((PlaybackPlayer) -> NowPlayingSource)? = nil,
+         saveSelection: ((PlaybackPlayer) -> Void)? = nil) {
+        self.source = source
+        self.selectedPlayer = selectedPlayer
+        self.makeSource = makeSource
+        self.saveSelection = saveSelection
+        observeSource()
+    }
+
+    private func observeSource() {
+        let generation = sourceGeneration
+        source.onChange = { [weak self] incoming in
+            guard let self, self.sourceGeneration == generation else { return }
+            self.receive(incoming)
         }
     }
 
-    public func start() { source.start() }
-    public func stop() { source.stop() }
+    private func receive(_ track: NowPlayingTrack?) {
+        let titleChanged = track?.title != self.track?.title || track?.artist != self.track?.artist
+        let artworkChanged = track?.artwork !== self.track?.artwork
+        self.track = track
+        elapsedAt = track?.elapsedAt ?? Date()
+        // Artwork may arrive independently; retained identity avoids work on clock updates.
+        if titleChanged || artworkChanged {
+            let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
+            withAnimation(.easeInOut(duration: 0.5)) { tint = newTint }
+        }
+    }
 
-    public func playPause() { source.playPause() }
-    public func next() { source.next() }
-    public func previous() { source.previous() }
-    public func seek(to seconds: Double) { source.seek(to: seconds) }
+    /// Change observation and transport together, without starting/stopping playback.
+    public func selectPlayer(_ player: PlaybackPlayer) {
+        guard player != selectedPlayer, let makeSource else { return }
+        sourceGeneration = UUID()
+        source.onChange = nil
+        source.stop()
+        receive(nil) // Cancel old lyric requests and discard the old clock/artwork.
+        selectedPlayer = player
+        saveSelection?(player)
+        source = makeSource(player)
+        observeSource()
+        if started { source.start() }
+    }
+
+    public func start() {
+        guard !started else { return }
+        started = true
+        observeSource()
+        source.start()
+    }
+    public func stop() {
+        started = false
+        sourceGeneration = UUID()
+        source.onChange = nil
+        source.stop()
+        receive(nil)
+    }
+
+    public func playPause() { if track != nil { source.playPause() } }
+    public func next() { if track != nil { source.next() } }
+    public func previous() { if track != nil { source.previous() } }
+    public func seek(to seconds: Double) {
+        guard track != nil, seconds.isFinite else { return }
+        source.seek(to: max(0, seconds))
+    }
 
     /// Current position, interpolated from the last measurement so the scrubber
     /// advances smoothly between source updates.
