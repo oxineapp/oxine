@@ -32,10 +32,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "LyricsCore"),
-        .target(name: "GestureKit", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "LyricsCoreTests", dependencies: ["LyricsCore"]),
         .testTarget(name: "NotchKitTests", dependencies: ["NotchKit"]),
-        .testTarget(name: "GestureKitTests", dependencies: ["GestureKit"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Types shared verbatim across the app↔daemon XPC boundary.
         .target(
             name: "SousShared"
@@ -104,7 +102,6 @@ let package = Package(
         .executableTarget(
             name: "Oxine",
             dependencies: [
-                "GestureKit",
                 "SousShared",
                 "PanelKit",
                 "SousKit",

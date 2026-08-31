@@ -63,59 +63,6 @@ The timestamp parser/overlay are adapted from the user's local ScreenLyrics
 project. Track requests are cancelled on track changes; completed results
 (including missing lyrics) are cached in memory and transient failures back off.
 
-## FnGestures and middle click
-
-Right-click the Oxine menu-bar icon → **Fn Gestures & Middle Click**, or open
-Settings → Integrations → **Configure gestures & middle click**.
-
-The integrated engine is adapted from [Sha-Dox/FnGestures](https://github.com/Sha-Dox/FnGestures).
-Hold Fn for configured scroll, swipe, pinch, rotation, tap and click actions.
-Each gesture has action presets and 0.5×–4× sensitivity, plus custom key combos
-and shell commands. Middle Click is available as a preset. Fresh configurations
-also map Fn+left-click to middle click; imported configurations keep their mappings.
-Three-finger **tap** without Fn is enabled by default and has a separate toggle.
-Lift all three fingers without pressing the trackpad down. Long holds, movement,
-fourth fingers and physical clicks cancel that tap. For a physical click, map
-Gestures → Click → Middle Click and hold Fn while clicking.
-The menu shows current/peak finger counts and the number of recognized middle-click
-taps, so touch detection can be checked separately from macOS permissions.
-
-The touch reader uses the 96-byte contact ABI, includes initial touch-down frames,
-and rejects malformed records. Device callbacks start on the main run loop; devices
-are retained and deduplicated by hardware ID during hotplug checks. This prevents
-repeated registrations and preserves multi-finger records.
-
-The gesture menu includes a live **Fn: held / released** indicator. Hold and release
-Fn/Globe while that menu is open to check detection. Tracking uses physical system
-modifier/key state as well as Fn transitions; missing flags on scroll/click events
-no longer cancel Fn, and arrow-key flags cannot activate it. A 50 ms check recovers
-missed presses/releases, including while menus are open. Releasing Fn stops smooth
-volume/brightness adjustment. No keyboard contents are recorded.
-
-One touch reader handles both features; it does not restart any other app.
-Quit standalone FnGestures/MiddleClick before enabling this integration to avoid
-duplicate actions. The old FnGestures config is copied on first launch, never
-modified. Oxine's copy lives at
-`~/Library/Application Support/Oxine/Gestures/config.json`.
-
-macOS requires **Input Monitoring** for the event tap and **Accessibility** for
-middle click and click suppression. Grant these to **Oxine Beta**, using the
-**Set up permissions — drag app into Settings…** button in Integrations (also
-available from the gesture menu). A separate floating helper stays visible over
-System Settings. Open each permission page, drag the Oxine app icon into its actual
-app list, and enable its switch. This is a copy-only file-URL drag; it never moves
-the app. If an old signed build is listed, remove that entry with − before adding
-the current icon. The helper includes **Show app in Finder** as a fallback and
-**Restart Oxine Beta** to apply grants. Launching with `--gesture-permissions`
-opens only this helper, without waiting for notes/iCloud; Restart then opens the
-normal app. Only macOS and the user grant permission;
-the helper does not bypass prompts or edit the permissions database.
-
-An active event tap is rebuilt automatically
-when permission changes; a watchdog re-enables a timed-out tap. macOS may require
-a restart after a permission grant. System trackpad gestures can still intercept
-Mission Control/Spaces gestures; change their bindings if needed.
-
 ## Installation and rollback
 
 This local build is ad-hoc signed (`com.oxine.beta`), not notarized. You can use
@@ -127,25 +74,18 @@ rebuilding. Stable-channel Sparkle updates are disabled for this beta.
 
 No privileged battery/fan helper is installed or replaced by the beta build.
 Existing helper trust checks may reject a locally signed beta; use stable Oxine
-for those features if so. Do not reinstall helpers just to test lyrics/gestures.
+for those features if so. Do not reinstall helpers just to test lyrics.
 
-To roll back: quit Oxine Beta and open `/Applications/Oxine.app`; reopen
-MiddleClick/FnGestures if desired. No source data or stable installation is deleted.
+To roll back: quit Oxine Beta and open `/Applications/Oxine.app`.
+No source data or stable installation is deleted.
 
 ## Validation
 
 Run `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`.
 Tests cover LRC ordering, Unicode, repeated timestamps, source/user timing offsets,
-blank lines, lyric area clamping/anchoring on offset and small displays, and three-finger contact recognition and rejection. Hardware gestures
-must also be checked on the Mac after the permission grants. NotchKit regression
-tests cover live font/size changes, animation cancellation, timing adjustments,
-and preserving wrapped lyric lines. Fn regression tests cover missing/stale event
-flags, physical-state recovery, synthetic shortcuts, other modifiers, and tap resets.
-Raw touch-frame fixtures cover multi-finger offsets, initial contact and staggered
-release, hover rejection, and malformed input. Mouse-event tests validate button 2,
-click count, matching down/up events, and removal of the Fn trigger flag.
-The permission drag test verifies a real application file URL on an isolated
-pasteboard, including paths with spaces, without changing the clipboard or moving files.
+blank lines, lyric area clamping/anchoring on offset and small displays.
+NotchKit regression tests cover live font/size changes, animation cancellation,
+timing adjustments, and preserving wrapped lyric lines.
 
 Playback regression tests cover source timestamps, metadata-only updates, seeks,
 pause/resume, fractional rates, track identity, explicit cleared metadata, late

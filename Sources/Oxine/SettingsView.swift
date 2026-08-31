@@ -1,4 +1,3 @@
-import GestureKit
 import SwiftUI
 import PanelKit
 import SousKit
@@ -59,7 +58,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .sous:         return "Charge limits & battery health"
         case .temper:       return "Temperatures & fans"
         case .notch:        return "Media, mirror, shelf at the notch"
-        case .integrations: return "Fn gestures, middle click, justtype sync"
+        case .integrations: return "justtype sync"
         case .shortcuts:    return "Keyboard shortcuts"
         case .about:        return "Version, updates, setup"
         }
@@ -120,7 +119,6 @@ enum SettingIndex {
         SettingEntry("Window size", .general, ["compact", "standard", "tall", "custom", "resize", "dimensions", "bigger", "smaller", "width", "height", "panel"]),
         SettingEntry("Accent color", .general, ["accent", "colour", "theme", "tint", "highlight", "appearance"]),
         SettingEntry("ScreenLyrics", .notch, ["lyrics", "timing", "font", "position", "lrclib", "opacity", "background", "animation", "outline"]),
-        SettingEntry("Fn Gestures & Middle Click", .integrations, ["fn", "middle", "click", "trackpad", "gesture", "sensitivity"]),
         // Tabs & Navigation
         SettingEntry("Edit tab bar", .tabs, ["reorder", "rearrange", "add", "remove", "hide", "customize", "organize", "arrange"]),
         SettingEntry("Swipe sensitivity", .tabs, ["two", "finger", "trackpad", "gesture", "scroll"]),
@@ -736,16 +734,6 @@ struct SettingsView: View {
         case .notch:
             anchored("Notch", notchSection)
         case .integrations:
-            SettingSection(title: "Fn Gestures & Middle Click") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Hold Fn for scroll, swipe, pinch, tap and click actions. Three-finger tap performs a middle click without Fn. Configure actions and sensitivity from the menu.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button("Configure gestures & middle click…") { GestureService.shared.showMenu() }
-                    Button("Set up permissions — drag app into Settings…") { GestureService.shared.requestPermissions() }
-                    Text("Quit standalone FnGestures and MiddleClick while using Oxine’s integrated gestures to avoid duplicate actions.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
             anchored("Integrations", justtypeSection)
         case .shortcuts:
             anchored("Keyboard Shortcuts", shortcutsSection)

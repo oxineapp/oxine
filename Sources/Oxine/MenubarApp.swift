@@ -1,4 +1,3 @@
-import GestureKit
 import SwiftUI
 import PanelKit
 import SousKit
@@ -76,14 +75,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var temperBeadColor: NSColor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Permission setup must remain usable even if the user's notes folder is
-        // waiting for iCloud. Its Restart button opens the normal app afterwards.
-        if CommandLine.arguments.contains("--gesture-permissions") {
-            NSApplication.shared.setActivationPolicy(.accessory)
-            GestureService.shared.start()
-            GestureService.shared.requestPermissions()
-            return
-        }
         // Tell the shared chrome who it is (settings suite + display name) before
         // anything touches the theme, size store, crash reporter, or updater.
         PanelKit.configure(.oxine)
@@ -113,7 +104,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The notch companion: its own top-of-screen surface, independent of the
         // dropdown panel. Safe to start late — it brings itself up if enabled.
         NotchCoordinator.shared.start()
-        GestureService.shared.start()
         if Bundle.main.object(forInfoDictionaryKey: "OxineBeta") as? Bool == true,
            !UserDefaults.standard.bool(forKey: "betaWelcomeShown") {
             UserDefaults.standard.set(true, forKey: "betaWelcomeShown")
@@ -440,10 +430,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         tabsItem.submenu = tabsMenu
         menu.addItem(tabsItem)
-
-        let gestures = NSMenuItem(title: "Fn Gestures & Middle Click", action: nil, keyEquivalent: "")
-        gestures.submenu = GestureService.shared.menu()
-        menu.addItem(gestures)
 
         menu.addItem(withTitle: "Settings\u{2026}", action: #selector(menuSettings), keyEquivalent: ",")
         menu.addItem(.separator())
