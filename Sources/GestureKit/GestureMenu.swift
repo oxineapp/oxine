@@ -213,11 +213,11 @@ final class MenuController: NSObject {
 
         menu.addItem(.separator())
 
-        let listen = NSMenuItem(title: "Request Input Monitoring…", action: #selector(requestListen(_:)), keyEquivalent: "")
+        let listen = NSMenuItem(title: "Set Up Input Monitoring…", action: #selector(requestListen(_:)), keyEquivalent: "")
         listen.target = self
         menu.addItem(listen)
 
-        let ax = NSMenuItem(title: "Request Accessibility…", action: #selector(requestAX(_:)), keyEquivalent: "")
+        let ax = NSMenuItem(title: "Set Up Accessibility…", action: #selector(requestAX(_:)), keyEquivalent: "")
         ax.target = self
         menu.addItem(ax)
 
@@ -344,19 +344,11 @@ final class MenuController: NSObject {
     }
 
     @objc private func requestListen(_ sender: Any?) {
-        if #available(macOS 10.15, *) {
-            if !CGPreflightListenEventAccess() {
-                CGRequestListenEventAccess()
-            }
-        }
-        openPane("Privacy_ListenEvent")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.onReload()
-        }
+        GestureService.shared.showPermissionHelp(page: .inputMonitoring)
     }
 
     @objc private func requestAX(_ sender: Any?) {
-        openPane("Privacy_Accessibility")
+        GestureService.shared.showPermissionHelp(page: .accessibility)
     }
 
 }

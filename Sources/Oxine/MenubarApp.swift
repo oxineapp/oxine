@@ -76,6 +76,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var temperBeadColor: NSColor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Permission setup must remain usable even if the user's notes folder is
+        // waiting for iCloud. Its Restart button opens the normal app afterwards.
+        if CommandLine.arguments.contains("--gesture-permissions") {
+            NSApplication.shared.setActivationPolicy(.accessory)
+            GestureService.shared.start()
+            GestureService.shared.requestPermissions()
+            return
+        }
         // Tell the shared chrome who it is (settings suite + display name) before
         // anything touches the theme, size store, crash reporter, or updater.
         PanelKit.configure(.oxine)

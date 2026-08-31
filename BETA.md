@@ -75,7 +75,18 @@ modified. Oxine's copy lives at
 
 macOS requires **Input Monitoring** for the event tap and **Accessibility** for
 middle click and click suppression. Grant these to **Oxine Beta**, using the
-permission buttons in Integrations. An active event tap is rebuilt automatically
+**Set up permissions — drag app into Settings…** button in Integrations (also
+available from the gesture menu). A separate floating helper stays visible over
+System Settings. Open each permission page, drag the Oxine app icon into its actual
+app list, and enable its switch. This is a copy-only file-URL drag; it never moves
+the app. If an old signed build is listed, remove that entry with − before adding
+the current icon. The helper includes **Show app in Finder** as a fallback and
+**Restart Oxine Beta** to apply grants. Launching with `--gesture-permissions`
+opens only this helper, without waiting for notes/iCloud; Restart then opens the
+normal app. Only macOS and the user grant permission;
+the helper does not bypass prompts or edit the permissions database.
+
+An active event tap is rebuilt automatically
 when permission changes; a watchdog re-enables a timed-out tap. macOS may require
 a restart after a permission grant. System trackpad gestures can still intercept
 Mission Control/Spaces gestures; change their bindings if needed.
@@ -108,3 +119,5 @@ flags, physical-state recovery, synthetic shortcuts, other modifiers, and tap re
 Raw touch-frame fixtures cover multi-finger offsets, initial contact and staggered
 release, hover rejection, and malformed input. Mouse-event tests validate button 2,
 click count, matching down/up events, and removal of the Fn trigger flag.
+The permission drag test verifies a real application file URL on an isolated
+pasteboard, including paths with spaces, without changing the clipboard or moving files.

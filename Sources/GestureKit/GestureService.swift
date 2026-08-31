@@ -26,6 +26,7 @@ public final class GestureService {
     private var started = false
     private var permissionState = ""
     private var middleClickCount = 0
+    private var permissionWindow: GesturePermissionWindow?
 
     private init() {}
 
@@ -80,12 +81,12 @@ public final class GestureService {
     public func showMenu() { menu().popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil) }
 
     public func requestPermissions() {
-        if !CGPreflightListenEventAccess() { CGRequestListenEventAccess() }
-        if !AXIsProcessTrusted() {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
-        }
-        configure()
+        showPermissionHelp()
+    }
+
+    func showPermissionHelp(page: GesturePermissionState.Page? = nil) {
+        if permissionWindow == nil { permissionWindow = GesturePermissionWindow() }
+        permissionWindow?.show(page: page)
     }
 
     func refreshMenu() {

@@ -741,7 +741,7 @@ struct SettingsView: View {
                     Text("Hold Fn for scroll, swipe, pinch, tap and click actions. Three-finger tap performs a middle click without Fn. Configure actions and sensitivity from the menu.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Configure gestures & middle click…") { GestureService.shared.showMenu() }
-                    Button("Grant Input Monitoring & Accessibility…") { GestureService.shared.requestPermissions() }
+                    Button("Set up permissions — drag app into Settings…") { GestureService.shared.requestPermissions() }
                     Text("Quit standalone FnGestures and MiddleClick while using Oxine’s integrated gestures to avoid duplicate actions.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
