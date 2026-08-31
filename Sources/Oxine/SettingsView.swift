@@ -119,7 +119,7 @@ enum SettingIndex {
         SettingEntry("Glass tint", .general, ["opacity", "transparency", "transparent", "translucent", "frosted", "blur", "material", "see", "through"]),
         SettingEntry("Window size", .general, ["compact", "standard", "tall", "custom", "resize", "dimensions", "bigger", "smaller", "width", "height", "panel"]),
         SettingEntry("Accent color", .general, ["accent", "colour", "theme", "tint", "highlight", "appearance"]),
-        SettingEntry("ScreenLyrics", .notch, ["lyrics", "timing", "font", "position", "lrclib"]),
+        SettingEntry("ScreenLyrics", .notch, ["lyrics", "timing", "font", "position", "lrclib", "opacity", "background", "animation", "outline"]),
         SettingEntry("Fn Gestures & Middle Click", .integrations, ["fn", "middle", "click", "trackpad", "gesture", "sensitivity"]),
         // Tabs & Navigation
         SettingEntry("Edit tab bar", .tabs, ["reorder", "rearrange", "add", "remove", "hide", "customize", "organize", "arrange"]),

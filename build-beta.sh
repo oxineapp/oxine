@@ -17,7 +17,7 @@ from pathlib import Path
 with open('Info.plist', 'rb') as f: p = plistlib.load(f)
 p.update(CFBundleExecutable='Oxine', CFBundleIdentifier='com.oxine.beta',
          CFBundleName='Oxine Beta', CFBundleDisplayName='Oxine Beta',
-         CFBundleShortVersionString='2.1.1-beta.1', CFBundleVersion='21101',
+         CFBundleShortVersionString='2.1.1-beta.2', CFBundleVersion='21102',
          OxineBeta=True, SUEnableAutomaticChecks=False)
 # Never offer a stable-channel update over the personal beta.
 p.pop('SUFeedURL', None)

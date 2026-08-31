@@ -7,8 +7,7 @@ import LyricsCore
 final class NotchLyrics {
     private let player: NowPlayingManager
     private let panel: NSPanel
-    private let label = NSTextField(wrappingLabelWithString: "")
-    private let caption = NSTextField(labelWithString: "")
+    private let canvas = LyricCanvas(frame: .zero)
     private var timer: Timer?
     private var request: Task<Void, Never>?
     private var key: TrackKey?
@@ -16,7 +15,6 @@ final class NotchLyrics {
     private var cache: [TrackKey: [LyricLine]] = [:]
     private var retryAt: Date?
     private var expanded = false
-    private var lastText = ""
     private let defaults = NotchKit.settingsDefaults
 
     private struct TrackKey: Hashable {
@@ -39,21 +37,7 @@ final class NotchLyrics {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isReleasedWhenClosed = false
-        let content = NSView()
-        content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.82).cgColor
-        content.layer?.cornerRadius = 14
-        for text in [label, caption] {
-            text.alignment = .center
-            text.textColor = .white
-            text.isSelectable = false
-            content.addSubview(text)
-        }
-        label.maximumNumberOfLines = 3
-        label.lineBreakMode = .byWordWrapping
-        caption.font = .systemFont(ofSize: 11)
-        caption.textColor = .white.withAlphaComponent(0.6)
-        panel.contentView = content
+        panel.contentView = canvas
     }
 
     func start() {
@@ -68,6 +52,7 @@ final class NotchLyrics {
     func stop() {
         timer?.invalidate(); timer = nil
         request?.cancel(); request = nil
+        canvas.cancelAnimation()
         panel.orderOut(nil)
     }
 
@@ -82,7 +67,7 @@ final class NotchLyrics {
         let enabled = defaults.object(forKey: "notchLyricsEnabled") as? Bool ?? false
         guard enabled else {
             request?.cancel(); request = nil; key = nil; lines = []
-            panel.orderOut(nil)
+            hide()
             return
         }
         let preview = defaults.bool(forKey: "notchLyricsPreview")
@@ -99,29 +84,38 @@ final class NotchLyrics {
         } else {
             request?.cancel(); request = nil; key = nil; lines = []
         }
-        guard !expanded, let screen = NotchGeometry.preferredScreen() else { panel.orderOut(nil); return }
-        let text = preview ? "Your lyrics, just below the notch" :
+        guard !expanded, let screen = NotchGeometry.preferredScreen() else { hide(); return }
+        let guide = defaults.bool(forKey: "notchLyricsShowBounds")
+        let samples = ["Your lyrics, just below the notch", "Choose a font. Let the words move.",
+                       "A little more room for the lines you want to sing along to."]
+        let text = preview ? samples[Int(Date().timeIntervalSinceReferenceDate / 3) % samples.count] :
             (player.isPlaying ? LRC.line(in: lines, position: player.position(at: Date()),
                                         adjustment: number("notchLyricsOffset", fallback: 0.3, range: -10...10)) : nil)
-        guard let text else { panel.orderOut(nil); return }
-        let font = number("notchLyricsFont", fallback: 22, range: 12...48)
-        let width = min(number("notchLyricsWidth", fallback: 520, range: 240...1000), screen.frame.width - 24)
-        let showTrack = defaults.object(forKey: "notchLyricsTrackInfo") as? Bool ?? true
-        label.font = .systemFont(ofSize: font, weight: .semibold)
-        if text != lastText { label.stringValue = text; lastText = text }
-        let measured = label.sizeThatFits(NSSize(width: width - 32, height: 1000)).height
-        let labelHeight = min(max(measured, font * 1.3), font * 3.9)
-        let height = labelHeight + (showTrack ? 38 : 20)
-        let xOffset = number("notchLyricsX", fallback: 0, range: -1500...1500)
-        let yOffset = number("notchLyricsY", fallback: 8, range: 0...1500)
-        let x = min(max(screen.frame.midX - width / 2 + xOffset, screen.frame.minX + 12), screen.frame.maxX - width - 12)
-        let y = max(screen.visibleFrame.minY + 12, NotchGeometry.notchFrame(for: screen).minY - yOffset - height)
-        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
-        label.frame = NSRect(x: 16, y: showTrack ? 28 : 10, width: width - 32, height: labelHeight)
-        caption.frame = NSRect(x: 16, y: 8, width: width - 32, height: 16)
-        caption.isHidden = !showTrack
-        caption.stringValue = preview ? "ScreenLyrics · preview" : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
+        guard text != nil || guide else { hide(); return }
+        let width = number("notchLyricsWidth", fallback: 520, range: 240...1000)
+        let height = number("notchLyricsHeight", fallback: 160, range: 100...500)
+        let frame = LyricsLayout.frame(screen: screen.frame, visible: screen.visibleFrame,
+                                       notchBottom: NotchGeometry.notchFrame(for: screen).minY,
+                                       width: width, height: height,
+                                       xOffset: number("notchLyricsX", fallback: 0, range: -1500...1500),
+                                       yOffset: number("notchLyricsY", fallback: 8, range: 0...1500))
+        if panel.frame != frame { panel.setFrame(frame, display: true) }
+        let style = LyricCanvas.Style(
+            fontFamily: defaults.string(forKey: "notchLyricsFontFamily") ?? "system",
+            fontSize: number("notchLyricsFont", fallback: 22, range: 12...48),
+            backgroundEnabled: defaults.object(forKey: "notchLyricsBackground") as? Bool ?? true,
+            backgroundOpacity: number("notchLyricsBackgroundOpacity", fallback: 0.82, range: 0...1),
+            showBounds: guide,
+            showTrack: defaults.object(forKey: "notchLyricsTrackInfo") as? Bool ?? true,
+            animation: defaults.string(forKey: "notchLyricsAnimation") ?? "fade",
+            animationDuration: number("notchLyricsAnimationDuration", fallback: 0.25, range: 0.1...2))
+        let track = preview ? "ScreenLyrics · preview" : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
+        canvas.render(text: text, track: track, style: style, appearing: !panel.isVisible)
         if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    private func hide() {
+        if panel.isVisible { canvas.cancelAnimation(); panel.orderOut(nil) }
     }
 
     private func fetch(_ track: TrackKey) {

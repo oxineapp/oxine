@@ -13,10 +13,18 @@ The overlay shares the notch's Now Playing source (system-wide adapter, or the
 Music/Spotify fallback), follows playback, and hides when paused, during gaps,
 or while the notch is expanded. No extra Spotify polling process is started.
 
-- Text size: 12–48 pt; overlay width: 240–1000 pt, clamped to the display.
+- Text size: 12–48 pt; choose System, Rounded, Serif, Monospaced, or an installed font family.
+- Maximum lyric area: 240–1000 pt wide and 100–500 pt high, clamped to the display.
+  Text wraps inside that area and truncates overflow. The background fits the current line.
+- **Show maximum lyric area outline** draws a dashed guide around that exact area,
+  even without music. Turn it off independently when finished positioning.
+- **Show background** can be disabled completely. Opacity is adjustable from 0–100%;
+  zero is fully transparent. Text shadows keep the lyrics legible without a background.
+- Text appearance: None, Fade, Slide up, Pop, or Typewriter; duration 0.1–2 seconds.
+  Effects respect macOS Reduce Motion and cancel cleanly when the line changes.
 - Horizontal offset: −1500…1500 pt; distance below the notch: 0…1500 pt.
 - Timing: −10…+10 seconds, in 0.1 second steps. Positive = earlier, negative = later.
-- Preview lets you adjust placement without music; leaving Settings turns it off.
+- Preview cycles sample lines every three seconds to test fonts, placement and animations without music; leaving Settings turns it off.
 - The overlay is click-through, so it never blocks the app underneath.
 - All adjustments persist, including an exact zero timing adjustment.
 
@@ -70,5 +78,5 @@ MiddleClick/FnGestures if desired. No source data or stable installation is dele
 
 Run `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`.
 Tests cover LRC ordering, Unicode, repeated timestamps, source/user timing offsets,
-blank lines, and three-finger contact recognition and rejection. Hardware gestures
+blank lines, lyric area clamping/anchoring on offset and small displays, and three-finger contact recognition and rejection. Hardware gestures
 must also be checked on the Mac after the permission grants.
