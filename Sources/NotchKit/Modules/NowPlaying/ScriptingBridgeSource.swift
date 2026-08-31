@@ -53,7 +53,7 @@ public final class ScriptingBridgeSource: NowPlayingSource {
         if track == nil && last == nil { return }
         // While playing, always push (the scrubber needs fresh position); when
         // paused, only push on a real metadata change.
-        if let track, let last, track.sameMeta(as: last), !track.isPlaying { return }
+        if let track, let last, track.sameMeta(as: last), !track.isPlaying, track.elapsed == last.elapsed { return }
         let titleChanged = track?.title != last?.title
         last = track
         onChange?(track)
@@ -90,7 +90,8 @@ public final class ScriptingBridgeSource: NowPlayingSource {
             title: parts[1], artist: parts[2], album: parts[3],
             artwork: last?.app == app ? last?.artwork : nil,
             isPlaying: parts[0].contains("playing"), app: app,
-            elapsed: elapsed, duration: duration
+            elapsed: elapsed, duration: duration, elapsedAt: Date(),
+            hasPlaybackPosition: Double(parts[4]) != nil
         )
     }
 
@@ -105,11 +106,11 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     private func fetchArtwork(_ urlString: String, into track: NowPlayingTrack) {
         guard let url = URL(string: urlString) else { return }
         // Capture only Sendable values; re-match against `last` on the main actor.
-        let app = track.app, title = track.title
+        let app = track.app, title = track.title, artist = track.artist, album = track.album
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let data, let image = downsampledArtwork(data) else { return }
             Task { @MainActor in
-                guard let self, var t = self.last, t.app == app, t.title == title else { return }
+                guard let self, var t = self.last, t.app == app, t.title == title, t.artist == artist, t.album == album else { return }
                 t.artwork = image
                 self.last = t
                 self.onChange?(t)

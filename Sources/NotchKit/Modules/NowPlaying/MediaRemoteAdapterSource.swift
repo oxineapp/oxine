@@ -19,6 +19,9 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
     private var buffer = Data()
     /// The merged state — the adapter sends *diffs* that patch this.
     private var merged = MergedState()
+    private var generation = UUID()
+    private var receivedStreamEvent = false
+    private var outputHandle: FileHandle?
 
     public init() {}
 
@@ -42,18 +45,27 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
     // MARK: stream
 
     public func start() {
-        guard let script = Self.perlScript, let fw = Self.frameworkPath else { return }
+        guard process == nil, let script = Self.perlScript, let fw = Self.frameworkPath else { return }
+        generation = UUID()
+        let run = generation
+        receivedStreamEvent = false
+        merged = MergedState()
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: Self.perl)
-        proc.arguments = [script.path, fw, "stream"]
+        proc.arguments = [script.path, fw, "stream", "--micros"]
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
 
+        outputHandle = pipe.fileHandleForReading
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { return }
-            Task { @MainActor in self?.consume(chunk) }
+            // The serial pipe callback enqueues chunks in order on the main queue.
+            DispatchQueue.main.async {
+                guard let self, self.generation == run else { return }
+                self.consume(chunk)
+            }
         }
         do { try proc.run() } catch { notchLog("adapter launch failed: \(error)"); return }
         process = proc
@@ -65,10 +77,11 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
     private func seed() {
         guard let script = Self.perlScript, let fw = Self.frameworkPath else { return }
         let perl = Self.perl
+        let run = generation
         Task.detached { [weak self] in
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: perl)
-            proc.arguments = [script.path, fw, "get"]
+            proc.arguments = [script.path, fw, "get", "--micros"]
             let pipe = Pipe()
             proc.standardOutput = pipe
             proc.standardError = FileHandle.nullDevice
@@ -77,14 +90,30 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
             proc.waitUntilExit()
             // `get` prints one JSON object (optionally newline-terminated).
             let line = data.firstIndex(of: 0x0A).map { Data(data[..<$0]) } ?? data
-            await self?.parse(line)
+            await self?.applySeed(line, generation: run)
         }
     }
 
     public func stop() {
+        generation = UUID()
+        outputHandle?.readabilityHandler = nil
+        outputHandle = nil
         process?.terminate()
         process = nil
         buffer.removeAll()
+        merged = MergedState()
+        onChange?(nil)
+    }
+
+    private func applySeed(_ data: Data, generation: UUID) {
+        // A slow startup snapshot must not overwrite a newer seek/track event.
+        guard self.generation == generation else { return }
+        applySeed(data)
+    }
+
+    func applySeed(_ data: Data, receivedAt: Date = Date()) {
+        guard !receivedStreamEvent else { return }
+        parse(data, receivedAt: receivedAt, isStream: false)
     }
 
     // MARK: transport — via the private MediaRemote framework (codes per Boring Notch)
@@ -105,44 +134,97 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         }
     }
 
-    private func parse(_ line: Data) {
+    func parse(_ line: Data, receivedAt: Date = Date(), isStream: Bool = true) {
         guard !line.isEmpty,
-              let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
+              let decoded = try? JSONSerialization.jsonObject(with: line, options: .fragmentsAllowed) else { return }
+        if isStream { receivedStreamEvent = true }
+        if decoded is NSNull {
+            merged = MergedState()
+            onChange?(nil)
+            return
+        }
+        guard let obj = decoded as? [String: Any] else { return }
+        if obj["payload"] is NSNull {
+            merged = MergedState()
+            onChange?(nil)
+            return
+        }
         // `stream` wraps fields in {"payload":…,"diff":…}; the `get` seed prints the
         // fields flat. Fall back to the object itself so both feed this one parser.
         let payload = (obj["payload"] as? [String: Any]) ?? obj
         let diff = (obj["diff"] as? Bool) ?? false
 
-        // Patch the merged state: present fields overwrite; on a diff, absent
-        // fields keep their previous value; on a full update, absent fields reset.
-        func str(_ key: String, _ cur: String) -> String { payload[key] as? String ?? (diff ? cur : "") }
-
+        let previous = merged
+        if !diff { merged = MergedState() }
+        // Explicit JSON null clears a field; an absent diff field keeps its value.
+        func str(_ key: String, _ current: String) -> String {
+            guard let value = payload[key] else { return current }
+            return value as? String ?? ""
+        }
+        func number(_ key: String) -> Double? {
+            guard let n = payload[key] as? NSNumber, n.doubleValue.isFinite else { return nil }
+            return n.doubleValue
+        }
+        func seconds(_ key: String) -> Double? {
+            number(key + "Micros").map { $0 / 1_000_000 } ?? number(key)
+        }
         merged.title = str("title", merged.title)
         merged.artist = str("artist", merged.artist)
         merged.album = str("album", merged.album)
-        merged.bundleID = payload["parentApplicationBundleIdentifier"] as? String
-            ?? payload["bundleIdentifier"] as? String
-            ?? (diff ? merged.bundleID : nil)
-
-        if let playing = payload["playing"] as? Bool {
-            merged.isPlaying = playing
-        } else if !diff {
-            merged.isPlaying = false
+        if payload.keys.contains("parentApplicationBundleIdentifier") || payload.keys.contains("bundleIdentifier") {
+            merged.bundleID = payload["parentApplicationBundleIdentifier"] as? String ?? payload["bundleIdentifier"] as? String
         }
-
-        // Position + length (seconds). Kept across diffs; the manager interpolates
-        // between these coarse updates so the scrubber advances smoothly.
-        func num(_ key: String, _ cur: Double) -> Double {
-            if let n = payload[key] as? NSNumber { return n.doubleValue }
-            return diff ? cur : 0
+        merged.identifier = str("contentItemIdentifier", str("uniqueIdentifier", merged.identifier))
+        merged.isPlaying = payload["playing"] as? Bool ?? merged.isPlaying
+        let changedTrack = merged.title != previous.title || (!previous.artist.isEmpty && merged.artist != previous.artist) ||
+            (!previous.album.isEmpty && !merged.album.isEmpty && merged.album != previous.album) ||
+            merged.bundleID != previous.bundleID ||
+            (!previous.identifier.isEmpty && !merged.identifier.isEmpty && merged.identifier != previous.identifier)
+        if changedTrack {
+            merged.elapsed = 0; merged.elapsedAt = nil; merged.rawElapsed = nil; merged.rawTimestamp = nil
+            merged.artwork = nil
         }
-        merged.elapsed = num("elapsedTime", merged.elapsed)
-        merged.duration = num("duration", merged.duration)
+        if let duration = seconds("duration") { merged.duration = max(0, duration) }
+        else if payload["duration"] is NSNull || payload["durationMicros"] is NSNull { merged.duration = 0 }
+        if let rate = number("playbackRate") { merged.rate = max(0, rate) }
+        else if !previous.isPlaying && merged.isPlaying && merged.rate == 0 { merged.rate = 1 }
+
+        var stamp: Date?
+        if let micros = number("timestampEpochMicros") {
+            stamp = Date(timeIntervalSince1970: micros / 1_000_000)
+        } else if let string = payload["timestamp"] as? String {
+            let parser = ISO8601DateFormatter()
+            parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            stamp = parser.date(from: string)
+            if stamp == nil {
+                parser.formatOptions = [.withInternetDateTime]
+                stamp = parser.date(from: string)
+            }
+        }
+        if let stamp { merged.rawTimestamp = stamp }
+        if payload["timestamp"] is NSNull || payload["timestampEpochMicros"] is NSNull { merged.rawTimestamp = nil }
+        if let elapsed = seconds("elapsedTime") {
+            merged.rawElapsed = max(0, elapsed)
+            merged.elapsed = max(0, elapsed)
+            merged.elapsedAt = merged.rawTimestamp ?? receivedAt
+        } else if payload["elapsedTime"] is NSNull || payload["elapsedTimeMicros"] is NSNull {
+            merged.elapsedAt = nil; merged.rawElapsed = nil
+        } else if !changedTrack, let stamp, let rawElapsed = merged.rawElapsed {
+            // Timestamp-only diffs still refer to the retained elapsedTime field.
+            merged.elapsed = rawElapsed
+            merged.elapsedAt = stamp
+        } else if !changedTrack, merged.elapsedAt != nil,
+                  merged.isPlaying != previous.isPlaying || merged.rate != previous.rate {
+            // No new measurement: freeze/resume at the interpolated transition,
+            // rather than rewinding to the last raw sample or counting paused time.
+            merged.elapsed = previous.position(at: receivedAt)
+            merged.elapsedAt = receivedAt
+        }
 
         if let b64 = (payload["artworkData"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !b64.isEmpty, let data = Data(base64Encoded: b64) {
             merged.artwork = downsampledArtwork(data)
-        } else if !diff {
+        } else if !diff || payload["artworkData"] is NSNull {
             merged.artwork = nil
         }
 
@@ -154,7 +236,8 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
                 onChange?(NowPlayingTrack(
                     title: nowPlayingAppName(bundle), artist: "", album: "",
                     artwork: merged.artwork, isPlaying: merged.isPlaying, app: bundle,
-                    elapsed: merged.elapsed, duration: merged.duration))
+                    elapsed: merged.elapsed, duration: merged.duration, elapsedAt: merged.elapsedAt,
+                    playbackRate: merged.rate, hasPlaybackPosition: merged.elapsedAt != nil))
             } else {
                 onChange?(nil)
             }
@@ -163,7 +246,8 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         onChange?(NowPlayingTrack(
             title: merged.title, artist: merged.artist, album: merged.album,
             artwork: merged.artwork, isPlaying: merged.isPlaying, app: merged.bundleID,
-            elapsed: merged.elapsed, duration: merged.duration
+            elapsed: merged.elapsed, duration: merged.duration, elapsedAt: merged.elapsedAt,
+            playbackRate: merged.rate, hasPlaybackPosition: merged.elapsedAt != nil
         ))
     }
 
@@ -174,6 +258,15 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         var artwork: NSImage?
         var isPlaying = false
         var elapsed: Double = 0, duration: Double = 0
+        var elapsedAt: Date?
+        var rawElapsed: Double?
+        var rawTimestamp: Date?
+        var rate: Double = 1
+        var identifier = ""
+        func position(at date: Date) -> Double {
+            guard let elapsedAt else { return 0 }
+            return elapsed + (isPlaying ? max(0, date.timeIntervalSince(elapsedAt)) * rate : 0)
+        }
     }
 }
 

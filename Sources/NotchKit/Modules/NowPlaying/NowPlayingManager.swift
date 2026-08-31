@@ -17,11 +17,12 @@ public final class NowPlayingManager: ObservableObject {
 
     private let source: NowPlayingSource
 
-    public init() {
+    public convenience init() {
         // "system" = system-wide via the mediaremote-adapter (any app, incl.
         // browsers); "apps" = Music & Spotify only via ScriptingBridge. Defaults
         // to system-wide when the adapter is bundled, else the app baseline.
         let pref = NotchKit.settingsDefaults.string(forKey: "notchNowPlayingSource") ?? "system"
+        let source: NowPlayingSource
         if pref == "system", MediaRemoteAdapterSource.isAvailable {
             source = MediaRemoteAdapterSource()
             notchLog("now playing: mediaremote-adapter (system-wide)")
@@ -29,22 +30,17 @@ public final class NowPlayingManager: ObservableObject {
             source = ScriptingBridgeSource()
             notchLog("now playing: ScriptingBridge (Music/Spotify)")
         }
+        self.init(source: source)
+    }
+
+    init(source: NowPlayingSource) {
+        self.source = source
         source.onChange = { [weak self] incoming in
             guard let self else { return }
-            var track = incoming
-            // Resilience: players (notably Spotify over AppleScript, and some
-            // MediaRemote apps) occasionally report position 0 mid-track. Don't let
-            // that snap the scrubber back to the start — carry the position we'd
-            // already interpolated to for the same playing track.
-            if var t = track, let old = self.track,
-               t.app == old.app, t.title == old.title, t.isPlaying,
-               t.duration > 1, t.elapsed < 0.5 {
-                let carried = self.position(at: Date())   // from the prior sample
-                if carried > 1 { t.elapsed = carried; track = t }
-            }
-            let titleChanged = track?.title != self.track?.title
+            let track = incoming
+            let titleChanged = track?.title != self.track?.title || track?.artist != self.track?.artist
             self.track = track
-            self.elapsedAt = Date()
+            self.elapsedAt = track?.elapsedAt ?? Date()
             // Only recompute the (relatively costly) tint when the track changes.
             if titleChanged {
                 let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
@@ -64,10 +60,10 @@ public final class NowPlayingManager: ObservableObject {
     /// Current position, interpolated from the last measurement so the scrubber
     /// advances smoothly between source updates.
     public func position(at date: Date) -> Double {
-        guard let track else { return 0 }
-        guard track.isPlaying else { return track.elapsed }
-        let advanced = track.elapsed + date.timeIntervalSince(elapsedAt)
-        return min(max(advanced, 0), track.duration > 0 ? track.duration : advanced)
+        guard let track, track.hasPlaybackPosition, track.elapsed.isFinite else { return 0 }
+        let rate = track.playbackRate.isFinite ? max(0, track.playbackRate) : 1
+        let advanced = track.elapsed + (track.isPlaying ? max(0, date.timeIntervalSince(elapsedAt)) * rate : 0)
+        return min(max(advanced, 0), track.duration.isFinite && track.duration > 0 ? track.duration : max(advanced, 0))
     }
 
     public var isPlaying: Bool { track?.isPlaying ?? false }

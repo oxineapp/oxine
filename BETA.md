@@ -15,6 +15,12 @@ lyrics. No account or API key is needed. Not every recording has synced lyrics.
 The overlay shares the notch's Now Playing source (system-wide adapter, or the
 Music/Spotify fallback), follows playback, and hides when paused, during gaps,
 or while the notch is expanded. No extra Spotify polling process is started.
+The lyric clock uses the source's measurement timestamp and playback rate, so late
+artwork/metadata updates do not rewind it. Pauses, seeks to zero, repeated songs,
+and player changes are handled without carrying an old song's clock forward.
+A late startup snapshot cannot overwrite newer stream events. Lyrics wait when a
+new track has no known playback position. Incorrect timestamps in the lyric file
+itself can still require a timing adjustment or a different lyric source.
 
 - Text size: 12–48 pt; choose System, Rounded, Serif, Monospaced, or an installed font family.
 - Maximum lyric area: 240–1000 pt wide and 100–500 pt high, clamped to the display.
@@ -121,3 +127,7 @@ release, hover rejection, and malformed input. Mouse-event tests validate button
 click count, matching down/up events, and removal of the Fn trigger flag.
 The permission drag test verifies a real application file URL on an isolated
 pasteboard, including paths with spaces, without changing the clipboard or moving files.
+
+Playback regression tests cover source timestamps, metadata-only updates, seeks,
+pause/resume, fractional rates, track identity, explicit cleared metadata, late
+startup snapshots, and the resulting lyric-line selection.

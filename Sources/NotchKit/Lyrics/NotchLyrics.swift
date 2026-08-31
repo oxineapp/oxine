@@ -95,7 +95,7 @@ final class NotchLyrics {
         let timingChanged = lastTimingAdjustment.map { $0 != timing } ?? false
         lastTimingAdjustment = timing
         let text = showingSample ? samples[Int(Date().timeIntervalSinceReferenceDate / 3) % samples.count] :
-            (player.isPlaying ? LRC.line(in: lines, position: player.position(at: Date()),
+            (player.isPlaying && player.track?.hasPlaybackPosition == true ? LRC.line(in: lines, position: player.position(at: Date()),
                                         adjustment: timing) : nil)
         guard text != nil || guide else { hide(); return }
         let width = number("notchLyricsWidth", fallback: 520, range: 240...1000)

@@ -34,10 +34,15 @@ public struct NowPlayingTrack {
     /// Playback position + length in seconds (0 if the source can't report them).
     public var elapsed: Double
     public var duration: Double
+    /// Source measurement time, retained across metadata/artwork-only updates.
+    public var elapsedAt: Date?
+    public var playbackRate: Double
+    public var hasPlaybackPosition: Bool
 
     public init(title: String, artist: String, album: String = "",
                 artwork: NSImage? = nil, isPlaying: Bool, app: String? = nil,
-                elapsed: Double = 0, duration: Double = 0) {
+                elapsed: Double = 0, duration: Double = 0, elapsedAt: Date? = nil,
+                playbackRate: Double = 1, hasPlaybackPosition: Bool = true) {
         self.title = title
         self.artist = artist
         self.album = album
@@ -46,6 +51,9 @@ public struct NowPlayingTrack {
         self.app = app
         self.elapsed = elapsed
         self.duration = duration
+        self.elapsedAt = elapsedAt
+        self.playbackRate = playbackRate
+        self.hasPlaybackPosition = hasPlaybackPosition
     }
 
     /// Change detection ignores artwork identity (compared separately when set).
