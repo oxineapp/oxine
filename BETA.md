@@ -7,7 +7,12 @@ on this Mac is `/Users/mert/oxine-beta`.
 ## Playback source switch
 
 Use the **two rectangles with arrows** button beside the lyrics toggle on the
-notch Home/song page to choose **Automatic**, **Spotify**, or **Apple Music**.
+notch Home/song page. **Left-click** cycles Automatic → Spotify → Apple Music →
+Automatic; **right-click** opens the menu to choose directly, with the current
+source checked. Both the source and lyrics buttons accept the first click even
+when another app is active. Right-clicking never cycles or toggles playback.
+The source button shows the Spotify or Apple Music icon when that app is selected,
+and the two-rectangle symbol in Automatic mode.
 Automatic uses the existing system-wide source (including browser media). Manual
 choices pin observation, artwork, lyrics, play/pause, skip and seeking to that app.
 Choosing a source does not pause, play, or launch the player. The choice persists
@@ -18,6 +23,9 @@ The first manual app selection may require macOS **Automation** permission for
 Oxine Beta to read/control that app. Individual browser tabs and arbitrary
 background media sessions are not listed separately; use Automatic for them.
 Apple Music cover bytes and Spotify artwork URLs are read from the selected app.
+Position and duration remain numeric Apple-event values, so regional decimal
+commas cannot hide lyrics or reset playback time. Metadata is read as separate
+fields so embedded newlines cannot corrupt the timing fields.
 
 ## ScreenLyrics
 

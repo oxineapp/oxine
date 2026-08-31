@@ -14,6 +14,14 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable {
         }
     }
 
+    var bundleIdentifier: String? {
+        switch self {
+        case .automatic: nil
+        case .spotify: "com.spotify.client"
+        case .music: "com.apple.Music"
+        }
+    }
+
     var scriptingApp: String? {
         switch self {
         case .automatic: nil

@@ -66,6 +66,12 @@ public final class NowPlayingManager: ObservableObject {
     }
 
     /// Change observation and transport together, without starting/stopping playback.
+    public func cyclePlayer() {
+        let players = PlaybackPlayer.allCases
+        guard let index = players.firstIndex(of: selectedPlayer) else { return }
+        selectPlayer(players[(index + 1) % players.count])
+    }
+
     public func selectPlayer(_ player: PlaybackPlayer) {
         guard player != selectedPlayer, let makeSource else { return }
         sourceGeneration = UUID()

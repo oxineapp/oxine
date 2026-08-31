@@ -15,6 +15,7 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     private var artworkURL: String?
     private let player: PlaybackPlayer
     private let executeScript: (String) -> NSAppleEventDescriptor?
+    private var lastClockAvailability: Bool?
 
     public convenience init(player: PlaybackPlayer = .automatic) {
         self.init(player: player, executeScript: Self.execute)
@@ -39,6 +40,7 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     public func stop() {
         timer?.invalidate(); timer = nil
         last = nil; artworkURL = nil
+        lastClockAvailability = nil
     }
 
     // MARK: transport
@@ -98,33 +100,45 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     /// Query one player without launching it. Returns nil if not running/stopped.
     /// Fields: state, title, artist, album, position(s), duration, [artwork url].
     private func query(_ app: String) -> NowPlayingTrack? {
-        let artworkLine = app == "Spotify" ? "& linefeed & (artwork url of current track)" : ""
+        let artworkLine = app == "Spotify" ? ", (artwork url of current track)" : ""
         let script = """
         if application "\(app)" is running then
           tell application "\(app)"
             if player state is stopped then
               return "stopped"
             end if
-            return (player state as string) & linefeed & (name of current track) & linefeed & (artist of current track) & linefeed & (album of current track) & linefeed & (player position as string) & linefeed & (duration of current track as string) \(artworkLine)
+            return {(player state as string), (name of current track), (artist of current track), (album of current track), player position, duration of current track\(artworkLine)}
           end tell
         else
           return "stopped"
         end if
         """
-        guard let out = run(script), out != "stopped" else { return nil }
-        let parts = out.components(separatedBy: "\n")
-        guard parts.count >= 6 else { return nil }
-        artworkURL = parts.count >= 7 ? parts[6] : nil
-        let elapsed = Double(parts[4]) ?? 0
-        // Spotify reports duration in milliseconds; Music in seconds.
-        var duration = Double(parts[5]) ?? 0
+        // Keep numeric Apple events numeric. String coercion is locale-sensitive
+        // (e.g. 34,75 in en_TR), and newline-delimited metadata can split titles.
+        guard let result = executeScript(script), result.descriptorType == typeAEList,
+              result.numberOfItems >= 6 else { return nil }
+        func text(_ index: Int) -> String { result.atIndex(index)?.stringValue ?? "" }
+        func number(_ index: Int) -> Double? {
+            guard let item = result.atIndex(index), item.descriptorType != typeNull,
+                  let value = item.coerce(toDescriptorType: typeIEEE64BitFloatingPoint)?.doubleValue,
+                  value.isFinite, value >= 0 else { return nil }
+            return value
+        }
+        let title = text(2), artist = text(3), album = text(4)
+        artworkURL = result.numberOfItems >= 7 ? text(7) : nil
+        let elapsed = number(5)
+        if lastClockAvailability != (elapsed != nil) {
+            lastClockAvailability = elapsed != nil
+            notchLog("\(app) playback clock available: \(elapsed != nil)")
+        }
+        var duration = number(6) ?? 0
         if app == "Spotify" { duration /= 1000 }
         return NowPlayingTrack(
-            title: parts[1], artist: parts[2], album: parts[3],
-            artwork: last?.app == app && last?.title == parts[1] && last?.artist == parts[2] && last?.album == parts[3] ? last?.artwork : nil,
-            isPlaying: parts[0].contains("playing"), app: app,
-            elapsed: elapsed, duration: duration, elapsedAt: Date(),
-            hasPlaybackPosition: Double(parts[4]) != nil
+            title: title, artist: artist, album: album,
+            artwork: last?.app == app && last?.title == title && last?.artist == artist && last?.album == album ? last?.artwork : nil,
+            isPlaying: text(1) == "playing", app: app,
+            elapsed: elapsed ?? 0, duration: duration, elapsedAt: Date(),
+            hasPlaybackPosition: elapsed != nil
         )
     }
 

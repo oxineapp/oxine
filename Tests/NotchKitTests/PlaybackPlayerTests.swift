@@ -1,5 +1,6 @@
 import AppKit
 import Testing
+import LyricsCore
 @testable import NotchKit
 
 @MainActor
@@ -88,7 +89,7 @@ func pinnedSpotifyNeverQueriesMusicAndControlsSpotifyEvenWhenPaused() {
     var scripts: [String] = []
     let source = ScriptingBridgeSource(player: .spotify) { script in
         scripts.append(script)
-        return NSAppleEventDescriptor(string: "paused\nSong\nArtist\nAlbum\n20\n180000\n")
+        return playbackDescriptor(state: "paused", elapsed: 20, duration: 180000)
     }
     var track: NowPlayingTrack?
     source.onChange = { track = $0 }
@@ -115,4 +116,64 @@ func missingPinnedMusicDoesNotFallBackToSpotify() {
     manager.playPause()
     #expect(scripts.count == 1)
     manager.stop()
+}
+
+private func playbackDescriptor(state: String = "playing", elapsed: Double, duration: Double,
+                                title: String = "Song") -> NSAppleEventDescriptor {
+    let list = NSAppleEventDescriptor.list()
+    let fields: [NSAppleEventDescriptor] = [.init(string: state), .init(string: title),
+        .init(string: "Artist"), .init(string: "Album"), .init(double: elapsed),
+        .init(double: duration), .init(string: "")]
+    for (index, field) in fields.enumerated() { list.insert(field, at: index + 1) }
+    return list
+}
+
+@MainActor @Test
+func numericSpotifyPositionDrivesLyricsWithoutLocaleOrNewlineCoercion() throws {
+    let source = ScriptingBridgeSource(player: .spotify) { _ in
+        playbackDescriptor(elapsed: 45.75, duration: 217573, title: "Song\nLive")
+    }
+    let manager = NowPlayingManager(source: source, selectedPlayer: .spotify)
+    manager.start()
+    let track = try #require(manager.track)
+    #expect(track.title == "Song\nLive")
+    #expect(track.hasPlaybackPosition && track.elapsed == 45.75)
+    #expect(abs(track.duration - 217.573) < 0.001)
+    let position = manager.position(at: try #require(track.elapsedAt))
+    let lyrics = LRC.parse("[00:00]intro\n[00:30]verse\n[00:45]chorus")
+    #expect(LRC.line(in: lyrics, position: position, adjustment: 0) == "chorus")
+    manager.stop()
+}
+
+@MainActor @Test
+func unavailableNumericPositionDoesNotInventLyricsAtZero() {
+    let result = playbackDescriptor(elapsed: 30, duration: 200)
+    result.remove(at: 5)
+    result.insert(NSAppleEventDescriptor.null(), at: 5)
+    let source = ScriptingBridgeSource(player: .music) { _ in result }
+    let manager = NowPlayingManager(source: source, selectedPlayer: .music)
+    manager.start()
+    #expect(manager.track?.hasPlaybackPosition == false)
+    manager.stop()
+}
+
+@MainActor @Test
+func nativePlayerButtonCyclesAndContextMenuOnlyChangesSourceOnSelection() throws {
+    let source = SelectablePlaybackSource()
+    let manager = NowPlayingManager(source: source, makeSource: { _ in SelectablePlaybackSource() })
+    let button = NotchClickButton()
+    button.onPress = { manager.cyclePlayer() }
+    button.contextMenu = { manager.playbackMenu() }
+    #expect(button.acceptsFirstMouse(for: nil))
+    button.performClick(nil)
+    #expect(manager.selectedPlayer == .spotify)
+    let menu = try #require(button.contextMenu?())
+    #expect(manager.selectedPlayer == .spotify) // Opening the menu must not cycle.
+    #expect(menu.items[1].state == .on)
+    let musicItem = try #require(menu.items[2] as? PlaybackMenuItem)
+    musicItem.choose()
+    #expect(manager.selectedPlayer == .music)
+    button.performClick(nil)
+    #expect(manager.selectedPlayer == .automatic)
+    #expect(source.commands.isEmpty)
 }

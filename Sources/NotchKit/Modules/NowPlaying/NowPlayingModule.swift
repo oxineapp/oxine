@@ -82,36 +82,17 @@ struct PlaybackPlayerButton: View {
     @ObservedObject var manager: NowPlayingManager
 
     var body: some View {
-        Menu {
-            Picker("Playback source", selection: Binding(
-                get: { manager.selectedPlayer },
-                set: { manager.selectPlayer($0) }
-            )) {
-                ForEach(PlaybackPlayer.allCases) { player in
-                    Text(player.name).tag(player)
-                }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            if let track = manager.track {
-                Text("\(nowPlayingAppName(track.app)): \(track.title)")
-            }
-            Text("Automatic follows macOS, including browser playback.")
-            Text("Separate browser tabs are not selectable.")
-        } label: {
-            Image(systemName: "rectangle.2.swap")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(manager.selectedPlayer == .automatic ? .white.opacity(0.65) : Color.panelAccent)
-                .frame(width: 28, height: 26)
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Switch playback source — \(manager.selectedPlayer.name)")
-        .accessibilityLabel("Switch playback source")
-        .accessibilityValue(manager.selectedPlayer.name)
+        NotchIconButton(
+            symbol: "rectangle.2.swap", image: nowPlayingAppIcon(manager.selectedPlayer.bundleIdentifier),
+            selected: manager.selectedPlayer != .automatic,
+            label: "Switch playback source", value: manager.selectedPlayer.name,
+            help: "Left-click: next player · Right-click: choose player — \(manager.selectedPlayer.name)",
+            action: { manager.cyclePlayer() },
+            contextMenu: { manager.playbackMenu() }
+        )
+        .frame(width: 28, height: 26)
     }
+
 }
 
 /// The same saved switch as Settings → Notch; does not rebuild the player or seek.
@@ -119,20 +100,15 @@ struct LyricsToggleButton: View {
     @Binding var isEnabled: Bool
 
     var body: some View {
-        Button { isEnabled.toggle() } label: {
-            Image(systemName: isEnabled ? "quote.bubble.fill" : "quote.bubble")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isEnabled ? Color.panelAccent : .white.opacity(0.65))
-                .frame(width: 28, height: 26)
-                .background(Color.panelAccent.opacity(isEnabled ? 0.16 : 0), in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(isEnabled ? "Hide lyrics" : "Show lyrics below the notch when it closes")
-        .accessibilityLabel("Lyrics")
-        .accessibilityValue(isEnabled ? "On" : "Off")
-        .accessibilityAddTraits(isEnabled ? .isSelected : [])
+        NotchIconButton(
+            symbol: isEnabled ? "quote.bubble.fill" : "quote.bubble", selected: isEnabled,
+            label: "Lyrics", value: isEnabled ? "On" : "Off",
+            help: isEnabled ? "Hide lyrics" : "Show lyrics below the notch when it closes",
+            action: { isEnabled.toggle() }
+        )
+        .frame(width: 28, height: 26)
     }
+
 }
 
 /// Progress scrubber with drag-to-seek. Interpolates position between the

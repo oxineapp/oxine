@@ -119,7 +119,10 @@ final class NotchLyrics {
         let track = showingSample ? "ScreenLyrics · preview" : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
         canvas.render(text: text, track: track, style: style, appearing: !panel.isVisible,
                       animateChanges: !timingChanged && (!panel.isVisible || !frameChanged))
-        if !panel.isVisible { panel.orderFrontRegardless() }
+        if !panel.isVisible {
+            panel.orderFrontRegardless()
+            notchLog("lyrics overlay visible (preview: \(showingSample), timed line: \(text != nil))")
+        }
     }
 
     private func hide() {
@@ -142,6 +145,7 @@ final class NotchLyrics {
                 let (data, response) = try await URLSession.shared.data(for: query)
                 guard !Task.isCancelled, let self, self.key == track else { return }
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                notchLog("lyrics lookup HTTP \(status)")
                 if status == 404 { self.finish([], for: track); return }
                 guard status == 200 else { throw URLError(.badServerResponse) }
                 let payload = try JSONDecoder().decode(Response.self, from: data)
@@ -155,6 +159,7 @@ final class NotchLyrics {
     }
 
     private func finish(_ result: [LyricLine], for track: TrackKey) {
+        notchLog("lyrics loaded: \(result.count) timed lines")
         if cache.count >= 100 { cache.removeAll() }
         cache[track] = result
         lines = result
