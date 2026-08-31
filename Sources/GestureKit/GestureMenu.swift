@@ -92,6 +92,8 @@ final class MenuController: NSObject {
     private let configManager: ConfigManager
     private let onReload: () -> Void
     let menu = NSMenu()
+    private let touchIndicator = NSMenuItem(title: "Trackpad: waiting for touch", action: nil, keyEquivalent: "")
+    private let clickIndicator = NSMenuItem(title: "Middle-click taps: 0", action: nil, keyEquivalent: "")
     private let fnIndicator = NSMenuItem(title: "Fn: released", action: nil, keyEquivalent: "")
 
     init(configManager: ConfigManager, onReload: @escaping () -> Void) {
@@ -102,6 +104,11 @@ final class MenuController: NSObject {
 
     func updateFnIndicator(held: Bool) {
         fnIndicator.title = held ? "Fn: held ✓" : "Fn: released — hold Fn to test"
+    }
+
+    func updateTouchIndicator(status: String, clicks: Int) {
+        touchIndicator.title = status
+        clickIndicator.title = "Middle-click taps: \(clicks)"
     }
 
     func build(tapStatus: String) {
@@ -115,6 +122,10 @@ final class MenuController: NSObject {
         fnIndicator.isEnabled = false
         updateFnIndicator(held: engine?.fnState.held ?? false)
         menu.addItem(fnIndicator)
+        touchIndicator.isEnabled = false
+        clickIndicator.isEnabled = false
+        menu.addItem(touchIndicator)
+        menu.addItem(clickIndicator)
 
         menu.addItem(.separator())
 

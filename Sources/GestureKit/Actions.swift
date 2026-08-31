@@ -190,21 +190,36 @@ enum ActionRunner {
         post(false)
     }
 
-    static func postClick(_ button: String) {
-        let loc = CGEvent(source: nil)?.location ?? .zero
-        let src = CGEventSource(stateID: .hidSystemState)
-        func post(_ type: CGEventType, _ btn: CGMouseButton) {
-            let ev = CGEvent(mouseEventSource: src, mouseType: type,
-                             mouseCursorPosition: loc, mouseButton: btn)!
-            ev.setIntegerValueField(.eventSourceUserData, value: magic)
-            ev.post(tap: .cghidEventTap)
-            usleep(40_000)
-        }
+    /// Build a real button-2 pair; never leak the Fn trigger into the destination app.
+    /// Kept separate from posting so tests do not inject system input.
+    static func clickEvents(_ button: String, at location: CGPoint,
+                            flags: CGEventFlags) -> [CGEvent] {
+        let types: [CGEventType]
+        let mouseButton: CGMouseButton
         switch button.lowercased() {
-        case "left": post(.leftMouseDown, .left); post(.leftMouseUp, .left)
-        case "right": post(.rightMouseDown, .right); post(.rightMouseUp, .right)
-        case "middle": post(.otherMouseDown, .center); post(.otherMouseUp, .center)
-        default: appLog("unknown mouse button: \(button)")
+        case "left": types = [.leftMouseDown, .leftMouseUp]; mouseButton = .left
+        case "right": types = [.rightMouseDown, .rightMouseUp]; mouseButton = .right
+        case "middle": types = [.otherMouseDown, .otherMouseUp]; mouseButton = .center
+        default: return []
+        }
+        let source = CGEventSource(stateID: .privateState)
+        return types.compactMap { type in
+            guard let event = CGEvent(mouseEventSource: source, mouseType: type,
+                                      mouseCursorPosition: location, mouseButton: mouseButton) else { return nil }
+            event.flags = flags.subtracting(.maskSecondaryFn)
+            event.setIntegerValueField(.mouseEventClickState, value: 1)
+            event.setIntegerValueField(.eventSourceUserData, value: magic)
+            return event
+        }
+    }
+
+    static func postClick(_ button: String) {
+        let location = CGEvent(source: nil)?.location ?? .zero
+        let events = clickEvents(button, at: location, flags: CGEventSource.flagsState(.hidSystemState))
+        guard events.count == 2 else { return }
+        for event in events {
+            event.post(tap: .cghidEventTap)
+            usleep(40_000)
         }
     }
 }

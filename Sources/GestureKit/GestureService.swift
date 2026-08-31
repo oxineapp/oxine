@@ -25,6 +25,7 @@ public final class GestureService {
     private var activeTap = false
     private var started = false
     private var permissionState = ""
+    private var middleClickCount = 0
 
     private init() {}
 
@@ -43,6 +44,14 @@ public final class GestureService {
         engine = GestureEngine(fnState: FnState(), configManager: configManager, debug: false)
         menuController = MenuController(configManager: configManager, onReload: { [weak self] in self?.configure() })
         engine.onFnChanged = { held in menuController?.updateFnIndicator(held: held) }
+        engine.onMiddleClick = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.middleClickCount += 1
+                appLog("middle-click tap recognized (\(self.middleClickCount))")
+                self.updateTouchIndicator()
+            }
+        }
         Multitouch.setFrameHandler { device, touches in engine.mtFrame(device: device, touches: touches) }
         configure()
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
@@ -85,9 +94,10 @@ public final class GestureService {
         if !configManager.current.enabled { status = "Gestures disabled" }
         else if tap == nil { status = "Grant Input Monitoring to Oxine Beta" }
         else if !activeTap { status = "Grant Accessibility for middle click & click remapping" }
-        else if multitouchRef == nil { status = "Event tap active · multi-touch unavailable" }
+        else if multitouchRef == nil || multitouchRef?.deviceCount == 0 { status = "Event tap active · no touch device connected" }
         else { status = "Gestures & middle click ready" }
         menuController.build(tapStatus: status)
+        updateTouchIndicator()
     }
 
     private func removeTap() {
@@ -155,5 +165,11 @@ public final class GestureService {
     private func synchronizeFn() {
         engine?.synchronizeModifiers(flags: physicalModifiers())
         menuController?.updateFnIndicator(held: engine?.fnState.held ?? false)
+        updateTouchIndicator()
+    }
+
+    private func updateTouchIndicator() {
+        menuController?.updateTouchIndicator(status: multitouchRef?.statusText ?? "Trackpad: unavailable",
+                                            clicks: middleClickCount)
     }
 }

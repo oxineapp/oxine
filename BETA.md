@@ -48,8 +48,17 @@ Hold Fn for configured scroll, swipe, pinch, rotation, tap and click actions.
 Each gesture has action presets and 0.5×–4× sensitivity, plus custom key combos
 and shell commands. Middle Click is available as a preset. Fresh configurations
 also map Fn+left-click to middle click; imported configurations keep their mappings.
-Three-finger tap without Fn is enabled by default and has a separate toggle.
-Long holds, movement, fourth fingers and physical clicks cancel that tap.
+Three-finger **tap** without Fn is enabled by default and has a separate toggle.
+Lift all three fingers without pressing the trackpad down. Long holds, movement,
+fourth fingers and physical clicks cancel that tap. For a physical click, map
+Gestures → Click → Middle Click and hold Fn while clicking.
+The menu shows current/peak finger counts and the number of recognized middle-click
+taps, so touch detection can be checked separately from macOS permissions.
+
+The touch reader uses the 96-byte contact ABI, includes initial touch-down frames,
+and rejects malformed records. Device callbacks start on the main run loop; devices
+are retained and deduplicated by hardware ID during hotplug checks. This prevents
+repeated registrations and preserves multi-finger records.
 
 The gesture menu includes a live **Fn: held / released** indicator. Hold and release
 Fn/Globe while that menu is open to check detection. Tracking uses physical system
@@ -96,3 +105,6 @@ must also be checked on the Mac after the permission grants. NotchKit regression
 tests cover live font/size changes, animation cancellation, timing adjustments,
 and preserving wrapped lyric lines. Fn regression tests cover missing/stale event
 flags, physical-state recovery, synthetic shortcuts, other modifiers, and tap resets.
+Raw touch-frame fixtures cover multi-finger offsets, initial contact and staggered
+release, hover rejection, and malformed input. Mouse-event tests validate button 2,
+click count, matching down/up events, and removal of the Fn trigger flag.

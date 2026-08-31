@@ -41,6 +41,7 @@ final class GestureEngine {
 
     // Fired on actual Fn state changes, including recovery after a missed event.
     var onFnChanged: ((Bool) -> Void)?
+    var onMiddleClick: (() -> Void)?
 
     private func setFnHeld(_ v: Bool) {
         let old = fnState.held
@@ -355,8 +356,15 @@ final class GestureEngine {
 
     // MARK: multi-touch
 
-    func mtFrame(device: UInt, touches: [Multitouch.Touch]) {
-        mtQueue.async { self.processMT(device: device, touches: touches) }
+    func mtFrame(device: UInt, touches: [Multitouch.Touch]?) {
+        mtQueue.async {
+            guard let touches else {
+                self.middleTaps[device]?.cancel()
+                self.mtStates[device] = MTState()
+                return
+            }
+            self.processMT(device: device, touches: touches)
+        }
     }
 
     private func fireMT(_ name: String) {
@@ -375,6 +383,7 @@ final class GestureEngine {
         let middleEnabled = cfg.enabled && cfg.middleClick && !fn && AXIsProcessTrusted()
         if middle.update(touches: touches, time: now, enabled: middleEnabled) {
             ActionRunner.queue(.mouse("middle"))
+            onMiddleClick?()
         }
         middleTaps[device] = middle
         guard cfg.enabled && cfg.multitouch else { mtStates[device] = MTState(); return }
