@@ -101,6 +101,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         observeSous()
         observeTemper()
         observeCaffeine()
+        // The apps subsystem: register the built-in dogfood apps, scan installs,
+        // start what's enabled. Before the notch, which asks it for app tabs.
+        AppsManager.shared.start()
         // The notch companion: its own top-of-screen surface, independent of the
         // dropdown panel. Safe to start late — it brings itself up if enabled.
         NotchCoordinator.shared.start()
@@ -416,7 +419,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // hidden tab is never stranded.
         let tabsItem = NSMenuItem(title: "Open Tab", action: nil, keyEquivalent: "")
         let tabsMenu = NSMenu()
-        for tab in TabID.canonical {
+        for tab in PanelTab.allAvailable {
             let item = NSMenuItem(title: tab.title, action: #selector(menuOpenTab(_:)), keyEquivalent: "")
             item.image = NSImage(systemSymbolName: tab.icon, accessibilityDescription: nil)
             item.representedObject = tab.rawValue

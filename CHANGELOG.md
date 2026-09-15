@@ -4,6 +4,19 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.2.0
+- **New: Apps.** Settings → Apps is a small store. Caffeine and Focus are apps now, first-party extras install with one click, and community apps install from a GitHub `creator/repo` after you see exactly what they want. Every app has its own page: settings, footer slot, access grants, macOS permissions, uninstall. The panel footer's quick toggles are yours to pick and drag into order.
+- **New: ScreenLyrics** (install from Apps). Synced lyrics for the song that's playing, in a Liquid Glass pill right under the notch. Seven sizes, optional artist and song line, font and line-change animation, a timing offset, and a distance slider. It steps aside while the notch is open and lets clicks pass through. Lyrics come from LRCLIB, no account.
+- **New: FnGestures** (install from Apps). Hold fn and scroll for volume or brightness, flick sideways for the next or previous track. Needs Accessibility only.
+- New: game mode for the notch. Settings → Notch → "Open the notch" picks Hover, Click, or ⌘-click, so a cursor at the top never opens it mid-game.
+- New: the playback source switch is two small icons that slide when you click; it only appears while a second player is running, and right-click lists every source. A pinned player that quits falls back to Automatic.
+- New: click the album art or the title in the notch to bring the playing app forward.
+- fix: switching the playback source no longer freezes Oxine. Music and Spotify are read off the main thread, so the macOS Automation prompt can't block the app.
+- fix: a wide video thumbnail no longer pushes the now playing card under the neighbouring widget.
+- fix: the open notch widens with its tab count, so a fifth tab clears the cutout instead of colliding with it.
+- fix: album art survives metadata updates, the playback clock no longer rewinds, and now playing numbers parse correctly in every locale.
+- fix: opening a menu inside the notch no longer closes it.
+
 ## 2.1.1
 - New: split the notch bar to show two metrics at once (Settings → Notch) — each half fills inward from its edge.
 - New: Home "player only" layout (Settings → Notch → Home widget → None) gives the player the full width.

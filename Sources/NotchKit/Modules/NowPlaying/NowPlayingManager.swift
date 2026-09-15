@@ -2,9 +2,8 @@ import SwiftUI
 import CoreImage
 
 /// Owns the chosen now-playing source and republishes its track for the views.
-/// Prefers the system-wide adapter when its resources are bundled; otherwise the
-/// ScriptingBridge baseline. Both conform to `NowPlayingSource`, so swapping is
-/// a one-line decision here.
+/// Automatic prefers the system-wide adapter; explicit choices use app-directed
+/// observation and transport. The same selected feed drives artwork and lyrics.
 @MainActor
 public final class NowPlayingManager: ObservableObject {
     @Published public private(set) var track: NowPlayingTrack?
@@ -15,59 +14,168 @@ public final class NowPlayingManager: ObservableObject {
     /// smoothly between the (coarse) source updates.
     @Published public private(set) var elapsedAt: Date = .init()
 
-    private let source: NowPlayingSource
+    @Published public private(set) var selectedPlayer: PlaybackPlayer
+    /// The sources worth offering right now: Automatic, plus each player that is
+    /// actually running. With only Automatic there is nothing to switch to, so
+    /// the switch hides; a pinned player that quits falls back to Automatic
+    /// rather than leaving the notch stuck on "Nothing playing in …".
+    @Published public private(set) var availablePlayers: [PlaybackPlayer] = [.automatic]
+    private var source: NowPlayingSource
+    private let makeSource: ((PlaybackPlayer) -> NowPlayingSource)?
+    private let saveSelection: ((PlaybackPlayer) -> Void)?
+    private let availability: () -> Set<PlaybackPlayer>
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var sourceGeneration = UUID()
+    private var started = false
 
-    public init() {
-        // "system" = system-wide via the mediaremote-adapter (any app, incl.
-        // browsers); "apps" = Music & Spotify only via ScriptingBridge. Defaults
-        // to system-wide when the adapter is bundled, else the app baseline.
-        let pref = NotchKit.settingsDefaults.string(forKey: "notchNowPlayingSource") ?? "system"
-        if pref == "system", MediaRemoteAdapterSource.isAvailable {
-            source = MediaRemoteAdapterSource()
-            notchLog("now playing: mediaremote-adapter (system-wide)")
-        } else {
-            source = ScriptingBridgeSource()
-            notchLog("now playing: ScriptingBridge (Music/Spotify)")
+    public convenience init() {
+        let defaults = NotchKit.settingsDefaults
+        let selection = PlaybackPlayer(rawValue: defaults.string(forKey: "notchPlaybackPlayer") ?? "") ?? .automatic
+        let preferSystem = (defaults.string(forKey: "notchNowPlayingSource") ?? "system") == "system"
+        let factory: (PlaybackPlayer) -> NowPlayingSource = { player in
+            if player == .automatic, preferSystem, MediaRemoteAdapterSource.isAvailable {
+                return MediaRemoteAdapterSource()
+            }
+            return ScriptingBridgeSource(player: player)
         }
-        source.onChange = { [weak self] incoming in
-            guard let self else { return }
-            var track = incoming
-            // Resilience: players (notably Spotify over AppleScript, and some
-            // MediaRemote apps) occasionally report position 0 mid-track. Don't let
-            // that snap the scrubber back to the start — carry the position we'd
-            // already interpolated to for the same playing track.
-            if var t = track, let old = self.track,
-               t.app == old.app, t.title == old.title, t.isPlaying,
-               t.duration > 1, t.elapsed < 0.5 {
-                let carried = self.position(at: Date())   // from the prior sample
-                if carried > 1 { t.elapsed = carried; track = t }
-            }
-            let titleChanged = track?.title != self.track?.title
-            self.track = track
-            self.elapsedAt = Date()
-            // Only recompute the (relatively costly) tint when the track changes.
-            if titleChanged {
-                let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
-                withAnimation(.easeInOut(duration: 0.5)) { self.tint = newTint }
-            }
+        self.init(source: factory(selection), selectedPlayer: selection, makeSource: factory,
+                  saveSelection: { defaults.set($0.rawValue, forKey: "notchPlaybackPlayer") },
+                  availability: Self.runningPlayers)
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            workspaceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshAvailability() }
+            })
         }
     }
 
-    public func start() { source.start() }
-    public func stop() { source.stop() }
+    /// `availability` answers which explicit players can be offered (tests
+    /// default to all of them; the app asks the workspace what's running).
+    init(source: NowPlayingSource, selectedPlayer: PlaybackPlayer = .automatic,
+         makeSource: ((PlaybackPlayer) -> NowPlayingSource)? = nil,
+         saveSelection: ((PlaybackPlayer) -> Void)? = nil,
+         availability: @escaping () -> Set<PlaybackPlayer> = { Set(PlaybackPlayer.allCases) }) {
+        self.source = source
+        self.selectedPlayer = selectedPlayer
+        self.makeSource = makeSource
+        self.saveSelection = saveSelection
+        self.availability = availability
+        observeSource()
+        refreshAvailability()
+    }
 
-    public func playPause() { source.playPause() }
-    public func next() { source.next() }
-    public func previous() { source.previous() }
-    public func seek(to seconds: Double) { source.seek(to: seconds) }
+    // Workspace observers are removed in `stop()` (the manager lives as long as
+    // its notch); a nonisolated deinit can't touch actor state.
+
+    private static func runningPlayers() -> Set<PlaybackPlayer> {
+        let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+        return Set(PlaybackPlayer.allCases.filter { $0.bundleIdentifier.map(running.contains) ?? true })
+    }
+
+    private func refreshAvailability() {
+        let now = availability().union([.automatic])
+        let ordered = PlaybackPlayer.allCases.filter(now.contains)
+        if ordered != availablePlayers { availablePlayers = ordered }
+        if !now.contains(selectedPlayer) { selectPlayer(.automatic) }
+    }
+
+    /// What one click of the switch would move to (the next available source).
+    public var nextPlayer: PlaybackPlayer {
+        let players = availablePlayers
+        guard let index = players.firstIndex(of: selectedPlayer) else { return players.first ?? .automatic }
+        return players[(index + 1) % players.count]
+    }
+
+    private func observeSource() {
+        let generation = sourceGeneration
+        source.onChange = { [weak self] incoming in
+            guard let self, self.sourceGeneration == generation else { return }
+            self.receive(incoming)
+        }
+    }
+
+    private func receive(_ track: NowPlayingTrack?) {
+        let titleChanged = track?.title != self.track?.title || track?.artist != self.track?.artist
+        let artworkChanged = track?.artwork !== self.track?.artwork
+        self.track = track
+        elapsedAt = track?.elapsedAt ?? Date()
+        // Artwork may arrive independently; retained identity avoids work on clock updates.
+        if titleChanged || artworkChanged {
+            let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
+            withAnimation(.easeInOut(duration: 0.5)) { tint = newTint }
+        }
+    }
+
+    /// Change observation and transport together, without starting/stopping playback.
+    /// Bring the app that's playing to the front (launching it if the track's
+    /// bundle id names an installed app that isn't running).
+    public func openPlayerApp() {
+        let ws = NSWorkspace.shared
+        let hint = track?.app ?? selectedPlayer.bundleIdentifier
+        if let hint, hint.contains("."), let url = ws.urlForApplication(withBundleIdentifier: hint) {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            ws.openApplication(at: url, configuration: config)
+            return
+        }
+        if let hint, let running = ws.runningApplications.first(where: { $0.localizedName == hint || $0.bundleIdentifier == hint }) {
+            running.activate()
+            return
+        }
+        if let id = selectedPlayer.bundleIdentifier, let url = ws.urlForApplication(withBundleIdentifier: id) {
+            ws.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+
+    public func cyclePlayer() {
+        guard availablePlayers.count > 1 else { return }
+        selectPlayer(nextPlayer)
+    }
+
+    public func selectPlayer(_ player: PlaybackPlayer) {
+        guard player != selectedPlayer, let makeSource else { return }
+        sourceGeneration = UUID()
+        source.onChange = nil
+        source.stop()
+        receive(nil) // Cancel old lyric requests and discard the old clock/artwork.
+        selectedPlayer = player
+        saveSelection?(player)
+        source = makeSource(player)
+        observeSource()
+        if started { source.start() }
+    }
+
+    public func start() {
+        guard !started else { return }
+        started = true
+        observeSource()
+        source.start()
+    }
+    public func stop() {
+        for o in workspaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(o) }
+        workspaceObservers = []
+        started = false
+        sourceGeneration = UUID()
+        source.onChange = nil
+        source.stop()
+        receive(nil)
+    }
+
+    public func playPause() { if track != nil { source.playPause() } }
+    public func next() { if track != nil { source.next() } }
+    public func previous() { if track != nil { source.previous() } }
+    public func seek(to seconds: Double) {
+        guard track != nil, seconds.isFinite else { return }
+        source.seek(to: max(0, seconds))
+    }
 
     /// Current position, interpolated from the last measurement so the scrubber
     /// advances smoothly between source updates.
     public func position(at date: Date) -> Double {
-        guard let track else { return 0 }
-        guard track.isPlaying else { return track.elapsed }
-        let advanced = track.elapsed + date.timeIntervalSince(elapsedAt)
-        return min(max(advanced, 0), track.duration > 0 ? track.duration : advanced)
+        guard let track, track.hasPlaybackPosition, track.elapsed.isFinite else { return 0 }
+        let rate = track.playbackRate.isFinite ? max(0, track.playbackRate) : 1
+        let advanced = track.elapsed + (track.isPlaying ? max(0, date.timeIntervalSince(elapsedAt)) * rate : 0)
+        return min(max(advanced, 0), track.duration.isFinite && track.duration > 0 ? track.duration : max(advanced, 0))
     }
 
     public var isPlaying: Bool { track?.isPlaying ?? false }

@@ -15,7 +15,7 @@ struct MainView: View {
     /// The user's customizable tab bar (which tabs, in what order). Observed so
     /// edits in Settings / the tour reorder the live bar.
     @ObservedObject private var tabConfig = TabBarConfig.shared
-    @State var activeTab: TabID = TabBarConfig.shared.enabled.first ?? .notes
+    @State var activeTab: PanelTab = TabBarConfig.shared.enabled.first ?? .builtin(.notes)
     /// Settings is a route, not a tab (opened from the footer gear).
     @State private var showingSettings = false
     @State var showSetup = SetupManager.shared.isFirstLaunch
@@ -41,10 +41,14 @@ struct MainView: View {
             : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
     }
 
-    /// Position of a tab within the current bar order (drives slide direction).
-    private func position(of tab: TabID) -> Int { tabConfig.enabled.firstIndex(of: tab) ?? 0 }
+    /// The bar as actually rendered: saved order minus app tabs that can't
+    /// resolve right now (uninstalled/disabled apps keep their stored slot).
+    private var visibleTabs: [PanelTab] { tabConfig.enabled.filter { $0.isResolvable } }
 
-    func switchTab(to tab: TabID, bySwipe: Bool = false) {
+    /// Position of a tab within the current bar order (drives slide direction).
+    private func position(of tab: PanelTab) -> Int { visibleTabs.firstIndex(of: tab) ?? 0 }
+
+    func switchTab(to tab: PanelTab, bySwipe: Bool = false) {
         // Remember how this switch was initiated so the destination can decide
         // whether to auto-prompt for Touch ID. Set on every call (taps clear it,
         // swipes set it) so a stale swipe flag can't leak into a later tap.
@@ -66,7 +70,7 @@ struct MainView: View {
             if dir == .previous { swipeHaptic(); switchTab(to: preSettingsTab, bySwipe: true) }
             return
         }
-        let tabs = tabConfig.enabled
+        let tabs = visibleTabs
         guard let i = tabs.firstIndex(of: activeTab) else { return }
         let j = dir == .next ? i + 1 : i - 1
         guard tabs.indices.contains(j) else { return }   // no wrap: silent at the ends
@@ -111,9 +115,11 @@ struct MainView: View {
     /// navigates away, so each visit re-authenticates.
     @State private var clipboardUnlocked = false
     @State private var notesUnlocked = false
+    /// Bumped when the set of enabled apps changes, so `visibleTabs` recomputes.
+    @State private var appsRevision = 0
     /// The content tab to return to when leaving Settings (which is opened from
     /// the footer gear rather than living in the tab bar).
-    @State private var preSettingsTab: TabID = .notes
+    @State private var preSettingsTab: PanelTab = .builtin(.notes)
 
     /// The corner grip shows only when the panel is actually drag-resizable.
     var showResizeGrip: Bool { panelSizePreset == PanelSize.custom.rawValue && !panelCustomLocked }
@@ -151,33 +157,41 @@ struct MainView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showResizeGrip)
         .onAppear {
-            appDelegate?.isAuthVisible = (!showingSettings && activeTab == .auth)
+            appDelegate?.isAuthVisible = (!showingSettings && activeTab == .builtin(.auth))
             guard !didStart else { return }
             didStart = true
             clipboardManager.startMonitoring()
         }
         .onChange(of: activeTab) { oldTab, newTab in
             slideForward = position(of: newTab) >= position(of: oldTab)
-            appDelegate?.isAuthVisible = (!showingSettings && newTab == .auth)
-            if newTab != .history { clipboardUnlocked = false }
-            if newTab != .notes { notesUnlocked = false }
-            if oldTab != .auth && newTab == .auth && !navigatingBySwipe {
+            appDelegate?.isAuthVisible = (!showingSettings && newTab == .builtin(.auth))
+            if newTab != .builtin(.history) { clipboardUnlocked = false }
+            if newTab != .builtin(.notes) { notesUnlocked = false }
+            if oldTab != .builtin(.auth) && newTab == .builtin(.auth) && !navigatingBySwipe {
                 NotificationCenter.default.post(name: .authTabActivated, object: nil)
             }
         }
         .onChange(of: showingSettings) { _, open in
-            appDelegate?.isAuthVisible = (!open && activeTab == .auth)
+            appDelegate?.isAuthVisible = (!open && activeTab == .builtin(.auth))
         }
-        .onChange(of: tabConfig.enabled) { _, tabs in
+        .onChange(of: tabConfig.enabled) { _, _ in
             // If the active tab was removed from the bar, retreat to the first one.
-            if !tabs.contains(activeTab) { switchTab(to: tabs.first ?? .notes) }
+            let tabs = visibleTabs
+            if !tabs.contains(activeTab) { switchTab(to: tabs.first ?? .builtin(.notes)) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appsChanged)) { _ in
+            // App enable/disable changes which stored tabs resolve. Re-render,
+            // and retreat if the active tab just vanished.
+            appsRevision &+= 1
+            let tabs = visibleTabs
+            if !tabs.contains(activeTab) { switchTab(to: tabs.first ?? .builtin(.notes)) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             showSettingsRoute()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openTab)) { note in
             // From the status-bar menu — navigable even if the tab is off the bar.
-            guard let raw = note.object as? String, let tab = TabID(rawValue: raw) else { return }
+            guard let raw = note.object as? String, let tab = PanelTab(rawValue: raw) else { return }
             switchTab(to: tab)
         }
         .onReceive(NotificationCenter.default.publisher(for: .swipeNavigate)) { note in
@@ -216,7 +230,22 @@ struct MainView: View {
     /// every tab/settings change.
     private var routeID: String { showingSettings ? "settings" : activeTab.rawValue }
 
-    @ViewBuilder private func tabContent(_ tab: TabID) -> some View {
+    @ViewBuilder private func tabContent(_ tab: PanelTab) -> some View {
+        switch tab {
+        case .builtin(let t): builtinContent(t)
+        case .app(let appID):
+            if let app = AppsManager.shared.app(appID) {
+                AppTabView(runtime: app.runtime)
+            } else {
+                Text("This app is no longer installed.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder private func builtinContent(_ tab: TabID) -> some View {
         switch tab {
         case .notes:
             if requireNotesAuth && !notesUnlocked {
@@ -240,7 +269,7 @@ struct MainView: View {
                     onUnlock: { clipboardUnlocked = true }
                 )
             } else {
-                ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: .notes) })
+                ClipboardHistoryView(items: $clipboardManager.history, clipboardManager: clipboardManager, notesManager: notesManager, onSwitchToNotes: { switchTab(to: .builtin(.notes)) })
             }
         case .auth:
             AuthView()
@@ -255,7 +284,8 @@ struct MainView: View {
 
     var mainContent: some View {
         VStack(spacing: 0) {
-            TabBar(tabs: tabConfig.enabled, activeTab: activeTab, onSelect: { switchTab(to: $0) })
+            TabBar(tabs: visibleTabs, activeTab: activeTab, onSelect: { switchTab(to: $0) })
+                .id(appsRevision)
 
             Group {
                 if showingSettings {
@@ -289,9 +319,9 @@ struct MainView: View {
 
 struct TabBar: View {
     /// The user's chosen tabs, in order — driven by `TabBarConfig`.
-    var tabs: [TabID]
-    var activeTab: TabID
-    var onSelect: (TabID) -> Void
+    var tabs: [PanelTab]
+    var activeTab: PanelTab
+    var onSelect: (PanelTab) -> Void
     @Namespace private var tabAnimation
     /// Natural width of the labelled row, measured once by a hidden probe. The
     /// only measured value; the available width comes free from the layout.
@@ -405,8 +435,7 @@ struct FooterView: View {
     var isSettingsOpen: Bool
     var appDelegate: AppDelegate?
     var onToggleSettings: () -> Void
-    @State private var focusEnabled = FocusModeManager.shared.isEnabled
-    @ObservedObject private var caffeine = CaffeineManager.shared
+    @ObservedObject private var appsManager = AppsManager.shared
     @ObservedObject private var shortcut = ShortcutManager.shared
     private var accent: Color { .panelAccent }
 
@@ -417,52 +446,13 @@ struct FooterView: View {
                 .foregroundColor(.white.opacity(0.2))
                 .padding(.trailing, 4)
 
-            utilityButton(
-                icon: caffeine.isActive ? "bolt.horizontal.fill" : "bolt.horizontal",
-                on: caffeine.isActive,
-                help: caffeine.isActive
-                    ? "Keeping your Mac awake — click to stop"
-                    : "Keep your Mac awake (right-click to choose how long)"
-            ) {
-                caffeine.toggle()
-            }
-            .contextMenu {
-                Section("Stay awake for") {
-                    ForEach(CaffeineManager.presets, id: \.label) { preset in
-                        Button {
-                            caffeine.startAndSetDefault(preset.seconds)
-                        } label: {
-                            if caffeine.defaultDuration == preset.seconds {
-                                Label(preset.label, systemImage: "checkmark")
-                            } else {
-                                Text(preset.label)
-                            }
-                        }
-                    }
-                }
-                if caffeine.isActive {
-                    Divider()
-                    Button("Turn off", role: .destructive) { caffeine.stop() }
-                }
+            // The user-assignable quick-toggle slots (Settings → Apps). Each is
+            // an installed app's one-click action + right-click menu; Caffeine
+            // and Focus are the built-in defaults.
+            ForEach(appsManager.footerApps) { app in
+                AppQuickToggleButton(runtime: app.runtime)
             }
 
-            if caffeine.isActive {
-                Text(caffeine.statusText)
-                    .font(.system(size: 10, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundColor(accent.opacity(0.75))
-                    .padding(.trailing, 2)
-                    .transition(.opacity)
-            }
-
-            utilityButton(
-                icon: focusEnabled ? "moon.fill" : "moon",
-                on: focusEnabled,
-                help: focusEnabled ? "Disable focus mode" : "Dim background windows"
-            ) {
-                FocusModeManager.shared.toggle()
-                focusEnabled = FocusModeManager.shared.isEnabled
-            }
             utilityButton(
                 icon: isPinned ? "pin.fill" : "pin",
                 on: isPinned,

@@ -1,5 +1,6 @@
 import AppKit
 import NotchKit
+import SwiftUI
 import TemperKit
 
 /// Wires NotchKit into Oxine: owns the notch controller + window and rebuilds
@@ -29,9 +30,27 @@ final class NotchCoordinator {
             let avgRPM = fans.map(\.actualRPM).reduce(0, +) / n
             return MetricReadout(fraction: avgFrac, text: "\(Int(avgRPM.rounded())) rpm")
         }
+        // App-contributed bar metrics ("app:<id>" tokens in the metric pickers).
+        NotchKit.externalBarMetrics = {
+            AppsManager.shared.barMetricApps.map { app in
+                ExternalBarMetric(
+                    id: "app:\(app.id)",
+                    label: app.manifest.surfaces.barMetric?.label ?? app.name,
+                    color: .panelAccent,
+                    readout: { [weak app] in
+                        guard let app else { return nil }
+                        return MetricReadout(fraction: app.runtime.metricValue,
+                                             text: app.runtime.metricText ?? "")
+                    })
+            }
+        }
         NotificationCenter.default.addObserver(
             self, selector: #selector(settingsChanged),
             name: .notchSettingsChanged, object: nil)
+        // Display changes (lid closed, monitor plugged) move the notch screen.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(settingsChanged),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil)
         apply()
     }
 
@@ -48,6 +67,12 @@ final class NotchCoordinator {
         controller.pinned.toggle()
     }
 
+    /// Flash a transient peek line beside the cutout (used by apps' `peek`
+    /// messages, already rate-limited in `AppRuntime`). No-op with the notch off.
+    func peek(_ text: String) {
+        controller?.peek(text)
+    }
+
 
     /// Tear down and (re)build from the current settings — covers enable/disable
     /// and the faux-notch toggle in one path.
@@ -56,14 +81,17 @@ final class NotchCoordinator {
         controller = nil
         guard enabled else { return }
 
-        // Tabs: Home (player + webcam slot), Shelf, Calendar. The notch reopens
-        // to whichever tab was last used.
-        let controller = NotchController(modules: [
+        // Tabs: Home (player + webcam slot), Shelf, Calendar — plus a tab per
+        // enabled app that declares a notchTab surface. The notch reopens to
+        // whichever tab was last used.
+        var modules: [any NotchModule] = [
             HomeModule(),
             ShelfModule(),
             CalendarModule(),
             WeatherModule()
-        ])
+        ]
+        modules.append(contentsOf: AppsManager.shared.notchTabApps.map { RemoteNotchModule(app: $0) })
+        let controller = NotchController(modules: modules)
         let presenter = NotchPresenter(controller: controller, allowFauxNotch: fauxOnExternal)
         self.controller = controller
         self.presenter = presenter

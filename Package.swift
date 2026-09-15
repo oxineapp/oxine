@@ -31,6 +31,11 @@ let package = Package(
         .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.1.0")
     ],
     targets: [
+        // Pure lyric plumbing (LRC parsing, line lookup, overlay layout math):
+        // no AppKit, so it stays unit-testable in isolation.
+        .target(name: "LyricsCore"),
+        .testTarget(name: "LyricsCoreTests", dependencies: ["LyricsCore"]),
+        .testTarget(name: "NotchKitTests", dependencies: ["NotchKit", "LyricsCore"]),
         // Types shared verbatim across the app↔daemon XPC boundary.
         .target(
             name: "SousShared"
@@ -91,6 +96,7 @@ let package = Package(
         .target(
             name: "NotchKit",
             dependencies: [
+                "LyricsCore",
                 "PanelKit",
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit")
             ]

@@ -37,9 +37,77 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// Identity for anything that can occupy a tab-bar slot: a built-in `TabID`,
+/// or an installed app's `panelTab` surface. Persisted as raw strings — the
+/// built-ins keep their historical tokens ("notes"), apps get "app:<id>" — so
+/// existing saved bars load unchanged. App entries whose app is missing or
+/// disabled are kept in storage but filtered from display (`isResolvable`),
+/// so a temporarily-disabled app doesn't lose its slot.
+enum PanelTab: Hashable, Identifiable, Codable {
+    case builtin(TabID)
+    case app(String)
+
+    var id: String { rawValue }
+
+    var rawValue: String {
+        switch self {
+        case .builtin(let t): return t.rawValue
+        case .app(let appID): return "app:" + appID
+        }
+    }
+
+    init?(rawValue: String) {
+        if rawValue.hasPrefix("app:") {
+            self = .app(String(rawValue.dropFirst(4)))
+        } else if let t = TabID(rawValue: rawValue) {
+            self = .builtin(t)
+        } else {
+            return nil
+        }
+    }
+
+    /// The built-in bar, in canonical order.
+    static var canonical: [PanelTab] { TabID.canonical.map { .builtin($0) } }
+
+    /// Everything that can be on the bar right now: built-ins + enabled apps
+    /// declaring a panelTab surface.
+    @MainActor static var allAvailable: [PanelTab] {
+        canonical + AppsManager.shared.panelTabApps.map { .app($0.id) }
+    }
+
+    /// Whether this entry can render right now (built-ins always; app tabs only
+    /// while their app is installed, enabled, and offers the surface).
+    @MainActor var isResolvable: Bool {
+        switch self {
+        case .builtin: return true
+        case .app(let appID):
+            guard let a = AppsManager.shared.app(appID) else { return false }
+            return a.enabled && a.manifest.surfaces.panelTab != nil
+        }
+    }
+
+    @MainActor var icon: String {
+        switch self {
+        case .builtin(let t): return t.icon
+        case .app(let appID):
+            let a = AppsManager.shared.app(appID)
+            return a?.manifest.surfaces.panelTab?.icon ?? a?.icon ?? "shippingbox"
+        }
+    }
+
+    @MainActor var title: String {
+        switch self {
+        case .builtin(let t): return t.title
+        case .app(let appID):
+            let a = AppsManager.shared.app(appID)
+            return a?.manifest.surfaces.panelTab?.title ?? a?.name ?? appID
+        }
+    }
+}
+
 /// The current route the panel is showing: one of the bar tabs, or Settings.
 enum Route: Equatable {
-    case tab(TabID)
+    case tab(PanelTab)
     case settings
 }
 
@@ -56,7 +124,7 @@ final class TabBarConfig: ObservableObject {
     private let store = UserDefaults(suiteName: "com.oxine.settings")
 
     /// Ordered, deduplicated, always at least one tab.
-    @Published private(set) var enabled: [TabID]
+    @Published private(set) var enabled: [PanelTab]
 
     private init() {
         if let raw = UserDefaults(suiteName: "com.oxine.settings")?.string(forKey: Self.key) {
@@ -64,36 +132,37 @@ final class TabBarConfig: ObservableObject {
             // keeps it (now "scripts") instead of silently dropping it. See
             // ScriptsMigration, which also rewrites the stored value once.
             let parsed = raw.split(separator: ",").map { $0 == "plugins" ? "scripts" : String($0) }
-                .compactMap { TabID(rawValue: $0) }
+                .compactMap { PanelTab(rawValue: $0) }
             self.enabled = TabBarConfig.normalize(parsed)
         } else {
-            self.enabled = TabID.canonical
+            self.enabled = PanelTab.canonical
         }
     }
 
-    /// Tabs not currently on the bar, in canonical order (the "add" tray).
-    var available: [TabID] { TabID.canonical.filter { !enabled.contains($0) } }
+    /// Tabs not currently on the bar, in canonical order (the "add" tray) —
+    /// built-ins plus any enabled app tabs.
+    var available: [PanelTab] { PanelTab.allAvailable.filter { !enabled.contains($0) } }
 
-    func isEnabled(_ tab: TabID) -> Bool { enabled.contains(tab) }
+    func isEnabled(_ tab: PanelTab) -> Bool { enabled.contains(tab) }
 
-    func add(_ tab: TabID) {
+    func add(_ tab: PanelTab) {
         guard !enabled.contains(tab) else { return }
         enabled.append(tab)
         persist()
     }
 
     /// Remove a tab from the bar. No-op if it would empty the bar (floor of 1).
-    func remove(_ tab: TabID) {
+    func remove(_ tab: PanelTab) {
         guard enabled.count > 1, let i = enabled.firstIndex(of: tab) else { return }
         enabled.remove(at: i)
         persist()
     }
 
-    func toggle(_ tab: TabID) { isEnabled(tab) ? remove(tab) : add(tab) }
+    func toggle(_ tab: PanelTab) { isEnabled(tab) ? remove(tab) : add(tab) }
 
     /// Replace the whole bar in one shot (used by the drag composer on drop).
     /// Normalized, so it can never persist an empty or duplicated bar.
-    func setEnabled(_ tabs: [TabID]) {
+    func setEnabled(_ tabs: [PanelTab]) {
         let n = TabBarConfig.normalize(tabs)
         guard n != enabled else { return }
         enabled = n
@@ -105,27 +174,28 @@ final class TabBarConfig: ObservableObject {
         persist()
     }
 
-    func moveUp(_ tab: TabID) {
+    func moveUp(_ tab: PanelTab) {
         guard let i = enabled.firstIndex(of: tab), i > 0 else { return }
         enabled.swapAt(i, i - 1); persist()
     }
 
-    func moveDown(_ tab: TabID) {
+    func moveDown(_ tab: PanelTab) {
         guard let i = enabled.firstIndex(of: tab), i < enabled.count - 1 else { return }
         enabled.swapAt(i, i + 1); persist()
     }
 
-    func reset() { enabled = TabID.canonical; persist() }
+    func reset() { enabled = PanelTab.canonical; persist() }
 
     private func persist() {
         store?.set(enabled.map(\.rawValue).joined(separator: ","), forKey: Self.key)
     }
 
-    /// Drop unknowns/dupes and guarantee a non-empty bar.
-    private static func normalize(_ tabs: [TabID]) -> [TabID] {
-        var seen = Set<TabID>(), out: [TabID] = []
+    /// Drop dupes and guarantee a non-empty bar. App entries are kept even when
+    /// their app is currently missing (they filter out at display time instead).
+    private static func normalize(_ tabs: [PanelTab]) -> [PanelTab] {
+        var seen = Set<PanelTab>(), out: [PanelTab] = []
         for t in tabs where !seen.contains(t) { seen.insert(t); out.append(t) }
-        return out.isEmpty ? TabID.canonical : out
+        return out.isEmpty ? PanelTab.canonical : out
     }
 }
 
@@ -134,8 +204,8 @@ final class TabBarConfig: ObservableObject {
 /// A glanceable, non-interactive render of the bar exactly as it will look, so
 /// edits below it read as "this is your bar."
 struct TabBarPreview: View {
-    let tabs: [TabID]
-    var active: TabID?
+    let tabs: [PanelTab]
+    var active: PanelTab?
     var body: some View {
         HStack(spacing: 4) {
             ForEach(tabs) { t in
@@ -175,10 +245,10 @@ struct TabEditor: View {
     @ObservedObject var config = TabBarConfig.shared
 
     // Working order, committed to `config` on drop.
-    @State private var bar: [TabID] = []
-    @State private var tray: [TabID] = []
+    @State private var bar: [PanelTab] = []
+    @State private var tray: [PanelTab] = []
 
-    @State private var dragging: TabID?
+    @State private var dragging: PanelTab?
     @State private var dragPoint: CGPoint = .zero
     @State private var dragSize: CGSize = .zero      // captured once at lift, stable
     @State private var ignoreDrag = false            // this press began off any chip
@@ -215,7 +285,7 @@ struct TabEditor: View {
 
     /// One row (bar or tray). Records its own frame so an empty zone is still a
     /// valid drop target, and lays its chips out evenly.
-    private func zone(_ zone: Zone, tabs: [TabID]) -> some View {
+    private func zone(_ zone: Zone, tabs: [PanelTab]) -> some View {
         HStack(spacing: zone == .bar ? 6 : 8) {
             // Bar chips stretch to share the width (like the real tab bar); tray
             // chips stay natural and pack to the left.
@@ -238,7 +308,7 @@ struct TabEditor: View {
         )
     }
 
-    private func chip(_ tab: TabID, fill: Bool) -> some View {
+    private func chip(_ tab: PanelTab, fill: Bool) -> some View {
         // No per-chip gesture: the single container gesture (see body) hit-tests
         // these recorded frames. Attaching it here would let `reflow()` reorder
         // the chip out from under its own recognizer mid-drag — SwiftUI then
@@ -254,7 +324,7 @@ struct TabEditor: View {
 
     /// The lifted chip drawn at the finger. Size is snapshotted at lift so it
     /// never re-reads reflowing frames mid-drag.
-    private func floatingChip(_ tab: TabID) -> some View {
+    private func floatingChip(_ tab: PanelTab) -> some View {
         ComposerChip(tab: tab, fill: true, lifted: true)
             .frame(width: max(dragSize.width, 56), height: max(dragSize.height, 32))
             .position(dragPoint)
@@ -289,14 +359,14 @@ struct TabEditor: View {
     }
 
     /// Which chip (if any) sits under a point — bar or tray.
-    private func chip(at p: CGPoint) -> TabID? {
+    private func chip(at p: CGPoint) -> PanelTab? {
         for (key, rect) in frames where rect.contains(p) {
-            if let t = TabID(rawValue: key) { return t }
+            if let t = PanelTab(rawValue: key) { return t }
         }
         return nil
     }
 
-    private func beginDrag(_ tab: TabID) {
+    private func beginDrag(_ tab: PanelTab) {
         let f = frames[tab.rawValue] ?? .zero
         dragSize = f.size
         dragPoint = CGPoint(x: f.midX, y: f.midY)
@@ -342,10 +412,10 @@ struct TabEditor: View {
         if wasDragging { config.setEnabled(bar) }   // tray is local; only the bar persists
     }
 
-    /// Seed the working rows from the saved config (canonical order for the tray).
+    /// Seed the working rows from the saved config (available order for the tray).
     private func sync() {
         bar = config.enabled
-        tray = TabID.canonical.filter { !config.enabled.contains($0) }
+        tray = PanelTab.allAvailable.filter { !config.enabled.contains($0) }
     }
 }
 
@@ -353,7 +423,7 @@ struct TabEditor: View {
 /// lifted under the finger. `fill` stretches it to share the row width (bar);
 /// natural width otherwise (tray).
 private struct ComposerChip: View {
-    let tab: TabID
+    let tab: PanelTab
     var fill: Bool = false
     var lifted: Bool = false
     var body: some View {
