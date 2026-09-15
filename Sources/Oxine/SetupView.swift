@@ -726,9 +726,8 @@ struct Step6Notch: View {
     }
 }
 
-/// Apps step: what apps are (separate additions with their own pages, footer
-/// slots and access, installed and removed from Settings → Apps), then the
-/// two made by the Oxine team, installable right here.
+/// Apps step: what apps are, then a shelf of the two made by the Oxine team
+/// (accent-outlined, installable right here) and the curated shelf below it.
 struct Step7Apps: View {
     var hasNotch: Bool
     @ObservedObject private var manager = AppsManager.shared
@@ -743,10 +742,11 @@ struct Step7Apps: View {
                 Text("Apps")
                     .font(.system(size: 19, weight: .bold))
                     .foregroundColor(.white)
-                Text("Oxine grows by apps: separate additions you install and remove in Settings → Apps. Each gets its own page, a footer slot if it wants one, and only the access it declares.")
+                Text("Add-ons you install and remove in Settings → Apps. Each has its own page and only the access it declares.")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("OPTIONAL")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .tracking(0.8)
@@ -757,80 +757,135 @@ struct Step7Apps: View {
                     .padding(.top, 2)
             }
 
-            HStack(spacing: 6) {
-                Text("MADE BY THE OXINE TEAM")
-                    .font(.system(size: 9, weight: .semibold)).tracking(0.8)
-                    .foregroundColor(.white.opacity(0.35))
-                Spacer()
+            shelfLabel("Made by the Oxine team", symbol: "checkmark.seal.fill")
+            HStack(spacing: 10) {
+                if hasNotch { tile("oxine.screenlyrics") }
+                tile("oxine.fngestures")
             }
-            .padding(.top, 2)
 
-            if hasNotch {
-                card(id: "oxine.screenlyrics",
-                     note: "Synced lyrics in a small glass pill under the notch while music plays. No account; lyrics come from LRCLIB.")
-            }
-            card(id: "oxine.fngestures",
-                 note: "Hold fn and scroll for volume or brightness, flick sideways to skip tracks. Needs Accessibility, which you grant once.")
-
-            Text("Community apps install from a GitHub repo the same way, after you see what they ask for.")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-                .multilineTextAlignment(.center)
-                .padding(.top, 2)
+            shelfLabel("Curated", symbol: "sparkles")
+            curatedShelf
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
+        .task { if manager.featured == nil { await manager.fetchFeatured() } }
     }
 
-    @ViewBuilder private func card(id: String, note: String) -> some View {
+    private func shelfLabel(_ text: String, symbol: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
+            Text(text.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.8)
+            Spacer()
+        }
+        .foregroundColor(.white.opacity(0.4))
+        .padding(.top, 2)
+    }
+
+    /// One Oxine-made app: tile, name, tagline, install state; accent outline.
+    @ViewBuilder private func tile(_ id: String) -> some View {
         if let entry = BundledApps.entry(id) {
-            let installed = manager.app(id) != nil
             let m = entry.manifest
+            let installed = manager.app(id) != nil
+            let needsAccess = installed && id == "oxine.fngestures" && !FnGestureEngine.accessibilityGranted
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     AppIconTile(symbol: m.icon ?? "shippingbox", size: 30)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(m.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                        Text(m.tagline ?? "").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.55))
-                            .lineLimit(1)
+                        Text(m.name).font(.system(size: 12.5, weight: .semibold)).foregroundColor(.white)
+                        Text("by Oxine").font(.system(size: 9.5, weight: .medium)).foregroundColor(accent.opacity(0.9))
                     }
-                    Spacer()
-                    if installed {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Installed")
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                    } else {
-                        StorePrimaryButton(title: "Install", symbol: "arrow.down") {
-                            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
-                        }
-                    }
+                    Spacer(minLength: 0)
                 }
-                Text(note)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.65))
-                    .lineSpacing(3)
+                Text(m.tagline ?? "")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                if installed, id == "oxine.fngestures", !FnGestureEngine.accessibilityGranted {
+                Spacer(minLength: 0)
+                if needsAccess {
                     Button(action: { FnGestureEngine.requestAccessibility() }) {
                         Label("Grant Accessibility", systemImage: "figure.wave")
-                            .font(.system(size: 11.5, weight: .semibold))
+                            .font(.system(size: 10.5, weight: .semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .foregroundColor(accent)
-                            .background(accent.opacity(0.12))
-                            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                            .contentShape(Rectangle())
+                            .padding(.vertical, 6)
+                            .foregroundColor(.orange)
+                            .background(Capsule().fill(Color.orange.opacity(0.12)))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                } else if installed {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Installed")
+                    }
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                } else {
+                    Button(action: { withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) } }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.down").font(.system(size: 9, weight: .bold))
+                            Text("Install").font(.system(size: 11, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .foregroundColor(.white)
+                        .background(Capsule().fill(accent.opacity(0.9)))
+                        .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(11)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.035))
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(LinearGradient(colors: [accent.opacity(0.12), accent.opacity(0.03)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(accent.opacity(0.55), lineWidth: 1))
+        }
+    }
+
+    /// The curated shelf from the registry; dashed placeholders until it fills.
+    @ViewBuilder private var curatedShelf: some View {
+        if let entries = manager.featured, !entries.isEmpty {
+            HStack(spacing: 10) {
+                ForEach(entries.prefix(2)) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            AppIconTile(symbol: entry.icon ?? "shippingbox", size: 26)
+                            Text(entry.name).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                            Spacer(minLength: 0)
+                        }
+                        Text(entry.tagline ?? entry.repo)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundColor(.white.opacity(0.55)).lineLimit(2)
+                        Text("Install from Settings → Apps")
+                            .font(.system(size: 9.5, weight: .medium)).foregroundColor(.white.opacity(0.35))
+                    }
+                    .padding(11)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.035)))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                ForEach(0..<2, id: \.self) { _ in
+                    VStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.2))
+                        Text("More apps soon").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.3))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 68)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                }
+            }
+            Text("A curated shelf picked by the Oxine team, plus any GitHub repo tagged oxine-app, all in Settings → Apps.")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.35))
+                .multilineTextAlignment(.center)
         }
     }
 }
