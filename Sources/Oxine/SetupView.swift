@@ -726,12 +726,29 @@ struct Step6Notch: View {
     }
 }
 
-/// Apps step: what apps are, then a shelf of the two made by the Oxine team
-/// (accent-outlined, installable right here) and the curated shelf below it.
+/// Apps step. A row of app icons with names, like a launcher: Sous, Temper,
+/// ScreenLyrics, FnGestures, then dashed slots for the curated shelf. Hovering
+/// an icon fills a fixed-height card underneath with what it is, who made it,
+/// and its install state — the step never changes size.
 struct Step7Apps: View {
     var hasNotch: Bool
     @ObservedObject private var manager = AppsManager.shared
+    @State private var selected: String = "oxine.sous"
     private var accent: Color { .panelAccent }
+
+    /// What the grid shows, in order: built-ins first, then installables.
+    private var entries: [Entry] {
+        var out: [Entry] = []
+        for id in ["oxine.sous", "oxine.temper"] {
+            if let a = manager.app(id) { out.append(Entry(id: id, manifest: a.manifest, builtin: true)) }
+        }
+        for id in (hasNotch ? ["oxine.screenlyrics", "oxine.fngestures"] : ["oxine.fngestures"]) {
+            if let e = BundledApps.entry(id) { out.append(Entry(id: id, manifest: e.manifest, builtin: false)) }
+        }
+        return out
+    }
+    private struct Entry: Identifiable { let id: String; let manifest: AppManifest; let builtin: Bool }
+    private static let soonID = "__soon"
 
     var body: some View {
         VStack(spacing: 12) {
@@ -757,136 +774,141 @@ struct Step7Apps: View {
                     .padding(.top, 2)
             }
 
-            shelfLabel("Made by the Oxine team", symbol: "checkmark.seal.fill")
-            HStack(spacing: 10) {
-                if hasNotch { tile("oxine.screenlyrics") }
-                tile("oxine.fngestures")
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(entries) { e in
+                    iconCell(id: e.id, symbol: e.manifest.icon ?? "shippingbox", name: e.manifest.name)
+                }
+                ForEach(0..<2, id: \.self) { i in
+                    iconCell(id: Self.soonID + "\(i)", symbol: "plus", name: "Soon", placeholder: true)
+                }
             }
+            .padding(.top, 4)
 
-            shelfLabel("Curated", symbol: "sparkles")
-            curatedShelf
+            detailCard
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
-        .task { if manager.featured == nil { await manager.fetchFeatured() } }
+        .onAppear { if manager.featured == nil { Task { await manager.fetchFeatured() } } }
     }
 
-    private func shelfLabel(_ text: String, symbol: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
-            Text(text.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(0.8)
-            Spacer()
-        }
-        .foregroundColor(.white.opacity(0.4))
-        .padding(.top, 2)
-    }
+    // MARK: Icons
 
-    /// One Oxine-made app: tile, name, tagline, install state; accent outline.
-    @ViewBuilder private func tile(_ id: String) -> some View {
-        if let entry = BundledApps.entry(id) {
-            let m = entry.manifest
-            let installed = manager.app(id) != nil
-            let needsAccess = installed && id == "oxine.fngestures" && !FnGestureEngine.accessibilityGranted
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    AppIconTile(symbol: m.icon ?? "shippingbox", size: 30)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(m.name).font(.system(size: 12.5, weight: .semibold)).foregroundColor(.white)
-                        Text("by Oxine").font(.system(size: 9.5, weight: .medium)).foregroundColor(accent.opacity(0.9))
-                    }
-                    Spacer(minLength: 0)
+    private func iconCell(id: String, symbol: String, name: String, placeholder: Bool = false) -> some View {
+        let isSelected = selected == id
+        return VStack(spacing: 6) {
+            ZStack {
+                if placeholder {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(isSelected ? 0.3 : 0.14),
+                                      style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    Image(systemName: symbol)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white.opacity(0.25))
+                } else {
+                    AppIconTile(symbol: symbol, size: 50)
                 }
-                Text(m.tagline ?? "")
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+            }
+            .frame(width: 50, height: 50)
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(accent.opacity(isSelected && !placeholder ? 0.9 : 0), lineWidth: 1.5)
+                .padding(-3))
+            .scaleEffect(isSelected ? 1.06 : 1)
+            Text(name)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundColor(.white.opacity(placeholder ? 0.35 : (isSelected ? 0.95 : 0.7)))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            if inside { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { selected = id } }
+        }
+        .onTapGesture { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { selected = id } }
+    }
+
+    // MARK: Detail
+
+    /// Fixed height so hovering between icons never moves the buttons below.
+    private var detailCard: some View {
+        ZStack(alignment: .topLeading) {
+            if selected.hasPrefix(Self.soonID) {
+                soonDetail
+            } else if let e = entries.first(where: { $0.id == selected }) {
+                appDetail(e)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: 112)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.035)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accent.opacity(0.25), lineWidth: 0.5))
+        .animation(.easeInOut(duration: 0.18), value: selected)
+    }
+
+    private func appDetail(_ e: Entry) -> some View {
+        let installed = e.builtin || manager.app(e.id) != nil
+        let needsAccess = e.id == "oxine.fngestures" && installed && !FnGestureEngine.accessibilityGranted
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(e.manifest.name).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                if let author = e.manifest.author {
+                    Text("by \(author)").font(.system(size: 10.5, weight: .medium)).foregroundColor(accent.opacity(0.9))
+                }
+                Spacer()
                 if needsAccess {
-                    Button(action: { FnGestureEngine.requestAccessibility() }) {
-                        Label("Grant Accessibility", systemImage: "figure.wave")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .foregroundColor(.orange)
-                            .background(Capsule().fill(Color.orange.opacity(0.12)))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
+                    smallButton("Grant Accessibility", tint: .orange) { FnGestureEngine.requestAccessibility() }
+                } else if e.builtin {
+                    Text("Built in").font(.system(size: 10, weight: .semibold)).foregroundColor(.white.opacity(0.4))
                 } else if installed {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Installed")
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark.circle.fill"); Text("Installed")
                     }
                     .font(.system(size: 10.5, weight: .semibold))
                     .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                } else {
-                    Button(action: { withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) } }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.down").font(.system(size: 9, weight: .bold))
-                            Text("Install").font(.system(size: 11, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .foregroundColor(.white)
-                        .background(Capsule().fill(accent.opacity(0.9)))
-                        .contentShape(Capsule())
+                } else if let entry = BundledApps.entry(e.id) {
+                    smallButton("Install", tint: accent, filled: true) {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(11)
-            .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(LinearGradient(colors: [accent.opacity(0.12), accent.opacity(0.03)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(accent.opacity(0.55), lineWidth: 1))
+            Text(e.manifest.description ?? e.manifest.tagline ?? "")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.65))
+                .lineSpacing(3)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(12)
+        .transition(.opacity)
+        .id(e.id)
     }
 
-    /// The curated shelf from the registry; dashed placeholders until it fills.
-    @ViewBuilder private var curatedShelf: some View {
-        if let entries = manager.featured, !entries.isEmpty {
-            HStack(spacing: 10) {
-                ForEach(entries.prefix(2)) { entry in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            AppIconTile(symbol: entry.icon ?? "shippingbox", size: 26)
-                            Text(entry.name).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-                            Spacer(minLength: 0)
-                        }
-                        Text(entry.tagline ?? entry.repo)
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(.white.opacity(0.55)).lineLimit(2)
-                        Text("Install from Settings → Apps")
-                            .font(.system(size: 9.5, weight: .medium)).foregroundColor(.white.opacity(0.35))
-                    }
-                    .padding(11)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.035)))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
-                }
+    private var soonDetail: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("Curated").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                Text("coming soon").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.4))
             }
-        } else {
-            HStack(spacing: 10) {
-                ForEach(0..<2, id: \.self) { _ in
-                    VStack(spacing: 6) {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.2))
-                        Text("More apps soon").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.3))
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 68)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
-                }
-            }
-            Text("A curated shelf picked by the Oxine team, plus any GitHub repo tagged oxine-app, all in Settings → Apps.")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.35))
-                .multilineTextAlignment(.center)
+            Text("Apps picked by the Oxine team will sit here. Anything on GitHub tagged oxine-app installs from Settings → Apps too, after you see what it asks for.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.65))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(12)
+        .transition(.opacity)
+        .id("soon")
+    }
+
+    private func smallButton(_ title: String, tint: Color, filled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .foregroundColor(filled ? .white : tint)
+                .background(Capsule().fill(filled ? tint.opacity(0.9) : tint.opacity(0.12)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

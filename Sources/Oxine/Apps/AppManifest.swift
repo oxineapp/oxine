@@ -8,6 +8,10 @@ struct AppManifest: Codable, Equatable, Sendable {
     var id: String
     var name: String
     var tagline: String?
+    /// Who made it, as shown in the store ("shadox", "alfaoz"). Optional.
+    var author: String?
+    /// A longer blurb for the app's page and the setup shelf. Optional.
+    var description: String?
     var icon: String?            // SF Symbol
     var api: Int
     var minOxine: String?

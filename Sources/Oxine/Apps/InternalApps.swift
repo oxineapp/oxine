@@ -23,14 +23,18 @@ enum InternalApps {
         return [
             makeApp(AppManifest(
                 id: "oxine.caffeine", name: "Caffeine",
-                tagline: "Keep your Mac awake", icon: "bolt.horizontal",
+                tagline: "Keep your Mac awake", author: "alfaoz",
+                description: "Keeps the display and the Mac awake for a set time from one footer click. Optionally nudges input so chat apps stay available.",
+                icon: "bolt.horizontal",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Default duration, keep apps active"),
                                 quickToggle: .init(icon: "bolt.horizontal", tooltip: "Keep your Mac awake", menu: true)),
                 capabilities: [], osPermissions: nil, network: false)) { CaffeineAppBackend() },
             makeApp(AppManifest(
                 id: "oxine.focus", name: "Focus",
-                tagline: "Dim background windows", icon: "moon",
+                tagline: "Dim background windows", author: "alfaoz",
+                description: "Fades and blurs every window but the front one so it stops pulling your eye. One footer click on, one off.",
+                icon: "moon",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Dim level & blur"),
                                 quickToggle: .init(icon: "moon", tooltip: "Dim background windows", menu: false)),
@@ -39,14 +43,18 @@ enum InternalApps {
             // being apps gives them a store page and a switch that hides the tab.
             makeApp(AppManifest(
                 id: "oxine.sous", name: "Sous",
-                tagline: "Battery health: charge limit, sailing, heat protection", icon: "heart.badge.bolt",
+                tagline: "Battery health: charge limit, sailing, heat protection", author: "alfaoz",
+                description: "Caps how far the battery charges, lets it sail between limits, pauses charging when hot, and tracks health over time. A small helper talks to the hardware.",
+                icon: "heart.badge.bolt",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Sous · Battery")),
                 capabilities: [], osPermissions: ["helper"], network: false),
                 native: { AnyView(SousSettings(sous: SousManager.shared)) }) { PassiveAppBackend() },
             makeApp(AppManifest(
                 id: "oxine.temper", name: "Temper",
-                tagline: "Temperatures, thermal pressure and fan control", icon: "fanblades.fill",
+                tagline: "Temperatures, thermal pressure and fan control", author: "alfaoz",
+                description: "Live temperatures, CPU load and thermal pressure on any Mac. With the fan helper installed, manual, smart or curve-based fan control.",
+                icon: "fanblades.fill",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Temper · Thermal & Fans")),
                 capabilities: [], osPermissions: ["helper"], network: false),

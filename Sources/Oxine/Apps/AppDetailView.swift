@@ -70,11 +70,23 @@ struct AppDetailView: View {
                         AppOriginBadge(app: app)
                         if let tag = app.updateAvailable { storeBadge("update \(tag)", tint: accent) }
                     }
+                    if let author = app.manifest.author {
+                        Text("by \(author)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(accent.opacity(0.9))
+                    }
                     if !app.tagline.isEmpty {
                         Text(app.tagline)
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.65))
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let blurb = app.manifest.description, !blurb.isEmpty {
+                        Text(blurb)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
                     }
                     HStack(spacing: 5) {
                         Circle().fill(status.color.opacity(0.9)).frame(width: 6, height: 6)

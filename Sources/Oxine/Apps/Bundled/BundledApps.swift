@@ -20,7 +20,9 @@ enum BundledApps {
         [
             Entry(manifest: AppManifest(
                 id: "oxine.screenlyrics", name: "ScreenLyrics",
-                tagline: "Live lyrics under the notch", icon: "quote.bubble",
+                tagline: "Live lyrics under the notch", author: "shadox & alfaoz",
+                description: "Synced lyrics for the song that's playing, in a small glass pill right under the notch. Seven sizes, optional artist line, steps aside while the notch is open. Lyrics come from LRCLIB, no account.",
+                icon: "quote.bubble",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Size, font & timing"),
                                 quickToggle: .init(icon: "quote.bubble", tooltip: "Lyrics under the notch", menu: true)),
@@ -30,7 +32,9 @@ enum BundledApps {
                   onUninstall: { LyricsSettings.reset() }),
             Entry(manifest: AppManifest(
                 id: "oxine.fngestures", name: "FnGestures",
-                tagline: "Hold fn, scroll for volume, flick for tracks", icon: "hand.draw",
+                tagline: "Hold fn, scroll for volume, flick for tracks", author: "shadox",
+                description: "Hold fn and scroll to change volume or brightness, flick sideways for the next or previous track. One event tap, Accessibility only.",
+                icon: "hand.draw",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
                 surfaces: .init(settings: .init(subtitle: "Gestures & sensitivity"),
                                 quickToggle: .init(icon: "hand.draw", tooltip: "fn gestures", menu: true)),
