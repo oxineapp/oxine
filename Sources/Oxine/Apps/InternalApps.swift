@@ -11,14 +11,12 @@ import TemperKit
 /// they wrap are unchanged; only the footer UI now reaches them this way.
 enum InternalApps {
     @MainActor static func all() -> [OxApp] {
-        let suite = UserDefaults(suiteName: "com.oxine.settings")
-        let enabledSet = (suite?.stringArray(forKey: "appsEnabled")).map(Set.init)
         func makeApp(_ manifest: AppManifest, native: (() -> AnyView)? = nil,
                      _ factory: @escaping () -> InternalAppBackend) -> OxApp {
             let app = OxApp(manifest: manifest,
                             kind: .internalApp(factory),
                             grants: AppsManager.defaultGrants(for: manifest),
-                            enabled: enabledSet?.contains(manifest.id) ?? true)
+                            enabled: AppsManager.storedEnabled(manifest.id))
             app.nativeSettings = native
             return app
         }

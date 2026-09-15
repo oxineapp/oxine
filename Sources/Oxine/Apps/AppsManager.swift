@@ -188,8 +188,26 @@ final class AppsManager: ObservableObject {
         if app.enabled { app.runtime.stop(); app.runtime.start() }
     }
 
+    /// Persist the *disabled* set: an app the user never touched (or one
+    /// added by an update) is on by default, so a stored list of enabled ids
+    /// can't silently switch new built-ins off.
     private func persistEnabled() {
-        suite?.set(apps.filter(\.enabled).map(\.id), forKey: "appsEnabled")
+        suite?.set(apps.filter { !$0.enabled }.map(\.id).sorted(), forKey: "appsDisabled")
+        suite?.removeObject(forKey: "appsEnabled")
+    }
+
+    /// Whether an app starts enabled, from the stored disabled set. Reads the
+    /// legacy enabled list once for apps that existed when it was written.
+    static func storedEnabled(_ id: String, suite: UserDefaults? = UserDefaults(suiteName: "com.oxine.settings")) -> Bool {
+        if let disabled = suite?.stringArray(forKey: "appsDisabled") { return !disabled.contains(id) }
+        if let enabled = suite?.stringArray(forKey: "appsEnabled") {
+            // Apps introduced after the legacy list (Sous, Temper) stay on.
+            let legacyKnown = ["oxine.caffeine", "oxine.focus", "oxine.screenlyrics", "oxine.fngestures"]
+            let isLegacyBuiltin = legacyKnown.contains(id)
+            let isExternal = id.contains(".") && !id.hasPrefix("oxine.")
+            return enabled.contains(id) || !(isLegacyBuiltin || isExternal)
+        }
+        return true
     }
     private func persistGrants(_ app: OxApp) {
         var all = (suite?.dictionary(forKey: "appsGrants") as? [String: [String]]) ?? [:]
@@ -199,9 +217,6 @@ final class AppsManager: ObservableObject {
     private func storedGrants(for id: String) -> Set<String>? {
         let all = (suite?.dictionary(forKey: "appsGrants") as? [String: [String]]) ?? [:]
         return all[id].map(Set.init)
-    }
-    private func storedEnabled() -> Set<String>? {
-        (suite?.stringArray(forKey: "appsEnabled")).map(Set.init)
     }
 
     /// Default grant set for a manifest: everything known and non-sensitive on;
@@ -239,9 +254,8 @@ final class AppsManager: ObservableObject {
     }
 
     private func installedBundled() -> [OxApp] {
-        let enabledSet = storedEnabled()
         return installedBundledIDs.compactMap { id in
-            BundledApps.entry(id).map { makeBundled($0, enabled: enabledSet?.contains(id) ?? true) }
+            BundledApps.entry(id).map { makeBundled($0, enabled: Self.storedEnabled(id, suite: suite)) }
         }
     }
 
@@ -308,7 +322,6 @@ final class AppsManager: ObservableObject {
     private func scanInstalled() -> [OxApp] {
         let fm = FileManager.default
         guard let dirs = try? fm.contentsOfDirectory(at: Self.appsRoot, includingPropertiesForKeys: nil) else { return [] }
-        let enabledSet = storedEnabled()
         var out: [OxApp] = []
         for dir in dirs where dir.hasDirectoryPath {
             guard let mData = try? Data(contentsOf: dir.appendingPathComponent("manifest.json")),
@@ -321,7 +334,7 @@ final class AppsManager: ObservableObject {
                 manifest: manifest,
                 kind: .external(repo: meta.repo, tag: meta.tag, binary: meta.binary, verified: meta.verified),
                 grants: storedGrants(for: manifest.id) ?? Self.defaultGrants(for: manifest),
-                enabled: enabledSet?.contains(manifest.id) ?? true)
+                enabled: Self.storedEnabled(manifest.id, suite: suite))
             out.append(app)
         }
         return out.sorted { $0.name < $1.name }
