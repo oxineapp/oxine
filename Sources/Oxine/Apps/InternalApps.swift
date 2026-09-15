@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+import SousKit
+import SwiftUI
+import TemperKit
 
 /// The compiled-in dogfood apps: Caffeine (keep awake) and Focus (dim others),
 /// re-plumbed to speak the real apps protocol through `InternalAppBackend`.
@@ -10,11 +13,14 @@ enum InternalApps {
     @MainActor static func all() -> [OxApp] {
         let suite = UserDefaults(suiteName: "com.oxine.settings")
         let enabledSet = (suite?.stringArray(forKey: "appsEnabled")).map(Set.init)
-        func makeApp(_ manifest: AppManifest, _ factory: @escaping () -> InternalAppBackend) -> OxApp {
-            OxApp(manifest: manifest,
-                  kind: .internalApp(factory),
-                  grants: AppsManager.defaultGrants(for: manifest),
-                  enabled: enabledSet?.contains(manifest.id) ?? true)
+        func makeApp(_ manifest: AppManifest, native: (() -> AnyView)? = nil,
+                     _ factory: @escaping () -> InternalAppBackend) -> OxApp {
+            let app = OxApp(manifest: manifest,
+                            kind: .internalApp(factory),
+                            grants: AppsManager.defaultGrants(for: manifest),
+                            enabled: enabledSet?.contains(manifest.id) ?? true)
+            app.nativeSettings = native
+            return app
         }
         return [
             makeApp(AppManifest(
@@ -31,8 +37,31 @@ enum InternalApps {
                 surfaces: .init(settings: .init(subtitle: "Dim level & blur"),
                                 quickToggle: .init(icon: "moon", tooltip: "Dim background windows", menu: false)),
                 capabilities: [], osPermissions: nil, network: false)) { FocusAppBackend() },
+            // Sous and Temper keep their own panel tabs and native settings panes;
+            // being apps gives them a store page and a switch that hides the tab.
+            makeApp(AppManifest(
+                id: "oxine.sous", name: "Sous",
+                tagline: "Battery health: charge limit, sailing, heat protection", icon: "heart.badge.bolt",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(settings: .init(subtitle: "Sous · Battery")),
+                capabilities: [], osPermissions: ["helper"], network: false),
+                native: { AnyView(SousSettings(sous: SousManager.shared)) }) { PassiveAppBackend() },
+            makeApp(AppManifest(
+                id: "oxine.temper", name: "Temper",
+                tagline: "Temperatures, thermal pressure and fan control", icon: "fanblades.fill",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(settings: .init(subtitle: "Temper · Thermal & Fans")),
+                capabilities: [], osPermissions: ["helper"], network: false),
+                native: { AnyView(TemperSettings(temper: TemperManager.shared)) }) { PassiveAppBackend() },
         ]
     }
+}
+
+/// A backend for built-ins whose whole surface is native (their panel tab and
+/// settings pane): nothing to render over the protocol, nothing to receive.
+@MainActor
+final class PassiveAppBackend: InternalAppBackend {
+    override func receive(_ msg: HostMessage) {}
 }
 
 /// Caffeine as an app: primary click toggles at the saved default; the menu

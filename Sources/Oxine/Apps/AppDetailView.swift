@@ -114,11 +114,7 @@ struct AppDetailView: View {
 
     @ViewBuilder private var settingsBlock: some View {
         if app.manifest.surfaces.settings != nil {
-            if app.enabled {
-                AppViewRenderer(runtime: runtime, surface: "settings")
-                    .onAppear { runtime.sendLifecycle(phase: "activate", surface: "settings") }
-                    .onDisappear { runtime.sendLifecycle(phase: "deactivate", surface: "settings") }
-            } else {
+            if !app.enabled {
                 SettingSection(title: "Settings") {
                     HStack(spacing: 8) {
                         Image(systemName: "power").font(.system(size: 12)).foregroundColor(.white.opacity(0.35))
@@ -126,6 +122,12 @@ struct AppDetailView: View {
                             .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
                     }
                 }
+            } else if let native = app.nativeSettings {
+                SettingSection(title: app.manifest.surfaces.settings?.subtitle ?? "Settings") { native() }
+            } else {
+                AppViewRenderer(runtime: runtime, surface: "settings")
+                    .onAppear { runtime.sendLifecycle(phase: "activate", surface: "settings") }
+                    .onDisappear { runtime.sendLifecycle(phase: "deactivate", surface: "settings") }
             }
         }
     }
@@ -202,6 +204,7 @@ struct AppDetailView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
+                        if perm.lowercased() != "helper" {
                         Button(action: { openPrivacyPane(perm) }) {
                             Text("Open")
                                 .font(.system(size: 10.5, weight: .semibold))
@@ -211,9 +214,12 @@ struct AppDetailView: View {
                         }
                         .buttonStyle(.plain)
                         .help("Open System Settings")
+                        }
                     }
                 }
-                Text(app.isFirstParty
+                Text(perms.map { $0.lowercased() } == ["helper"]
+                     ? "Installed and repaired from the app's own tab; removable from its settings above."
+                     : app.isFirstParty
                      ? "Granted to Oxine in System Settings → Privacy & Security."
                      : "macOS asks for these on the app's own behalf — Oxine never holds them. Grants live in System Settings → Privacy & Security.")
                     .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.3))

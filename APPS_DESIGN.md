@@ -395,3 +395,12 @@ Deferred (next):
   a toggle, off by default. The old box layout, the style picker and the
   sample-line preview are retired.
 - Settings root order: General, Tabs & Navigation, Apps, …
+- Sous and Temper are built-in apps too (`oxine.sous`, `oxine.temper`): a
+  store page with their native settings pane (`OxApp.nativeSettings`, a
+  SwiftUI view instead of a view tree) and a switch that hides their panel tab
+  (`PanelTab.isResolvable`). The Sous/Temper settings categories are gone.
+- Quick toggles can flag `warning: true`; the footer then shows
+  "<App> · <text>" in orange with a tooltip, so a caption like "no access"
+  is never anonymous.
+- Setup tour gained an Extras step (after Notch) offering ScreenLyrics (notch
+  Macs) and FnGestures with the same install as the store.

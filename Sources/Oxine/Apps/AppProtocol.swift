@@ -22,7 +22,9 @@ enum AppMessage: Sendable {
     case view(surface: String, body: [AppNode])
     /// Quick-toggle state: icon/active drive the footer button, `text` is an
     /// optional live caption beside it (e.g. a countdown), `menu` the right-click.
-    case toggle(active: Bool, icon: String?, text: String?, menu: [AppMenuItem]?)
+    /// `warning` tints the caption as a problem the user should look at
+    /// (e.g. a missing permission) and names the app in its tooltip.
+    case toggle(active: Bool, icon: String?, text: String?, menu: [AppMenuItem]?, warning: Bool? = nil)
     /// Bar-metric value (0…1) plus an optional short readout label.
     case metric(value: Double, text: String?)
     /// Request a transient notch peek. Rate-limited by the host.
@@ -56,7 +58,8 @@ enum AppMessage: Sendable {
             return .toggle(active: v["active"]?.boolValue ?? false,
                            icon: v["icon"]?.stringValue,
                            text: v["text"]?.stringValue,
-                           menu: menu)
+                           menu: menu,
+                           warning: v["warning"]?.boolValue)
         case "metric":
             return .metric(value: v["value"]?.numberValue ?? 0, text: v["text"]?.stringValue)
         case "peek":

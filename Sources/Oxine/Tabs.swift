@@ -72,13 +72,16 @@ enum PanelTab: Hashable, Identifiable, Codable {
     /// Everything that can be on the bar right now: built-ins + enabled apps
     /// declaring a panelTab surface.
     @MainActor static var allAvailable: [PanelTab] {
-        canonical + AppsManager.shared.panelTabApps.map { .app($0.id) }
+        canonical.filter(\.isResolvable) + AppsManager.shared.panelTabApps.map { .app($0.id) }
     }
 
-    /// Whether this entry can render right now (built-ins always; app tabs only
-    /// while their app is installed, enabled, and offers the surface).
+    /// Whether this entry can render right now. Built-ins always, except Sous
+    /// and Temper, which are apps in the store and hide with their switch; app
+    /// tabs only while their app is installed, enabled, and offers the surface.
     @MainActor var isResolvable: Bool {
         switch self {
+        case .builtin(.sous): return AppsManager.shared.app("oxine.sous")?.enabled ?? true
+        case .builtin(.temper): return AppsManager.shared.app("oxine.temper")?.enabled ?? true
         case .builtin: return true
         case .app(let appID):
             guard let a = AppsManager.shared.app(appID) else { return false }

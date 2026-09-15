@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CryptoKit
 import Foundation
+import SwiftUI
 
 /// One app the store knows about: identity + manifest + how to run it. The two
 /// kinds are indistinguishable above the backend — internal apps are the
@@ -24,6 +25,9 @@ final class OxApp: ObservableObject, Identifiable {
     @Published var enabled: Bool
     /// Set when a newer release tag was seen upstream.
     @Published var updateAvailable: String?
+    /// Built-in apps whose settings predate the view-tree protocol (Sous,
+    /// Temper) hand the store a native SwiftUI pane for their page instead.
+    var nativeSettings: (() -> AnyView)?
 
     private(set) lazy var runtime = AppRuntime(app: self)
 

@@ -8,6 +8,11 @@ struct AppQuickToggleButton: View {
     @ObservedObject var runtime: AppRuntime
     private var accent: Color { .panelAccent }
 
+    private var tooltip: String {
+        if runtime.toggleWarning, let text = runtime.toggleText { return "\(runtime.app.name): \(text)" }
+        return runtime.app.manifest.surfaces.quickToggle?.tooltip ?? runtime.app.name
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             Button(action: { runtime.sendEvent(surface: "quickToggle", ref: nil, kind: "tap") }) {
@@ -15,7 +20,8 @@ struct AppQuickToggleButton: View {
                       ?? runtime.app.manifest.surfaces.quickToggle?.icon
                       ?? runtime.app.icon)
                     .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(runtime.toggleActive ? 0.85 : 0.32))
+                    .foregroundColor(runtime.toggleWarning ? .orange.opacity(0.9)
+                                     : .white.opacity(runtime.toggleActive ? 0.85 : 0.32))
                     .frame(width: 26, height: 22)
                     .background(
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -23,7 +29,7 @@ struct AppQuickToggleButton: View {
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             .buttonStyle(.plain)
-            .help(runtime.app.manifest.surfaces.quickToggle?.tooltip ?? runtime.app.name)
+            .help(tooltip)
             .contextMenu {
                 if runtime.app.manifest.surfaces.quickToggle?.menu == true, !runtime.toggleMenu.isEmpty {
                     ForEach(Array(runtime.toggleMenu.enumerated()), id: \.offset) { _, item in
@@ -45,11 +51,14 @@ struct AppQuickToggleButton: View {
             }
 
             if let text = runtime.toggleText, !text.isEmpty {
-                Text(text)
+                // A warning names its app: "FnGestures · no access" in orange,
+                // so the caption is never an orphan next to a small icon.
+                Text(runtime.toggleWarning ? "\(runtime.app.name) · \(text)" : text)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundColor(accent.opacity(0.75))
+                    .foregroundColor(runtime.toggleWarning ? .orange.opacity(0.9) : accent.opacity(0.75))
                     .padding(.trailing, 2)
+                    .help(runtime.toggleWarning ? "\(runtime.app.name): \(text)" : "")
                     .transition(.opacity)
             }
         }

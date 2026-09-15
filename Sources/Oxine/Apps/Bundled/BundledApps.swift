@@ -290,7 +290,8 @@ final class FnGesturesAppBackend: InternalAppBackend {
                      text: c.enabled && status == .needsAccessibility ? "no access" : nil,
                      menu: FnGestureEngine.Config.Vertical.allCases.map {
                         AppMenuItem(id: "v:\($0.rawValue)", title: "fn + scroll: \($0.label)", checked: c.vertical == $0)
-                     }))
+                     },
+                     warning: c.enabled && status == .needsAccessibility))
         var status1: [AppNode] = [
             N.toggle("enabled", "fn gestures", c.enabled),
             N.keyValue("Status", status.label),

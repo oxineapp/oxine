@@ -11,7 +11,7 @@ import ServiceManagement
 /// flat list so related settings live together (e.g. the editor moved under
 /// Notes, Focus + Caffeine pair up).
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, tabs, apps, notes, clipboard, sous, temper, notch, integrations, shortcuts, about
+    case general, tabs, apps, notes, clipboard, notch, integrations, shortcuts, about
 
     var id: String { rawValue }
 
@@ -21,8 +21,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .tabs:         return "Tabs & Navigation"
         case .notes:        return "Notes"
         case .clipboard:    return "Clipboard"
-        case .sous:         return "Sous · Battery"
-        case .temper:       return "Temper · Thermal"
         case .notch:        return "Notch"
         case .apps:         return "Apps"
         case .integrations: return "Integrations"
@@ -37,8 +35,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .tabs:         return "rectangle.3.group"
         case .notes:        return "square.and.pencil"
         case .clipboard:    return "clock.arrow.circlepath"
-        case .sous:         return "heart.badge.bolt"
-        case .temper:       return "fanblades.fill"
         case .notch:        return "macbook.gen2"
         case .apps:         return "shippingbox"
         case .integrations: return "link"
@@ -54,8 +50,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .tabs:         return "Arrange the bar, swipe & haptics"
         case .notes:        return "Location, lock, editor"
         case .clipboard:    return "History size, lock, clear"
-        case .sous:         return "Charge limits & battery health"
-        case .temper:       return "Temperatures & fans"
         case .notch:        return "Media, mirror, shelf at the notch"
         case .apps:         return "Install, manage & app settings"
         case .integrations: return "justtype sync"
@@ -72,10 +66,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .tabs:         return ["tab", "bar", "reorder", "navigation", "swipe", "haptic", "gesture"]
         case .notes:        return ["notes", "folder", "location", "obsidian", "editor", "markdown", "touch id", "lock", "biometrics"]
         case .clipboard:    return ["clipboard", "history", "paste", "clear", "touch id", "lock"]
-        case .sous:         return ["sous", "battery", "charge", "limit", "health", "power"]
-        case .temper:       return ["temper", "thermal", "temperature", "fan", "heat", "cpu"]
         case .notch:        return ["notch", "dynamic", "island", "media", "now playing", "music", "mirror", "camera", "shelf", "airdrop", "drop"]
-        case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "footer", "slot", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures"]
+        case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "footer", "slot", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures", "sous", "battery", "charge", "temper", "thermal", "fan", "heat"]
         case .integrations: return ["integration", "justtype", "sync", "connect", "account"]
         case .shortcuts:    return ["shortcut", "keyboard", "hotkey", "popup"]
         case .about:        return ["about", "version", "update", "software", "quit", "setup"]
@@ -139,20 +131,20 @@ enum SettingIndex {
         SettingEntry("Keep Mac awake", .apps, ["caffeine", "sleep", "insomnia", "stay", "awake", "prevent", "screensaver", "coffee"]),
         SettingEntry("Keep apps active", .apps, ["caffeine", "apps", "active", "teams", "slack", "idle", "jiggle", "away", "presence", "available"]),
         // Sous · Battery
-        SettingEntry("Charge limit / sailing range", .sous, ["charge", "limit", "sailing", "range", "battery", "percent", "cap", "ceiling", "stop", "maximum", "80"]),
-        SettingEntry("Heat protection", .sous, ["heat", "protection", "temperature", "hot", "thermal", "pause"]),
-        SettingEntry("MagSafe LED", .sous, ["magsafe", "led", "light", "indicator", "green", "amber"]),
-        SettingEntry("Auto-calibrate battery", .sous, ["calibrate", "calibration", "gauge", "accuracy", "cycle"]),
-        SettingEntry("Battery health", .sous, ["battery", "health", "wear", "capacity", "cycles", "condition"]),
-        SettingEntry("Reinstall / repair battery helper", .sous, ["reinstall", "repair", "helper", "daemon", "fix", "privileged", "smc", "broken"]),
-        SettingEntry("Remove battery helper", .sous, ["remove", "uninstall", "delete", "helper", "daemon"]),
+        SettingEntry("Charge limit / sailing range", .apps, ["charge", "limit", "sailing", "range", "battery", "percent", "cap", "ceiling", "stop", "maximum", "80"]),
+        SettingEntry("Heat protection", .apps, ["heat", "protection", "temperature", "hot", "thermal", "pause"]),
+        SettingEntry("MagSafe LED", .apps, ["magsafe", "led", "light", "indicator", "green", "amber"]),
+        SettingEntry("Auto-calibrate battery", .apps, ["calibrate", "calibration", "gauge", "accuracy", "cycle"]),
+        SettingEntry("Battery health", .apps, ["battery", "health", "wear", "capacity", "cycles", "condition"]),
+        SettingEntry("Reinstall / repair battery helper", .apps, ["reinstall", "repair", "helper", "daemon", "fix", "privileged", "smc", "broken"]),
+        SettingEntry("Remove battery helper", .apps, ["remove", "uninstall", "delete", "helper", "daemon"]),
         // Temper · Thermal
-        SettingEntry("Temperature unit", .temper, ["celsius", "fahrenheit", "degrees", "unit", "temperature"]),
-        SettingEntry("Extended temperature view", .temper, ["extended", "sensors", "cpu", "gpu", "ssd", "detailed", "map", "thermal", "heat"]),
-        SettingEntry("Verbose Smart output", .temper, ["verbose", "smart", "diagram", "debug", "explain"]),
-        SettingEntry("Fan speed / curve", .temper, ["fan", "speed", "rpm", "cooling", "curve", "manual", "mode", "blades", "loud", "quiet"]),
-        SettingEntry("Reinstall / repair fan helper", .temper, ["reinstall", "repair", "helper", "daemon", "fix", "fan", "privileged", "smc", "broken"]),
-        SettingEntry("Remove fan helper", .temper, ["remove", "uninstall", "delete", "helper", "fan", "daemon"]),
+        SettingEntry("Temperature unit", .apps, ["celsius", "fahrenheit", "degrees", "unit", "temperature"]),
+        SettingEntry("Extended temperature view", .apps, ["extended", "sensors", "cpu", "gpu", "ssd", "detailed", "map", "thermal", "heat"]),
+        SettingEntry("Verbose Smart output", .apps, ["verbose", "smart", "diagram", "debug", "explain"]),
+        SettingEntry("Fan speed / curve", .apps, ["fan", "speed", "rpm", "cooling", "curve", "manual", "mode", "blades", "loud", "quiet"]),
+        SettingEntry("Reinstall / repair fan helper", .apps, ["reinstall", "repair", "helper", "daemon", "fix", "fan", "privileged", "smc", "broken"]),
+        SettingEntry("Remove fan helper", .apps, ["remove", "uninstall", "delete", "helper", "fan", "daemon"]),
         // Notch
         SettingEntry("Show the notch companion", .notch, ["notch", "dynamic", "island", "companion", "enable", "media", "music"]),
         SettingEntry("Show on displays without a notch", .notch, ["faux", "external", "monitor", "display", "synthesised", "fake"]),
@@ -282,6 +274,10 @@ enum SettingIndex {
         case "Keep Mac awake", "Keep apps active": return "oxine.caffeine"
         case "ScreenLyrics": return "oxine.screenlyrics"
         case "FnGestures": return "oxine.fngestures"
+        case "Charge limit / sailing range", "Heat protection", "MagSafe LED", "Auto-calibrate battery",
+             "Battery health", "Reinstall / repair battery helper", "Remove battery helper": return "oxine.sous"
+        case "Temperature unit", "Extended temperature view", "Verbose Smart output", "Fan speed / curve",
+             "Reinstall / repair fan helper", "Remove fan helper": return "oxine.temper"
         default: return nil
         }
     }
@@ -297,11 +293,6 @@ enum SettingIndex {
         case "Markdown editor", "Obsidian vault": return "Editor"
         case "Clipboard history size", "Lock clipboard with Touch ID",
              "Clear all history", "Clear clipboard": return "Clipboard"
-        case "Charge limit / sailing range", "Heat protection", "MagSafe LED",
-             "Auto-calibrate battery", "Battery health",
-             "Reinstall / repair battery helper", "Remove battery helper": return "Sous · Battery"
-        case "Temperature unit", "Extended temperature view", "Verbose Smart output",
-             "Fan speed / curve", "Reinstall / repair fan helper", "Remove fan helper": return "Temper · Thermal & Fans"
         case "justtype sync": return "Integrations"
         case "Toggle popup shortcut": return "Keyboard Shortcuts"
         case "App version": return "About"
@@ -344,8 +335,6 @@ struct SettingsView: View {
     @AppStorage("notchBarMetricRight", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetricRight = "gpu"
     @State private var agentHookStatus = ""
     @StateObject private var permissions = NotchPermissions()
-    @ObservedObject private var sous = SousManager.shared
-    @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
     @State private var editingTabs = false
 
@@ -819,10 +808,6 @@ struct SettingsView: View {
             anchored("Editor", editorSection)
         case .clipboard:
             anchored("Clipboard", clipboardSection)
-        case .sous:
-            anchored("Sous · Battery", sousSection)
-        case .temper:
-            anchored("Temper · Thermal & Fans", temperSection)
         case .notch:
             anchored("Notch", notchSection)
         case .apps:
@@ -1205,18 +1190,6 @@ struct SettingsView: View {
                 Divider().opacity(0.1)
                 ShortcutRecorder(.notch)
             }
-        }
-    }
-
-    private var sousSection: some View {
-        SettingSection(title: "Sous · Battery") {
-            SousSettings(sous: sous)
-        }
-    }
-
-    private var temperSection: some View {
-        SettingSection(title: "Temper · Thermal & Fans") {
-            TemperSettings(temper: temper)
         }
     }
 

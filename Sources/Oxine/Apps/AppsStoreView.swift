@@ -743,6 +743,7 @@ enum AppPermissionLabels {
         case "automation":      return "Automation"
         case "inputmonitoring", "input-monitoring": return "Input Monitoring"
         case "notifications":   return "Notifications"
+        case "helper":          return "Privileged helper"
         default:                return perm.capitalized
         }
     }
@@ -756,6 +757,7 @@ enum AppPermissionLabels {
         case "automation":      return "gearshape.2"
         case "inputmonitoring", "input-monitoring": return "keyboard"
         case "notifications":   return "bell"
+        case "helper":          return "lock.shield"
         default:                return "hand.raised"
         }
     }
@@ -769,6 +771,7 @@ enum AppPermissionLabels {
         case "automation":      return "Control other apps with Apple events."
         case "inputmonitoring", "input-monitoring": return "See keyboard and mouse input in other apps."
         case "notifications":   return "Show notifications."
+        case "helper":          return "A small background helper installed once with your password; it talks to the hardware for the app."
         default:                return "Granted in System Settings → Privacy & Security."
         }
     }

@@ -10,9 +10,9 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Tabs. The Notch step is
-    /// inserted only on Macs that have a hardware notch (for now).
-    static let baseStepCount = 6
+    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Apps, Tabs. The Notch
+    /// step is inserted only on Macs that have a hardware notch (for now).
+    static let baseStepCount = 7
     /// Only offer the notch on Macs that physically have one.
     private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
     private var stepCount: Int { hasNotch ? SetupView.baseStepCount + 1 : SetupView.baseStepCount }
@@ -65,10 +65,13 @@ struct SetupView: View {
                     Step4Sous().transition(stepTransition)
                 } else if currentStep == 4 {
                     Step5Temper().transition(stepTransition)
-                } else {
-                    // Step 5, reached only on notch Macs (else the leak/Tabs step
-                    // is last). Enable or disable the notch companion.
+                } else if currentStep == 5, hasNotch {
+                    // Notch Macs only: enable or disable the notch companion.
                     Step6Notch().transition(stepTransition)
+                } else {
+                    // The installable extras (ScreenLyrics, FnGestures); the
+                    // leak/Tabs step follows as the last one.
+                    Step7Apps(hasNotch: hasNotch).transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -720,6 +723,100 @@ struct Step6Notch: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
+    }
+}
+
+/// Extras step: the first-party apps that ship inside Oxine but install on
+/// request. Same install as Settings → Apps, one card each, live state.
+struct Step7Apps: View {
+    var hasNotch: Bool
+    @ObservedObject private var manager = AppsManager.shared
+    private var accent: Color { .panelAccent }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 34))
+                .foregroundColor(accent)
+            VStack(spacing: 6) {
+                Text("Extras")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Two apps made by Oxine that install with a click. Both live in Settings → Apps, where you can remove them again.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                Text("OPTIONAL")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(.white.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .padding(.top, 2)
+            }
+
+            if hasNotch {
+                card(id: "oxine.screenlyrics",
+                     note: "Synced lyrics in a small glass pill under the notch while music plays. No account; lyrics come from LRCLIB.")
+            }
+            card(id: "oxine.fngestures",
+                 note: "Hold fn and scroll for volume or brightness, flick sideways to skip tracks. Needs Accessibility, which you grant once.")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder private func card(id: String, note: String) -> some View {
+        if let entry = BundledApps.entry(id) {
+            let installed = manager.app(id) != nil
+            let m = entry.manifest
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    AppIconTile(symbol: m.icon ?? "shippingbox", size: 30)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(m.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                        Text(m.tagline ?? "").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if installed {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Installed")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+                    } else {
+                        StorePrimaryButton(title: "Install", symbol: "arrow.down") {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
+                        }
+                    }
+                }
+                Text(note)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if installed, id == "oxine.fngestures", !FnGestureEngine.accessibilityGranted {
+                    Button(action: { FnGestureEngine.requestAccessibility() }) {
+                        Label("Grant Accessibility", systemImage: "figure.wave")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .foregroundColor(accent)
+                            .background(accent.opacity(0.12))
+                            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.035))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+        }
     }
 }
 

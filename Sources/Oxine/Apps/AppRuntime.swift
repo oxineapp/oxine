@@ -15,6 +15,7 @@ final class AppRuntime: ObservableObject {
     @Published private(set) var toggleActive = false
     @Published private(set) var toggleIcon: String?
     @Published private(set) var toggleText: String?
+    @Published private(set) var toggleWarning = false
     @Published private(set) var toggleMenu: [AppMenuItem] = []
     /// Bar-metric readout.
     @Published private(set) var metricValue: Double = 0
@@ -66,7 +67,7 @@ final class AppRuntime: ObservableObject {
         backend = nil
         running = false
         trees = [:]
-        toggleActive = false; toggleText = nil; toggleMenu = []
+        toggleActive = false; toggleText = nil; toggleMenu = []; toggleWarning = false
     }
 
     private func handleTermination(_ code: Int32) {
@@ -107,10 +108,11 @@ final class AppRuntime: ObservableObject {
             break
         case .view(let surface, let body):
             trees[surface] = body
-        case .toggle(let active, let icon, let text, let menu):
+        case .toggle(let active, let icon, let text, let menu, let warning):
             toggleActive = active
             toggleIcon = icon
             toggleText = text
+            toggleWarning = warning ?? false
             if let menu { toggleMenu = menu }
         case .metric(let value, let text):
             metricValue = min(max(value, 0), 1)
