@@ -3,6 +3,17 @@
     <channel>
         <title>Oxine</title>
         <item>
+            <title>2.3.0</title>
+            <pubDate>Tue, 15 Sep 2026 14:51:37 +0300</pubDate>
+            <link>https://github.com/oxineapp/oxine</link>
+            <sparkle:version>230</sparkle:version>
+            <sparkle:shortVersionString>2.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.3.0</h2><ul><li><strong>New: the Apps store looks like a store.</strong> Search at the top, artwork heroes you page through, and every shelf as cards two across: Made by Oxine, the community, the curated picks. Get or Open right on the card.</li><li><strong>New: app pages.</strong> Click any card or hero for the app&#x27;s listing: artwork, a Settings shortcut for installed apps, the facts strip (rating, author, origin or GitHub stars, network), what it does, where it shows up, what it asks for, and ratings and reviews.</li><li><strong>New: reviews.</strong> Rate any app from its page, no account. Your review is yours to edit or remove. Developers can read their app&#x27;s reviews as JSON from <code>watchtower.justtype.io/reviews/&lt;app id&gt;</code>.</li><li>New: the setup tour&#x27;s Apps step is a slice of the store: the first-party apps as heroes with Get on them, and the built-ins underneath.</li><li>New: the footer editor has its own Settings page (Settings → Footer) instead of living at the bottom of the store.</li><li>New: only community apps on the Oxine approved list are shown in the store; a <code>creator/repo</code> typed in the search field still installs after the disclosure.</li><li>fix: two-finger swipe inside Settings no longer fights the tab-swipe gesture; tab-swipe is off while Settings or setup is open.</li><li>fix: an orange footer warning shows only the message next to its orange icon; the app name is in the tooltip.</li></ul>]]></description>
+            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.3.0/Oxine-2.3.0.zip" length="5072734" type="application/octet-stream" sparkle:edSignature="bv7HvxQIZifC8jg/EFdDnS2o2apCY9DI5nZbPg22xVdyXsBF/By35mJaTzPJE/RgF9jOP+tveuLMbngp6cq0BA=="/>
+        </item>
+        <item>
             <title>2.2.0</title>
             <pubDate>Tue, 15 Sep 2026 12:24:14 +0300</pubDate>
             <link>https://github.com/oxineapp/oxine</link>
@@ -23,17 +34,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.1.1</h2><ul><li>New: split the notch bar to show two metrics at once (Settings → Notch) — each half fills inward from its edge.</li><li>New: Home &quot;player only&quot; layout (Settings → Notch → Home widget → None) gives the player the full width.</li><li>fix: the notch bar now hugs the real ear sizes on both sides, collapses cleanly when a side is empty, and stays hidden until the notch is fully closed.</li><li>fix: now playing shows video apps like QuickTime and browser video, with a working scrubber, and falls back to the app&#x27;s name and icon when there&#x27;s no track artwork.</li><li>fix: drag and drop is no longer blocked in the area beneath the notch.</li><li>fix: the notch bar no longer hides itself wrongly on multi-monitor setups (removed a faulty fullscreen check).</li><li>perf: lighter, smoother notch — the bar refreshes at a fixed cadence instead of on every system update, and artwork is downsampled, cutting stutter.</li></ul>]]></description>
             <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.1.1/Oxine-2.1.1.zip" length="4279810" type="application/octet-stream" sparkle:edSignature="zobH0WZRMlWretgQKKEamXO+113JhTWW3OO3TcAM4M1WRODMZ89jRGD3o3OTTsnmzBhrHyqNxrPMRCR+bMz3Cg=="/>
-        </item>
-        <item>
-            <title>2.1.0</title>
-            <pubDate>Sun, 07 Jun 2026 12:46:17 +0200</pubDate>
-            <link>https://github.com/oxineapp/oxine</link>
-            <sparkle:version>210</sparkle:version>
-            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<style>body,*{font-family:-apple-system,system-ui;font-size:13px;line-height:1.5}h2{font-size:15px;margin:0 0 6px}ul{margin:0;padding-left:18px}li{margin:3px 0}code{background:rgba(127,127,127,.18);padding:1px 4px;border-radius:4px}</style><h2>Oxine 2.1.0</h2><ul><li>New: a notch bar that fills left to right with a live metric. Pick CPU, GPU, fan speed, or your Claude 5 hour usage in Settings → Notch. It hugs the notch and ears, and steps aside when you open the notch.</li><li>fix: the now playing visualizer winds down smoothly when you pause instead of cutting out, and starts cleanly on play.</li><li>fix: the collapsed now playing sides stay up while paused (album art and bars), and clear only when playback stops.</li><li>fix: weather loads instantly now. It shows your last reading and refreshes in the background instead of waiting on a fresh location fix.</li></ul>]]></description>
-            <enclosure url="https://github.com/oxineapp/oxine/releases/download/v2.1.0/Oxine-2.1.0.zip" length="4257991" type="application/octet-stream" sparkle:edSignature="M60YUQ/TSnUrc8OQk67Hvfl6aUgbfA0hx3mYuoEB/JLR5doESQMKWAC1PQaj/LS4x6fHALKbtNlGCnkow/F0Dw=="/>
         </item>
         <item>
             <title>1.5.3</title>
