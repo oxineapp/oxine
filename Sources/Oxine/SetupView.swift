@@ -726,8 +726,9 @@ struct Step6Notch: View {
     }
 }
 
-/// Extras step: the first-party apps that ship inside Oxine but install on
-/// request. Same install as Settings → Apps, one card each, live state.
+/// Apps step: what apps are (separate additions with their own pages, footer
+/// slots and access, installed and removed from Settings → Apps), then the
+/// two made by the Oxine team, installable right here.
 struct Step7Apps: View {
     var hasNotch: Bool
     @ObservedObject private var manager = AppsManager.shared
@@ -739,10 +740,10 @@ struct Step7Apps: View {
                 .font(.system(size: 34))
                 .foregroundColor(accent)
             VStack(spacing: 6) {
-                Text("Extras")
+                Text("Apps")
                     .font(.system(size: 19, weight: .bold))
                     .foregroundColor(.white)
-                Text("Two apps made by Oxine that install with a click. Both live in Settings → Apps, where you can remove them again.")
+                Text("Oxine grows by apps: separate additions you install and remove in Settings → Apps. Each gets its own page, a footer slot if it wants one, and only the access it declares.")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
@@ -756,12 +757,26 @@ struct Step7Apps: View {
                     .padding(.top, 2)
             }
 
+            HStack(spacing: 6) {
+                Text("MADE BY THE OXINE TEAM")
+                    .font(.system(size: 9, weight: .semibold)).tracking(0.8)
+                    .foregroundColor(.white.opacity(0.35))
+                Spacer()
+            }
+            .padding(.top, 2)
+
             if hasNotch {
                 card(id: "oxine.screenlyrics",
                      note: "Synced lyrics in a small glass pill under the notch while music plays. No account; lyrics come from LRCLIB.")
             }
             card(id: "oxine.fngestures",
                  note: "Hold fn and scroll for volume or brightness, flick sideways to skip tracks. Needs Accessibility, which you grant once.")
+
+            Text("Community apps install from a GitHub repo the same way, after you see what they ask for.")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundColor(.white.opacity(0.4))
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
