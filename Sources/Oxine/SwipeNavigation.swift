@@ -37,6 +37,7 @@ extension AppDelegate {
         // Trackpad only (mouse wheels get no tab nav), and only the live finger
         // gesture — never its inertia tail.
         guard let panel, panel.isVisible,
+              !AppDelegate.swipeNavigationSuspended,
               event.hasPreciseScrollingDeltas,
               event.momentumPhase.isEmpty else { return false }
 

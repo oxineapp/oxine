@@ -726,189 +726,116 @@ struct Step6Notch: View {
     }
 }
 
-/// Apps step. A row of app icons with names, like a launcher: Sous, Temper,
-/// ScreenLyrics, FnGestures, then dashed slots for the curated shelf. Hovering
-/// an icon fills a fixed-height card underneath with what it is, who made it,
-/// and its install state — the step never changes size.
+/// Apps step: a slice of the store. The heroes up top are the installable
+/// first-party apps as artwork cards with Get right on them, paged sideways
+/// when there are two; under them, the four apps already built in, so the
+/// step says both "here is what you can add" and "here is what you have".
+/// Sized to fit the smallest panel without scrolling; a scroll view backs
+/// it up on a very short window.
 struct Step7Apps: View {
     var hasNotch: Bool
     @ObservedObject private var manager = AppsManager.shared
-    @State private var selected: String = "oxine.sous"
     private var accent: Color { .panelAccent }
+    private static let green = Color(red: 0.3, green: 0.85, blue: 0.5)
 
-    /// What the grid shows, in order: built-ins first, then installables.
-    private var entries: [Entry] {
-        var out: [Entry] = []
-        for id in ["oxine.sous", "oxine.temper"] {
-            if let a = manager.app(id) { out.append(Entry(id: id, manifest: a.manifest, builtin: true)) }
-        }
-        for id in (hasNotch ? ["oxine.screenlyrics", "oxine.fngestures"] : ["oxine.fngestures"]) {
-            if let e = BundledApps.entry(id) { out.append(Entry(id: id, manifest: e.manifest, builtin: false)) }
-        }
-        return out
+    private var featured: [BundledApps.Entry] {
+        (hasNotch ? ["oxine.screenlyrics", "oxine.fngestures"] : ["oxine.fngestures"])
+            .compactMap(BundledApps.entry)
     }
-    private struct Entry: Identifiable { let id: String; let manifest: AppManifest; let builtin: Bool }
-    private static let soonID = "__soon"
+    private var builtins: [OxApp] {
+        ["oxine.sous", "oxine.temper", "oxine.caffeine", "oxine.focus"].compactMap(manager.app)
+    }
+
+    private var heroes: [StoreHeroItem] {
+        featured.map { entry in
+            let m = entry.manifest
+            let installed = manager.app(m.id) != nil
+            return StoreHeroItem(
+                id: m.id,
+                kicker: installed ? "Made by Oxine" : "New from Oxine",
+                name: m.name, author: m.author, tagline: m.tagline ?? "",
+                icon: m.icon ?? "shippingbox", tint: AppArt.tint(for: m.id),
+                action: action(entry, installed: installed))
+        }
+    }
+
+    private func action(_ entry: BundledApps.Entry, installed: Bool) -> StoreAction {
+        if entry.manifest.id == "oxine.fngestures", installed, !FnGestureEngine.accessibilityGranted {
+            return .grant { FnGestureEngine.requestAccessibility() }
+        }
+        if installed { return .installed }
+        return .get {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "shippingbox")
-                .font(.system(size: 34))
-                .foregroundColor(accent)
-            VStack(spacing: 6) {
-                Text("Apps")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(.white)
-                Text("Add-ons you install and remove in Settings → Apps. Each has its own page and only the access it declares.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("OPTIONAL")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 14) {
+                header
+                StoreHeroCarousel(items: heroes, height: 150)
                     .padding(.top, 2)
+                builtinStrip
             }
-
-            HStack(alignment: .top, spacing: 6) {
-                ForEach(entries) { e in
-                    iconCell(id: e.id, symbol: e.manifest.icon ?? "shippingbox", name: e.manifest.name)
-                }
-                ForEach(0..<2, id: \.self) { i in
-                    iconCell(id: Self.soonID + "\(i)", symbol: "plus", name: "Soon", placeholder: true)
-                }
-            }
-            .padding(.top, 4)
-
-            detailCard
+            .padding(.horizontal, 18)
+            .padding(.vertical, 2)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-        .onAppear { if manager.featured == nil { Task { await manager.fetchFeatured() } } }
     }
 
-    // MARK: Icons
+    private var header: some View {
+        VStack(spacing: 5) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 24))
+                .foregroundColor(accent)
+                .padding(.bottom, 2)
+            Text("Apps")
+                .font(.system(size: 19, weight: .bold))
+                .foregroundColor(.white)
+            Text("Add-ons with their own page and only the access they declare. The whole store lives in Settings → Apps.")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
-    private func iconCell(id: String, symbol: String, name: String, placeholder: Bool = false) -> some View {
-        let isSelected = selected == id
-        return VStack(spacing: 6) {
-            ZStack {
-                if placeholder {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(isSelected ? 0.3 : 0.14),
-                                      style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    Image(systemName: symbol)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.25))
-                } else {
-                    AppIconTile(symbol: symbol, size: 50)
-                }
+    /// The built-ins as a strip of small tiles: already installed, nothing to do.
+    private var builtinStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Already in")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                Text("Built in and on by default")
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.white.opacity(0.4))
+                Spacer()
             }
-            .frame(width: 50, height: 50)
-            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(accent.opacity(isSelected && !placeholder ? 0.9 : 0), lineWidth: 1.5)
-                .padding(-3))
-            .scaleEffect(isSelected ? 1.06 : 1)
-            Text(name)
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundColor(.white.opacity(placeholder ? 0.35 : (isSelected ? 0.95 : 0.7)))
+            .padding(.horizontal, 2)
+            HStack(spacing: 8) {
+                ForEach(builtins) { app in builtinTile(app) }
+            }
+        }
+    }
+
+    private func builtinTile(_ app: OxApp) -> some View {
+        VStack(spacing: 6) {
+            AppIconTile(symbol: app.icon, size: 32)
+            Text(app.name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
                 .lineLimit(1)
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark").font(.system(size: 7.5, weight: .bold))
+                Text("Installed")
+            }
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(Self.green.opacity(0.9))
         }
         .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onHover { inside in
-            if inside { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { selected = id } }
-        }
-        .onTapGesture { withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { selected = id } }
-    }
-
-    // MARK: Detail
-
-    /// Fixed height so hovering between icons never moves the buttons below.
-    private var detailCard: some View {
-        ZStack(alignment: .topLeading) {
-            if selected.hasPrefix(Self.soonID) {
-                soonDetail
-            } else if let e = entries.first(where: { $0.id == selected }) {
-                appDetail(e)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .frame(height: 112)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.035)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accent.opacity(0.25), lineWidth: 0.5))
-        .animation(.easeInOut(duration: 0.18), value: selected)
-    }
-
-    private func appDetail(_ e: Entry) -> some View {
-        let installed = e.builtin || manager.app(e.id) != nil
-        let needsAccess = e.id == "oxine.fngestures" && installed && !FnGestureEngine.accessibilityGranted
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(e.manifest.name).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
-                if let author = e.manifest.author {
-                    Text("by \(author)").font(.system(size: 10.5, weight: .medium)).foregroundColor(accent.opacity(0.9))
-                }
-                Spacer()
-                if needsAccess {
-                    smallButton("Grant Accessibility", tint: .orange) { FnGestureEngine.requestAccessibility() }
-                } else if e.builtin {
-                    Text("Built in").font(.system(size: 10, weight: .semibold)).foregroundColor(.white.opacity(0.4))
-                } else if installed {
-                    HStack(spacing: 3) {
-                        Image(systemName: "checkmark.circle.fill"); Text("Installed")
-                    }
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                } else if let entry = BundledApps.entry(e.id) {
-                    smallButton("Install", tint: accent, filled: true) {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
-                    }
-                }
-            }
-            Text(e.manifest.description ?? e.manifest.tagline ?? "")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-                .lineSpacing(3)
-                .lineLimit(4)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .transition(.opacity)
-        .id(e.id)
-    }
-
-    private var soonDetail: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("Curated").font(.system(size: 13, weight: .bold)).foregroundColor(.white)
-                Text("coming soon").font(.system(size: 10.5, weight: .medium)).foregroundColor(.white.opacity(0.4))
-            }
-            Text("Apps picked by the Oxine team will sit here. Anything on GitHub tagged oxine-app installs from Settings → Apps too, after you see what it asks for.")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .transition(.opacity)
-        .id("soon")
-    }
-
-    private func smallButton(_ title: String, tint: Color, filled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 10.5, weight: .semibold))
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .foregroundColor(filled ? .white : tint)
-                .background(Capsule().fill(filled ? tint.opacity(0.9) : tint.opacity(0.12)))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
     }
 }
 

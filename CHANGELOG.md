@@ -4,6 +4,16 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.3.0
+- **New: the Apps store looks like a store.** Search at the top, artwork heroes you page through, and every shelf as cards two across: Made by Oxine, the community, the curated picks. Get or Open right on the card.
+- **New: app pages.** Click any card or hero for the app's listing: artwork, a Settings shortcut for installed apps, the facts strip (rating, author, origin or GitHub stars, network), what it does, where it shows up, what it asks for, and ratings and reviews.
+- **New: reviews.** Rate any app from its page, no account. Your review is yours to edit or remove. Developers can read their app's reviews as JSON from `watchtower.justtype.io/reviews/<app id>`.
+- New: the setup tour's Apps step is a slice of the store: the first-party apps as heroes with Get on them, and the built-ins underneath.
+- New: the footer editor has its own Settings page (Settings → Footer) instead of living at the bottom of the store.
+- New: only community apps on the Oxine approved list are shown in the store; a `creator/repo` typed in the search field still installs after the disclosure.
+- fix: two-finger swipe inside Settings no longer fights the tab-swipe gesture; tab-swipe is off while Settings or setup is open.
+- fix: an orange footer warning shows only the message next to its orange icon; the app name is in the tooltip.
+
 ## 2.2.0
 - **New: Apps.** Settings → Apps is a small store. Caffeine and Focus are apps now, first-party extras install with one click, and community apps install from a GitHub `creator/repo` after you see exactly what they want. Every app has its own page: settings, footer slot, access grants, macOS permissions, uninstall. The panel footer's quick toggles are yours to pick and drag into order.
 - **New: ScreenLyrics** (install from Apps). Synced lyrics for the song that's playing, in a Liquid Glass pill right under the notch. Seven sizes, optional artist and song line, font and line-change animation, a timing offset, and a distance slider. It steps aside while the notch is open and lets clicks pass through. Lyrics come from LRCLIB, no account.

@@ -1,80 +1,269 @@
 import PanelKit
 import SwiftUI
 
-/// The store pane (Settings → Apps): installed apps, the "From Oxine" shelf,
-/// the footer card, install-by-`creator/repo`, and the featured feed. Lives
-/// inside the Settings navigation and speaks its visual language — a room
-/// that grew, not an embedded web shop. An installed app's page is a real
-/// settings screen (the host owns that route so the header and slide match
-/// every other screen).
+/// The store (Settings → Apps). Front to back: a search field, the heroes
+/// (the first-party apps and anything curated, as artwork cards you page
+/// through), then the shelves — Made by Oxine, the community, the curated
+/// feed — as cards two across. Typing filters everything; a `creator/repo` in the field installs
+/// straight from GitHub after the disclosure. An installed app's page is a
+/// real settings screen (the host owns that route so the header and slide
+/// match every other screen).
 struct AppsStoreView: View {
     @ObservedObject private var manager = AppsManager.shared
     /// Open an installed app's page.
     var onOpen: (OxApp) -> Void
+    /// Open an app's store page (the listing: artwork, facts, reviews, access).
+    var onOpenListing: (StoreListing) -> Void
     private var accent: Color { .panelAccent }
 
+    @State private var query = ""
+    /// Community shelf (approved repos on the `oxine-app` topic): nil = not fetched yet.
+    @State private var community: [AppsManager.RegistryEntry]?
+
+    /// Install-from-GitHub: resolve → disclosure → install, shown under the field.
+    @StateObject private var flow = InstallFlow()
+
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
+    /// `creator/repo` typed in the field: one slash, no spaces.
+    private var typedRepo: String? {
+        let q = trimmedQuery
+        let parts = q.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty, !q.contains(" ") else { return nil }
+        return q
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            installedSection
-            BundledSection()
-            FooterSection()
-            InstallSection()
-            FeaturedSection()
+        VStack(alignment: .leading, spacing: 20) {
+            StoreSearchField(text: $query) { if let repo = typedRepo { flow.resolve(repo) } }
+            InstallFlowView(flow: flow)
+            if trimmedQuery.isEmpty {
+                StoreHeroCarousel(items: heroes)
+                madeByOxine
+                communitySection
+                curatedSection
+            } else {
+                results
+            }
+        }
+        .task {
+            flow.onInstalled = { query = "" }
+            if manager.featured == nil { await manager.fetchFeatured() }
+            if community == nil { community = await manager.fetchCommunity() }
+        }
+        .onChange(of: query) { _, _ in flow.clearMessage() }
+    }
+
+    // MARK: - Catalog
+
+    /// First-party, in shelf order: the installable pair first, then the
+    /// built-ins. Each row carries the installed app when there is one.
+    private struct FirstParty: Identifiable {
+        let manifest: AppManifest
+        let app: OxApp?
+        let bundled: BundledApps.Entry?
+        var id: String { manifest.id }
+    }
+
+    private var firstParty: [FirstParty] {
+        let catalog = BundledApps.catalog.map { entry in
+            FirstParty(manifest: entry.manifest, app: manager.app(entry.manifest.id), bundled: entry)
+        }
+        let builtin = manager.apps.filter(\.isInternal).map { FirstParty(manifest: $0.manifest, app: $0, bundled: nil) }
+        return catalog + builtin
+    }
+
+    private var installedExternal: [OxApp] { manager.apps.filter { !$0.isFirstParty } }
+
+    /// Community results the user hasn't installed already.
+    private var communityAvailable: [AppsManager.RegistryEntry] {
+        let installed = Set(installedExternal.compactMap(\.repo))
+        return (community ?? []).filter { !installed.contains($0.repo) }
+    }
+
+    private var heroes: [StoreHeroItem] {
+        var items = BundledApps.catalog.map { entry -> StoreHeroItem in
+            let m = entry.manifest
+            let app = manager.app(m.id)
+            return StoreHeroItem(
+                id: m.id,
+                kicker: app == nil ? "New from Oxine" : "Made by Oxine",
+                name: m.name, author: m.author, tagline: m.tagline ?? "",
+                icon: m.icon ?? "shippingbox", tint: AppArt.tint(for: m.id),
+                action: firstPartyAction(m, app: app, bundled: entry),
+                onTap: { onOpenListing(app.map(StoreListing.installed) ?? .bundled(entry)) })
+        }
+        for entry in (manager.featured ?? []).prefix(2) where !installedExternal.contains(where: { $0.repo == entry.repo }) {
+            items.append(StoreHeroItem(
+                id: "featured:" + entry.repo,
+                kicker: "Featured", name: entry.name, author: entry.repo,
+                tagline: entry.tagline ?? "", icon: entry.icon ?? "shippingbox",
+                tint: AppArt.tint(for: entry.repo),
+                action: .get { query = entry.repo; flow.resolve(entry.repo) },
+                onTap: { onOpenListing(.registry(entry)) }))
+        }
+        return items
+    }
+
+    /// An installed first-party app's settings already sit on the Settings
+    /// root, so the store doesn't double as a way in: its card just says
+    /// Installed. Two exceptions keep every state reachable — a turned-off
+    /// app (the root only lists enabled ones) and FnGestures without
+    /// Accessibility. Community apps keep Open, their page lives here.
+    private func firstPartyAction(_ m: AppManifest, app: OxApp?, bundled: BundledApps.Entry?) -> StoreAction {
+        if let app {
+            if app.id == "oxine.fngestures", app.enabled, !FnGestureEngine.accessibilityGranted {
+                return .grant { FnGestureEngine.requestAccessibility() }
+            }
+            if app.isFirstParty, app.enabled { return .installed }
+            return .open { onOpen(app) }
+        }
+        if let bundled {
+            return .get {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(bundled) }
+            }
+        }
+        return .installed
+    }
+
+    // MARK: - Shelves
+
+    /// A grid cell of any kind, so one shelf can mix installed apps and
+    /// catalog entries and still fill its rows.
+    private struct Cell: Identifiable {
+        let id: String
+        let view: AnyView
+    }
+
+    private var madeByOxine: some View {
+        StoreSection(title: "Made by Oxine") {
+            StoreGrid(items: firstParty) { item in firstPartyCard(item) }
         }
     }
 
-    // MARK: - Installed
-
-    private var installedSection: some View {
-        SettingSection(title: "Installed") {
-            VStack(spacing: 0) {
-                let apps = manager.apps
-                ForEach(Array(apps.enumerated()), id: \.element.id) { idx, app in
-                    installedRow(app)
-                    if idx < apps.count - 1 { Divider().opacity(0.06).padding(.leading, 46) }
-                }
+    @ViewBuilder private func firstPartyCard(_ item: FirstParty) -> some View {
+        let m = item.manifest
+        if let app = item.app {
+            installedCard(app)
+        } else {
+            StoreCard(icon: m.icon ?? "shippingbox", name: m.name,
+                      badge: ("Oxine", accent),
+                      action: firstPartyAction(m, app: nil, bundled: item.bundled),
+                      onTap: { if let b = item.bundled { onOpenListing(.bundled(b)) } }) {
+                taglineText(m.tagline ?? "")
             }
         }
     }
 
-    private func installedRow(_ app: OxApp) -> some View {
-        Button(action: { onOpen(app) }) {
-            HStack(spacing: 12) {
-                AppIconTile(symbol: app.icon, size: 34, active: app.enabled)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(app.name)
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundColor(.white.opacity(app.enabled ? 0.92 : 0.6))
-                        AppOriginBadge(app: app)
-                        if app.updateAvailable != nil { storeBadge("update", tint: accent) }
+    /// Clicking a card opens the listing; the button on it does the one
+    /// thing the app needs right now.
+    private func installedCard(_ app: OxApp) -> some View {
+        StoreCard(icon: app.icon, name: app.name,
+                  badge: originBadge(app),
+                  action: firstPartyAction(app.manifest, app: app, bundled: nil),
+                  onTap: { onOpenListing(.installed(app)) },
+                  active: app.enabled) {
+            AppStatusLine(app: app, dot: false)
+        }
+    }
+
+    private func taglineText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundColor(.white.opacity(0.45))
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func originBadge(_ app: OxApp) -> (text: String, tint: Color)? {
+        if app.isInternal { return ("built-in", .white.opacity(0.5)) }
+        if app.isBundled { return ("Oxine", accent) }
+        if app.verified { return ("verified", accent) }
+        return ("unverified", .orange)
+    }
+
+    private func communityCard(_ entry: AppsManager.RegistryEntry) -> some View {
+        StoreCard(icon: entry.icon ?? "shippingbox", name: entry.name,
+                  action: .get { query = entry.repo; flow.resolve(entry.repo) },
+                  onTap: { onOpenListing(.registry(entry)) }) {
+            taglineText(entry.tagline ?? entry.repo)
+        }
+    }
+
+    private var communitySection: some View {
+        StoreSection(title: "From the community") {
+            VStack(alignment: .leading, spacing: 0) {
+                if let community {
+                    let cells = installedExternal.map { app in Cell(id: app.id, view: AnyView(installedCard(app))) }
+                        + communityAvailable.map { e in Cell(id: e.repo, view: AnyView(communityCard(e))) }
+                    if cells.isEmpty {
+                        emptyLine("No community apps listed yet. Paste a creator/repo in the search field to install one directly.")
+                    } else {
+                        StoreGrid(items: cells) { $0.view }
                     }
-                    AppStatusLine(app: app)
+                } else {
+                    StoreGrid(items: installedExternal) { app in installedCard(app) }
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Looking on GitHub…").font(.system(size: 11)).foregroundColor(.white.opacity(0.4))
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 8)
                 }
-                Spacer(minLength: 8)
-                if manager.isInFooter(app), app.enabled {
-                    Image(systemName: "rectangle.bottomhalf.inset.filled")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.25))
-                        .help("In the panel footer")
-                }
-                Toggle("", isOn: Binding(
-                    get: { app.enabled },
-                    set: { manager.setEnabled(app, $0) }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(accent)
-                .labelsHidden()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.25))
             }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
+
+    @ViewBuilder private var curatedSection: some View {
+        if let entries = manager.featured, !entries.isEmpty {
+            StoreSection(title: "Picked by the Oxine team", subtitle: "Community apps we use ourselves") {
+                StoreGrid(items: entries) { entry in communityCard(entry) }
+            }
+        }
+    }
+
+    private func emptyLine(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundColor(.white.opacity(0.4))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 6).padding(.vertical, 8)
+    }
+
+    // MARK: - Search results
+
+    private func matches(_ text: String...) -> Bool {
+        let q = trimmedQuery.lowercased()
+        return text.contains { $0.lowercased().contains(q) }
+    }
+
+    private var results: some View {
+        let party = firstParty.filter { matches($0.manifest.name, $0.manifest.tagline ?? "", $0.manifest.author ?? "") }
+        let external = installedExternal.filter { matches($0.name, $0.tagline, $0.repo ?? "") }
+        let curated = (manager.featured ?? []).filter { matches($0.name, $0.tagline ?? "", $0.repo) }
+        let others = communityAvailable.filter { c in
+            !curated.contains { $0.repo == c.repo } && matches(c.name, c.tagline ?? "", c.repo)
+        }
+        let count = party.count + external.count + curated.count + others.count
+        return VStack(alignment: .leading, spacing: 14) {
+            if let repo = typedRepo, flow.phase == .idle || flow.phase == .resolving {
+                StoreRow(icon: "shippingbox", name: repo,
+                         action: .check { flow.resolve(repo) }) {
+                    Text(flow.phase == .resolving ? "Checking the latest release…" : "Install from GitHub")
+                        .font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
+                }
+            }
+            if count > 0 {
+                let cells = party.map { Cell(id: $0.id, view: AnyView(firstPartyCard($0))) }
+                    + external.map { Cell(id: $0.id, view: AnyView(installedCard($0))) }
+                    + (curated + others).map { Cell(id: $0.repo, view: AnyView(communityCard($0))) }
+                StoreSection(title: "Results") {
+                    StoreGrid(items: cells) { $0.view }
+                }
+            } else if typedRepo == nil {
+                emptyLine("No apps match “\(trimmedQuery)”. To install from GitHub, type the repo as creator/repo.")
+            }
+        }
+    }
+
 }
 
 // MARK: - Shared pieces
@@ -121,21 +310,25 @@ struct AppOriginBadge: View {
 struct AppStatusLine: View {
     @ObservedObject var app: OxApp
     @ObservedObject private var runtime: AppRuntime
+    /// The store's cards skip the dot; the text alone says Off or the error.
+    var dot = true
 
-    init(app: OxApp) {
+    init(app: OxApp, dot: Bool = true) {
         self.app = app
         self.runtime = app.runtime
+        self.dot = dot
     }
 
     var body: some View {
         let error = runtime.runtimeError
         let color: Color = error != nil ? .orange : (app.enabled && runtime.running ? .green : .white.opacity(0.25))
         HStack(spacing: 5) {
-            Circle().fill(color.opacity(0.9)).frame(width: 5, height: 5)
+            if dot { Circle().fill(color.opacity(0.9)).frame(width: 5, height: 5) }
             Text(error ?? (app.enabled ? app.tagline : "Off · \(app.tagline)"))
                 .font(.system(size: 11))
                 .foregroundColor(error != nil ? .orange.opacity(0.9) : .white.opacity(0.45))
-                .lineLimit(1)
+                .lineLimit(dot ? 1 : 2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -172,75 +365,16 @@ struct StorePrimaryButton: View {
     }
 }
 
-// MARK: - From Oxine (bundled, installable)
-
-/// First-party apps that ship inside Oxine but install on demand. No download,
-/// no checksum — they're our code — but the same disclosure: surfaces, and the
-/// macOS permission each will ask for. Installing is live.
-private struct BundledSection: View {
-    @ObservedObject private var manager = AppsManager.shared
-    private var accent: Color { .panelAccent }
-
-    var body: some View {
-        let available = manager.availableBundled
-        if !available.isEmpty {
-            SettingSection(title: "From Oxine") {
-                VStack(spacing: 10) {
-                    ForEach(available, id: \.manifest.id) { entry in card(entry) }
-                }
-            }
-        }
-    }
-
-    private func card(_ entry: BundledApps.Entry) -> some View {
-        let m = entry.manifest
-        return HStack(alignment: .top, spacing: 12) {
-            AppIconTile(symbol: m.icon ?? "shippingbox", size: 40)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text(m.name)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.92))
-                    storeBadge("Oxine", tint: accent)
-                }
-                Text(m.tagline ?? "")
-                    .font(.system(size: 11.5))
-                    .foregroundColor(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-                surfaceChips(m)
-                if let perms = m.osPermissions, !perms.isEmpty {
-                    Label("Asks macOS for \(perms.map(AppPermissionLabels.name).joined(separator: ", "))",
-                          systemImage: "hand.raised")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-            }
-            Spacer(minLength: 8)
-            StorePrimaryButton(title: "Install", symbol: "arrow.down") {
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
-            }
-            .padding(.top, 4)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(LinearGradient(colors: [accent.opacity(0.10), accent.opacity(0.03)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(accent.opacity(0.18), lineWidth: 0.5))
-    }
-}
-
 // MARK: - Footer
 
 /// The panel footer's quick-toggle slots: a live preview of the strip, then a
 /// row per eligible app to add, remove, or reorder it.
-private struct FooterSection: View {
+struct FooterSection: View {
     @ObservedObject private var manager = AppsManager.shared
     private var accent: Color { .panelAccent }
 
     var body: some View {
-        SettingSection(title: "Footer") {
+        StoreSection(title: "Footer", subtitle: "Quick toggles along the bottom of the panel") {
             VStack(alignment: .leading, spacing: 10) {
                 FooterPreview()
                 Text("Apps with a quick toggle can sit in the panel footer: click for the action, right-click for the menu. Drag the icons above to reorder. Up to \(AppsManager.maxFooterSlots) at once.")
@@ -260,6 +394,10 @@ private struct FooterSection: View {
                     }
                 }
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
         }
     }
 }
@@ -418,273 +556,6 @@ struct FooterSlotRow: View {
     }
 }
 
-// MARK: - Get more (creator/repo install)
-
-/// The `creator/repo` field: resolve → preview (surfaces, capabilities, OS
-/// permissions, grant toggles) → install. Nothing runs before the user has
-/// seen what the app wants and confirmed.
-private struct InstallSection: View {
-    @ObservedObject private var manager = AppsManager.shared
-    @State private var repoField = ""
-    @State private var phase: Phase = .idle
-    /// Grant choices made in the preview (seeded from the manifest defaults).
-    @State private var chosenGrants: Set<String> = []
-    private var accent: Color { .panelAccent }
-
-    enum Phase: Equatable {
-        case idle
-        case resolving
-        case failed(String)
-        case preview
-        case installing
-        case done(String)
-    }
-    @State private var resolved: AppsManager.ResolvedRelease?
-    /// Community browse (GitHub `oxine-app` topic): nil = not fetched.
-    @State private var community: [AppsManager.RegistryEntry]?
-    @State private var browsing = false
-
-    var body: some View {
-        SettingSection(title: "Get More") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Install an app from its GitHub repo. Apps run in their own process and only get the access they declare — you see everything it wants before it's installed.")
-                    .font(.system(size: 10.5))
-                    .foregroundColor(.white.opacity(0.45))
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 6) {
-                    Image(systemName: "shippingbox")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.35))
-                    TextField("creator/repo", text: $repoField)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.white)
-                        .onSubmit { resolve() }
-                    Button(action: resolve) {
-                        Text(phase == .resolving ? "Checking…" : "Check")
-                            .font(.system(size: 11, weight: .semibold))
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .foregroundColor(accent)
-                            .background(Capsule().fill(accent.opacity(0.12)))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(repoField.isEmpty || phase == .resolving)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
-
-                switch phase {
-                case .failed(let error):
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption2)
-                        .foregroundColor(.orange.opacity(0.9))
-                case .done(let name):
-                    Label("\(name) installed and running.", systemImage: "checkmark.circle")
-                        .font(.caption2)
-                        .foregroundColor(accent)
-                case .preview:
-                    if let r = resolved { previewCard(r) }
-                case .installing:
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("Downloading & verifying…")
-                            .font(.caption2).foregroundColor(.white.opacity(0.5))
-                    }
-                default:
-                    EmptyView()
-                }
-
-                communityBrowse
-            }
-        }
-    }
-
-    /// "Browse community apps" — everything on GitHub tagged `oxine-app`,
-    /// stars-sorted. Picking one just fills the field and runs the same
-    /// check → preview → install flow (no shortcut around the disclosure).
-    @ViewBuilder private var communityBrowse: some View {
-        Button(action: {
-            browsing.toggle()
-            if browsing && community == nil {
-                Task { @MainActor in community = await AppsManager.shared.searchApps("") }
-            }
-        }) {
-            HStack(spacing: 4) {
-                Image(systemName: browsing ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                Text("Browse community apps")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(.white.opacity(0.5))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        if browsing {
-            if let community {
-                if community.isEmpty {
-                    Text("Nothing tagged `oxine-app` on GitHub yet.")
-                        .font(.caption2).foregroundColor(.white.opacity(0.4))
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(community.enumerated()), id: \.element.id) { idx, entry in
-                            HStack(spacing: 8) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(entry.repo)
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(.white.opacity(0.8))
-                                    if let tagline = entry.tagline {
-                                        Text(tagline).font(.caption2)
-                                            .foregroundColor(.white.opacity(0.4)).lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                                Button(action: { repoField = entry.repo; resolve() }) {
-                                    Text("Check")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .padding(.horizontal, 8).padding(.vertical, 4)
-                                        .foregroundColor(accent)
-                                        .background(Capsule().fill(accent.opacity(0.1)))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.vertical, 5)
-                            if idx < community.count - 1 { Divider().opacity(0.06) }
-                        }
-                    }
-                }
-            } else {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Searching GitHub…").font(.caption2).foregroundColor(.white.opacity(0.4))
-                }
-            }
-        }
-    }
-
-    /// The pre-install disclosure: what it is, where it'll live, what it wants.
-    private func previewCard(_ r: AppsManager.ResolvedRelease) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                AppIconTile(symbol: r.manifest.icon ?? "shippingbox", size: 36)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(r.manifest.name)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white.opacity(0.92))
-                    Text("\(r.repo) · \(r.tag)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.45))
-                }
-                Spacer()
-                if r.sums == nil { storeBadge("no checksums", tint: .orange) }
-            }
-            if let tagline = r.manifest.tagline {
-                Text(tagline).font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
-            }
-
-            surfaceChips(r.manifest)
-
-            if !r.manifest.wantedCapabilities.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("WANTS ACCESS TO")
-                        .font(.system(size: 9, weight: .semibold)).tracking(0.8)
-                        .foregroundColor(.white.opacity(0.35))
-                    ForEach(r.manifest.wantedCapabilities, id: \.self) { cap in
-                        grantRow(cap)
-                    }
-                }
-            }
-            if let perms = r.manifest.osPermissions, !perms.isEmpty {
-                Label("Will ask macOS for: \(perms.map(AppPermissionLabels.name).joined(separator: ", "))",
-                      systemImage: "hand.raised")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            Label(r.manifest.network == true
-                  ? "Declares network use."
-                  : "Declares no network use (not technically enforced).",
-                  systemImage: "network")
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.5))
-            Text("This is a program from \(r.repo), not made by Oxine. It runs in its own process and can't reach your notes, clipboard history, or authenticator — but treat it with the same trust as any app you install.")
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.4))
-
-            HStack {
-                Button("Cancel") { phase = .idle; resolved = nil }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-                Spacer()
-                StorePrimaryButton(title: "Install", symbol: "arrow.down", action: install)
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accent.opacity(0.2), lineWidth: 0.5))
-    }
-
-    private func grantRow(_ cap: String) -> some View {
-        let known = AppManifest.knownCapabilities.contains(cap)
-        let sensitive = AppManifest.sensitiveCapabilities.contains(cap)
-        return HStack(spacing: 6) {
-            Image(systemName: sensitive ? "exclamationmark.shield" : "checkmark.shield")
-                .font(.system(size: 10))
-                .foregroundColor(sensitive ? .orange : accent.opacity(0.8))
-            Text(AppCapabilityLabels.label(cap))
-                .font(.system(size: 11.5))
-                .foregroundColor(.white.opacity(known ? 0.75 : 0.4))
-            Spacer()
-            if known {
-                Toggle("", isOn: Binding(
-                    get: { chosenGrants.contains(cap) },
-                    set: { on in if on { chosenGrants.insert(cap) } else { chosenGrants.remove(cap) } }
-                ))
-                .toggleStyle(.switch).controlSize(.mini).tint(sensitive ? .orange : accent).labelsHidden()
-            } else {
-                storeBadge("needs newer Oxine", tint: .orange)
-            }
-        }
-    }
-
-    private func resolve() {
-        guard !repoField.isEmpty else { return }
-        phase = .resolving
-        let repo = repoField
-        Task { @MainActor in
-            do {
-                let r = try await AppsManager.shared.resolve(repo: repo)
-                resolved = r
-                chosenGrants = AppsManager.defaultGrants(for: r.manifest)
-                phase = .preview
-            } catch {
-                phase = .failed(error.localizedDescription)
-            }
-        }
-    }
-
-    private func install() {
-        guard let r = resolved else { return }
-        phase = .installing
-        Task { @MainActor in
-            do {
-                try await AppsManager.shared.install(r, grants: chosenGrants)
-                // A fresh panel tab should be visible immediately; the user can
-                // remove or re-order it in the tab editor afterwards.
-                if r.manifest.surfaces.panelTab != nil {
-                    TabBarConfig.shared.add(.app(r.manifest.id))
-                }
-                phase = .done(r.manifest.name)
-                resolved = nil
-                repoField = ""
-            } catch {
-                phase = .failed(error.localizedDescription)
-            }
-        }
-    }
-}
-
 /// Chips summarizing which surfaces a manifest fills.
 @ViewBuilder func surfaceChips(_ manifest: AppManifest) -> some View {
     let chips = surfaceList(manifest)
@@ -774,59 +645,5 @@ enum AppPermissionLabels {
         case "helper":          return "A small background helper installed once with your password; it talks to the hardware for the app."
         default:                return "Granted in System Settings → Privacy & Security."
         }
-    }
-}
-
-// MARK: - Featured
-
-private struct FeaturedSection: View {
-    @ObservedObject private var manager = AppsManager.shared
-    private var accent: Color { .panelAccent }
-
-    var body: some View {
-        SettingSection(title: "Featured") {
-            Group {
-                if let entries = manager.featured {
-                    if entries.isEmpty {
-                        Text("Nothing featured yet — the shelf is curated by the Oxine team.")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.4))
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(entries.enumerated()), id: \.element.id) { idx, entry in
-                                featuredRow(entry)
-                                if idx < entries.count - 1 { Divider().opacity(0.06).padding(.leading, 46) }
-                            }
-                        }
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("Loading…").font(.caption2).foregroundColor(.white.opacity(0.4))
-                    }
-                }
-            }
-            .task { if manager.featured == nil { await manager.fetchFeatured() } }
-        }
-    }
-
-    private func featuredRow(_ entry: AppsManager.RegistryEntry) -> some View {
-        HStack(spacing: 12) {
-            AppIconTile(symbol: entry.icon ?? "shippingbox", size: 34)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(entry.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                Text(entry.tagline ?? entry.repo)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.45))
-                    .lineLimit(1)
-            }
-            Spacer()
-            Text(entry.repo)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.3))
-        }
-        .padding(.vertical, 6)
     }
 }

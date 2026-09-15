@@ -56,6 +56,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var scrollMonitor: Any?
     var resignObserver: Any?
     // Per-gesture state for two-finger swipe tab nav (see handleSwipeScroll).
+    /// True while Settings or setup is showing: their content scrolls sideways
+    /// itself (the store's hero pages), so tab-swipe stays out of the way.
+    static var swipeNavigationSuspended = false
     var swipeAccumX: CGFloat = 0
     var swipeAccumY: CGFloat = 0
     var swipeHorizontal = false   // gesture committed to the horizontal axis

@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CryptoKit
 import Foundation
+import PanelKit
 import SwiftUI
 
 /// One app the store knows about: identity + manifest + how to run it. The two
@@ -495,6 +496,119 @@ final class AppsManager: ObservableObject {
     // MARK: - Store feeds
 
     static let registryURL = URL(string: "https://raw.githubusercontent.com/oxineapp/registry/main/registry.json")!
+    /// The community allowlist: one `creator/repo` per line, `#` starts a
+    /// comment. Only repos on it are listed in the store's community shelf;
+    /// a `creator/repo` typed by hand still installs after the disclosure.
+    static let approvedURL = URL(string: "https://raw.githubusercontent.com/oxineapp/registry/main/approved.txt")!
+
+    /// Lowercased `creator/repo` set from `approved.txt`; empty when offline.
+    func fetchApproved() async -> Set<String> {
+        guard let (data, _) = try? await URLSession.shared.data(from: Self.approvedURL),
+              let text = String(data: data, encoding: .utf8) else { return [] }
+        return Set(text.split(whereSeparator: \.isNewline).compactMap { line -> String? in
+            let s = line.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !s.isEmpty, !s.hasPrefix("#"), s.contains("/") else { return nil }
+            return s
+        })
+    }
+
+    /// One review of an app, as the store shows it. Reviews live on
+    /// Watchtower (the same self-hosted box the crash reporter talks to):
+    /// anyone can rate from the listing, no account. Each install keeps a
+    /// random id, so a person has one review per app and can update or
+    /// withdraw it; `mine` marks that one. Moderation is Watchtower's
+    /// /reviews page.
+    struct Review: Codable, Identifiable, Sendable {
+        var author: String
+        var stars: Int
+        var text: String?
+        var date: String?
+        var mine: Bool?
+        var id: String { author + (date ?? "") + (mine == true ? "*" : "") }
+    }
+
+    private struct ReviewFeed: Codable { var reviews: [Review] }
+
+    /// This install's handle on its own reviews. Random, never shown.
+    var reviewInstallID: String {
+        if let id = suite?.string(forKey: "reviewInstallID") { return id }
+        let id = UUID().uuidString
+        suite?.set(id, forKey: "reviewInstallID")
+        return id
+    }
+    /// The name reviews are posted under; remembered between reviews.
+    var reviewerName: String {
+        get { suite?.string(forKey: "reviewerName") ?? "" }
+        set { suite?.set(newValue, forKey: "reviewerName") }
+    }
+
+    private func reviewsURL(_ id: String) -> URL {
+        var c = URLComponents(url: CrashReporter.baseURL.appendingPathComponent("reviews/\(id)"), resolvingAgainstBaseURL: false)!
+        c.queryItems = [URLQueryItem(name: "install", value: reviewInstallID)]
+        return c.url!
+    }
+
+    /// Reviews for an app id, newest first; empty when there are none or
+    /// we're offline.
+    func fetchReviews(for id: String) async -> [Review] {
+        var req = URLRequest(url: reviewsURL(id))
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let feed = try? JSONDecoder().decode(ReviewFeed.self, from: data) else { return [] }
+        return feed.reviews.filter { (1...5).contains($0.stars) }
+    }
+
+    enum ReviewError: LocalizedError {
+        case rejected(Int), offline
+        var errorDescription: String? {
+            switch self {
+            case .rejected(429): return "Too many reviews from this network right now. Try again in a bit."
+            case .rejected(let code): return "The review server said no (\(code))."
+            case .offline: return "Couldn't reach the review server."
+            }
+        }
+    }
+
+    /// Post (or update) this install's review of an app.
+    func postReview(appID: String, name: String, stars: Int, text: String) async throws {
+        reviewerName = name
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let body: [String: Any] = ["app": appID, "install": reviewInstallID, "name": name,
+                                   "stars": stars, "text": text, "version": version]
+        try await reviewCall("reviews", body)
+    }
+
+    /// Withdraw this install's review of an app.
+    func deleteReview(appID: String) async throws {
+        try await reviewCall("reviews/delete", ["app": appID, "install": reviewInstallID])
+    }
+
+    private func reviewCall(_ path: String, _ body: [String: Any]) async throws {
+        var req = URLRequest(url: CrashReporter.baseURL.appendingPathComponent(path))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(CrashReporter.ingestToken, forHTTPHeaderField: "X-Watchtower-Token")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let code = (resp as? HTTPURLResponse)?.statusCode else { throw ReviewError.offline }
+        guard code == 200 else { throw ReviewError.rejected(code) }
+    }
+
+    /// GitHub stargazers for a `creator/repo`; nil when unknown.
+    func fetchStars(repo: String) async -> Int? {
+        guard let json = try? await getJSON("https://api.github.com/repos/\(repo)") else { return nil }
+        return json["stargazers_count"]?.numberValue.map { Int($0) }
+    }
+
+    /// Community apps for the store: the `oxine-app` topic search, kept to
+    /// the repos on the approved list, in the list's order.
+    func fetchCommunity() async -> [RegistryEntry] {
+        async let approved = fetchApproved()
+        async let found = searchApps("")
+        let (allow, entries) = await (approved, found)
+        return entries.filter { allow.contains($0.repo.lowercased()) }
+    }
 
     func fetchFeatured() async {
         guard let (data, _) = try? await URLSession.shared.data(from: Self.registryURL),

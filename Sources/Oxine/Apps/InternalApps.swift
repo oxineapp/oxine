@@ -32,7 +32,7 @@ enum InternalApps {
                 capabilities: [], osPermissions: nil, network: false)) { CaffeineAppBackend() },
             makeApp(AppManifest(
                 id: "oxine.focus", name: "Focus",
-                tagline: "Dim background windows", author: "alfaoz",
+                tagline: "Dim background windows", author: "shadox",
                 description: "Fades and blurs every window but the front one so it stops pulling your eye. One footer click on, one off.",
                 icon: "moon",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,

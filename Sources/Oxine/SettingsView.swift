@@ -11,7 +11,7 @@ import ServiceManagement
 /// flat list so related settings live together (e.g. the editor moved under
 /// Notes, Focus + Caffeine pair up).
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, tabs, apps, notes, clipboard, notch, integrations, shortcuts, about
+    case general, tabs, footer, apps, notes, clipboard, notch, integrations, shortcuts, about
 
     var id: String { rawValue }
 
@@ -19,6 +19,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "General"
         case .tabs:         return "Tabs & Navigation"
+        case .footer:       return "Footer"
         case .notes:        return "Notes"
         case .clipboard:    return "Clipboard"
         case .notch:        return "Notch"
@@ -33,6 +34,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "slider.horizontal.3"
         case .tabs:         return "rectangle.3.group"
+        case .footer:       return "rectangle.bottomhalf.inset.filled"
         case .notes:        return "square.and.pencil"
         case .clipboard:    return "clock.arrow.circlepath"
         case .notch:        return "macbook.gen2"
@@ -48,6 +50,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "Startup, glass, window size, accent"
         case .tabs:         return "Arrange the bar, swipe & haptics"
+        case .footer:       return "Quick toggles along the bottom"
         case .notes:        return "Location, lock, editor"
         case .clipboard:    return "History size, lock, clear"
         case .notch:        return "Media, mirror, shelf at the notch"
@@ -64,10 +67,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return ["launch", "login", "startup", "glass", "tint", "opacity", "window", "size", "accent", "color", "colour", "appearance", "theme", "preview"]
         case .tabs:         return ["tab", "bar", "reorder", "navigation", "swipe", "haptic", "gesture"]
+        case .footer:       return ["footer", "slot", "toggle", "quick", "bottom", "strip"]
         case .notes:        return ["notes", "folder", "location", "obsidian", "editor", "markdown", "touch id", "lock", "biometrics"]
         case .clipboard:    return ["clipboard", "history", "paste", "clear", "touch id", "lock"]
         case .notch:        return ["notch", "dynamic", "island", "media", "now playing", "music", "mirror", "camera", "shelf", "airdrop", "drop"]
-        case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "footer", "slot", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures", "sous", "battery", "charge", "temper", "thermal", "fan", "heat"]
+        case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures", "sous", "battery", "charge", "temper", "thermal", "fan", "heat"]
         case .integrations: return ["integration", "justtype", "sync", "connect", "account"]
         case .shortcuts:    return ["shortcut", "keyboard", "hotkey", "popup"]
         case .about:        return ["about", "version", "update", "software", "quit", "setup"]
@@ -350,6 +354,9 @@ struct SettingsView: View {
     /// there, with its footer slot, access and uninstall). Root rows for apps
     /// with settings jump straight to it.
     @State private var storeDetailAppID: String?
+    /// An app's store page (listing) inside the Apps category. Sits between
+    /// the store and the app's settings page when opened from the store.
+    @State private var storeListing: StoreListing?
     /// Slide direction for the root↔detail transition (true = going deeper).
     @State private var slideForward = true
     /// What the user is typing (drives the field). `activeQuery` is the debounced
@@ -429,7 +436,7 @@ struct SettingsView: View {
     private func popToRoot() {
         slideForward = false
         flashAnchor = nil
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = nil; storeDetailAppID = nil }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = nil; storeDetailAppID = nil; storeListing = nil }
     }
 
     /// Push an installed app's page (Apps → app). From the root it opens the
@@ -439,9 +446,16 @@ struct SettingsView: View {
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = .apps; storeDetailAppID = id }
     }
 
+    /// Pop the app's settings page: back to its listing if that's how we got
+    /// here, otherwise to the store.
     private func popToStore() {
         slideForward = false
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = nil }
+    }
+
+    private func popListing() {
+        slideForward = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeListing = nil }
     }
 
     var body: some View {
@@ -459,6 +473,15 @@ struct SettingsView: View {
             }
     }
 
+    /// One id per screen in the stack, so a change at any level slides.
+    private var screenID: String {
+        guard let category else { return "__root__" }
+        var id = category.rawValue
+        if let listing = storeListing { id += "/" + listing.id }
+        if let app = storeDetailAppID { id += "/" + app }
+        return id
+    }
+
     /// The id-keyed screen swap. Root and detail slide past each other on the same
     /// spring the tab bar uses; `slideForward` flips the direction for back.
     private var content: some View {
@@ -469,7 +492,7 @@ struct SettingsView: View {
                 rootScreen
             }
         }
-        .id(category.map { $0.rawValue + (storeDetailAppID.map { "/" + $0 } ?? "") } ?? "__root__")
+        .id(screenID)
         .transition(slideForward
             ? .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
             : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing)))
@@ -738,10 +761,13 @@ struct SettingsView: View {
         // Inside Apps, an installed app's page is one level deeper: the header
         // names the app and back returns to the store, not the root.
         let storeApp = cat == .apps ? storeDetailAppID.flatMap { appsManager.app($0) } : nil
+        let listing = cat == .apps && storeApp == nil ? storeListing : nil
         return VStack(spacing: 0) {
             HStack {
                 if let app = storeApp {
                     backButton(app.name, action: popToStore)
+                } else if let listing {
+                    backButton(listing.name, action: popListing)
                 } else {
                     backButton(cat.title, action: popToRoot)
                 }
@@ -756,6 +782,11 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         if let app = storeApp {
                             AppDetailView(app: app, onUninstalled: popToStore)
+                        } else if let listing {
+                            AppListingView(listing: listing, onOpenSettings: { app in
+                                slideForward = true
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = app.id }
+                            })
                         } else {
                             detailSections(cat)
                         }
@@ -803,6 +834,8 @@ struct SettingsView: View {
         case .tabs:
             anchored("Tabs", tabsSection)
             anchored("Navigation", navigationSection)
+        case .footer:
+            anchored("Footer", FooterSection())
         case .notes:
             anchored("Notes", notesSection)
             anchored("Editor", editorSection)
@@ -814,6 +847,9 @@ struct SettingsView: View {
             AppsStoreView(onOpen: { app in
                 slideForward = true
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = app.id }
+            }, onOpenListing: { listing in
+                slideForward = true
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeListing = listing }
             })
         case .integrations:
             anchored("Integrations", justtypeSection)

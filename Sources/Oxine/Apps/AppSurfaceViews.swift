@@ -51,9 +51,9 @@ struct AppQuickToggleButton: View {
             }
 
             if let text = runtime.toggleText, !text.isEmpty {
-                // A warning names its app: "FnGestures · no access" in orange,
-                // so the caption is never an orphan next to a small icon.
-                Text(runtime.toggleWarning ? "\(runtime.app.name) · \(text)" : text)
+                // A warning is orange, and so is its icon beside it: that pairs
+                // the caption with its app, so the name stays in the tooltip.
+                Text(text)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .foregroundColor(runtime.toggleWarning ? .orange.opacity(0.9) : accent.opacity(0.75))

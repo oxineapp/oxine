@@ -126,6 +126,16 @@ web shop got embedded):
   update badge; tapping opens the app's detail page (surfaces it offers,
   capability grants with revoke switches, OS-permission status, log viewer,
   uninstall with keep-data option).
+- **Community** — the `oxine-app` topic search, shown only for repos listed
+  in `oxineapp/registry/approved.txt` (one `creator/repo` per line, `#`
+  comments). Off the list means not listed, not blocked: a typed
+  `creator/repo` still installs after the disclosure.
+- **Reviews** — on Watchtower (`watchtower.justtype.io`, the crash sink),
+  no account: the listing's composer posts `{app, install, name, stars,
+  text}` with a per-install random id, so one review per person per app,
+  editable and withdrawable from the same page. `GET /reviews/<app id>` is
+  public and feeds the listing; moderation is Watchtower's `/reviews` page
+  (hide or delete). See `watchtower/README.md`.
 - **Featured** — shelf from `oxineapp/registry` JSON. **Curated by us**:
   listing happens via PR to the registry repo, reviewed and merged only by
   the Oxine team (provenance badge + manifest sanity + a look at the source

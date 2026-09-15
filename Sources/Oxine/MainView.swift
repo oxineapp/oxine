@@ -198,6 +198,11 @@ struct MainView: View {
             guard let dir = note.object as? SwipeDirection else { return }
             navigateBySwipe(dir)
         }
+        // Settings and setup own horizontal scrolling (the store's hero pages);
+        // tab-swipe is off while either is up.
+        .onAppear { AppDelegate.swipeNavigationSuspended = showingSettings || showSetup }
+        .onChange(of: showingSettings) { _, on in AppDelegate.swipeNavigationSuspended = on || showSetup }
+        .onChange(of: showSetup) { _, on in AppDelegate.swipeNavigationSuspended = on || showingSettings }
         .onReceive(NotificationCenter.default.publisher(for: .panelSizeChanged)) { _ in
             // Match the window's eased resize (see AppDelegate.applyPanelSize) so
             // the content frame tracks the window instead of snapping ahead of it.
