@@ -12,6 +12,17 @@ final class LyricsOverlayModel: ObservableObject {
     /// Monotonic per *line change*, so identical consecutive lines (a repeated
     /// chorus) still get their entrance.
     @Published private(set) var lineID = 0
+    /// The cursor is over the pill: it fades back so whatever's under it shows.
+    @Published private(set) var hovered = false
+    /// The pill's frame in window coordinates (top-left origin), reported by
+    /// the view so the controller can hit-test the cursor against a
+    /// click-through panel.
+    var pillFrame: CGRect = .zero
+
+    func setHovered(_ on: Bool) {
+        guard on != hovered else { return }
+        withAnimation(.easeInOut(duration: 0.25)) { hovered = on }
+    }
 
     func update(line: String?, caption: String, settings: LyricsSettings, hidden: Bool, animate: Bool) {
         let changed = line != self.line
@@ -65,6 +76,8 @@ struct LyricsOverlayView: View {
         ZStack(alignment: .top) {
             if showing {
                 pill
+                    .opacity(model.hovered ? 0.28 : 1)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.pillFrame = $0 }
                     .padding(.top, s.gap)
                     .transition(pillTransition)
             }

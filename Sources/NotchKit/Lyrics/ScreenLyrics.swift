@@ -157,6 +157,7 @@ public final class ScreenLyrics: ObservableObject {
         model.update(line: line, caption: caption, settings: settings,
                      hidden: notchExpanded, animate: !timingChanged && !styleChanged)
         orderOutWork?.cancel(); orderOutWork = nil
+        model.setHovered(pillContainsCursor(panel))
         if !panel.isVisible {
             panel.orderFrontRegardless()
             notchLog("lyrics overlay visible (sample: \(showingSample), timed: \(timed != nil))")
@@ -203,6 +204,18 @@ public final class ScreenLyrics: ObservableObject {
         p.contentView = container
         panel = p
         return p
+    }
+
+    /// The panel is click-through, so hover can't come from AppKit: hit-test
+    /// the cursor against the pill's last reported frame instead.
+    private func pillContainsCursor(_ panel: NSPanel) -> Bool {
+        let local = model.pillFrame
+        guard panel.isVisible, !local.isEmpty else { return false }
+        // SwiftUI's window space has its origin at the top-left; flip into screen space.
+        let screenRect = CGRect(x: panel.frame.minX + local.minX,
+                                y: panel.frame.maxY - local.maxY,
+                                width: local.width, height: local.height)
+        return screenRect.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation)
     }
 
     /// Let the exit transition play before the panel disappears.
