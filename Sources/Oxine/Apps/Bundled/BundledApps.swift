@@ -1,23 +1,116 @@
 import Combine
 import Foundation
 import NotchKit
+import SousKit
+import SwiftUI
+import TemperKit
 
 /// First-party apps that ship inside Oxine but are *installed* from the store
 /// like anything else: they run in-process (they're ours, and they need deep
 /// hooks — an overlay panel, an event tap) yet speak the real apps protocol
 /// through `InternalAppBackend`, so their surfaces, footer slots and settings
-/// panes are the same plumbing a third-party app gets. Not installed until the
-/// user says so; uninstall stops them and wipes their settings.
+/// panes are the same plumbing a third-party app gets. Every first-party app
+/// is one of these: the `seeded` ones (Sous, Temper, Caffeine, Focus) come
+/// installed, the rest wait on the store's shelf. All of them can be turned off
+/// or uninstalled; uninstall stops them and wipes their settings.
 enum BundledApps {
     struct Entry {
         let manifest: AppManifest
+        /// Installed out of the box (and on the update that made it an app).
+        /// Still removable; once removed it stays removed.
+        var seeded = false
         let make: () -> InternalAppBackend
+        /// Surfaces drawn natively instead of through the view tree, for apps
+        /// whose UI is beyond the v1 vocabulary (Sous's power flow, Temper's
+        /// fan curve). Only in-process first-party apps can have these.
+        var nativeSettings: (() -> AnyView)? = nil
+        var nativePanelTab: (() -> AnyView)? = nil
         /// Wipe the app's own saved state on uninstall.
         let onUninstall: () -> Void
+        /// Runs on every uninstall, kept settings or not: undo what the app put
+        /// outside Oxine (Sous and Temper remove their privileged helpers).
+        var onRemove: () -> Void = {}
     }
 
     @MainActor static var catalog: [Entry] {
         [
+            Entry(manifest: AppManifest(
+                id: "oxine.sous", name: "Sous",
+                tagline: "Battery health: charge limit, sailing, heat protection", author: "alfaoz",
+                description: "Caps how far the battery charges, lets it sail between limits, pauses charging when hot, and tracks health over time. A small helper talks to the hardware. Off hands charging back to macOS, so another battery tool can take over.",
+                icon: "heart.badge.bolt",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(panelTab: .init(icon: "heart.badge.bolt", title: "Sous"),
+                                settings: .init(subtitle: "Sous · Battery")),
+                capabilities: [], osPermissions: ["helper"], network: false),
+                  seeded: true,
+                  make: { SousAppBackend() },
+                  nativeSettings: { AnyView(SousSettings(sous: SousManager.shared)) },
+                  nativePanelTab: { AnyView(SousView(sous: SousManager.shared)) },
+                  onUninstall: { SousManager.shared.resetSettings() },
+                  onRemove: { Task { await SousManager.shared.removeHelper() } }),
+            Entry(manifest: AppManifest(
+                id: "oxine.temper", name: "Temper",
+                tagline: "Temperatures, thermal pressure and fan control", author: "alfaoz",
+                description: "Live temperatures, CPU load and thermal pressure on any Mac. With the fan helper installed, manual, smart or curve-based fan control. Off hands the fans back to macOS, so another fan tool can take over.",
+                icon: "fanblades.fill",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(panelTab: .init(icon: "fanblades.fill", title: "Temper"),
+                                settings: .init(subtitle: "Temper · Thermal & Fans")),
+                capabilities: [], osPermissions: ["helper"], network: false),
+                  seeded: true,
+                  make: { TemperAppBackend() },
+                  nativeSettings: { AnyView(TemperSettings(temper: TemperManager.shared)) },
+                  nativePanelTab: { AnyView(TemperView(temper: TemperManager.shared)) },
+                  onUninstall: { TemperManager.shared.resetSettings() },
+                  onRemove: { Task { await TemperManager.shared.removeHelper() } }),
+            Entry(manifest: AppManifest(
+                id: "oxine.caffeine", name: "Caffeine",
+                tagline: "Keep your Mac awake", author: "alfaoz",
+                description: "Keeps the display and the Mac awake for a set time from one footer click. Optionally nudges input so chat apps stay available.",
+                icon: "bolt.horizontal",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(settings: .init(subtitle: "Default duration, keep apps active"),
+                                quickToggle: .init(icon: "bolt.horizontal", tooltip: "Keep your Mac awake", menu: true)),
+                capabilities: [], osPermissions: nil, network: false),
+                  seeded: true,
+                  make: { CaffeineAppBackend() },
+                  onUninstall: { CaffeineAppBackend.resetSettings() }),
+            Entry(manifest: AppManifest(
+                id: "oxine.focus", name: "Focus",
+                tagline: "Dim background windows", author: "shadox",
+                description: "Fades and blurs every window but the front one so it stops pulling your eye. One footer click on, one off.",
+                icon: "moon",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(settings: .init(subtitle: "Dim level & blur"),
+                                quickToggle: .init(icon: "moon", tooltip: "Dim background windows", menu: false)),
+                capabilities: [], osPermissions: nil, network: false),
+                  seeded: true,
+                  make: { FocusAppBackend() },
+                  onUninstall: { FocusAppBackend.resetSettings() }),
+            Entry(manifest: AppManifest(
+                id: "oxine.decant", name: "Decant",
+                tagline: "App-level volume control", author: "alfaoz",
+                description: "Turn one app down without touching the rest, mute it, boost a quiet one, or send it to different speakers. Live meters show who's making the noise. No audio driver and no change to your system output; apps you leave alone aren't touched at all.",
+                icon: "slider.vertical.3",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(panelTab: .init(icon: "slider.vertical.3", title: "Decant"),
+                                settings: .init(subtitle: "Decant · Per-app audio")),
+                capabilities: [], osPermissions: ["systemaudio"], network: false),
+                  make: { DecantAppBackend() },
+                  nativePanelTab: { AnyView(DecantView(decant: DecantManager.shared)) },
+                  onUninstall: { DecantManager.shared.resetSettings() }),
+            Entry(manifest: AppManifest(
+                id: "oxine.sear", name: "Sear",
+                tagline: "More granular control of your Mac's screen brightness", author: "alfaoz",
+                description: "Opens the brightness an XDR display keeps back for HDR video and uses it for everything, up to about twice as bright. The other way, it dims past the lowest brightness step on any display. One footer click; pauses by itself when the Mac runs hot.",
+                icon: "sun.max",
+                api: AppsProtocolVersion, minOxine: nil, run: nil,
+                surfaces: .init(settings: .init(subtitle: "Brighter, dimmer & safety"),
+                                quickToggle: .init(icon: "sun.max", tooltip: "Screen brightness past the limits", menu: true)),
+                capabilities: [], osPermissions: nil, network: false),
+                  make: { SearAppBackend() },
+                  onUninstall: { SearAppBackend.resetSettings() }),
             Entry(manifest: AppManifest(
                 id: "oxine.screenlyrics", name: "ScreenLyrics",
                 tagline: "Live lyrics under the notch", author: "shadox & alfaoz",

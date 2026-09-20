@@ -84,6 +84,7 @@ final class AppCapabilityBroker {
             return .object(["cpu": .number(usage.cpu), "gpu": .number(usage.gpu)])
         case "sous.state":
             let s = SousManager.shared
+            guard s.running else { return nil }     // Sous is off or uninstalled
             let m = s.metrics
             return .object([
                 "percent": .number(Double(s.displayPercent)),
@@ -98,6 +99,7 @@ final class AppCapabilityBroker {
             ])
         case "temper.metrics":
             let t = TemperManager.shared
+            guard t.running else { return nil }     // Temper is off or uninstalled
             let m = t.metrics
             let fans: [JSONValue] = t.displayFans.map {
                 .object(["rpm": .number($0.actualRPM),

@@ -109,6 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         AppsManager.shared.start()
         // The notch companion: its own top-of-screen surface, independent of the
         // dropdown panel. Safe to start late — it brings itself up if enabled.
+        NotchAudioReactor.shared.install()
         NotchCoordinator.shared.start()
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()

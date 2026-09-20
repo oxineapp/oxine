@@ -71,12 +71,17 @@ struct AppTabView: View {
     @ObservedObject var runtime: AppRuntime
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                AppViewRenderer(runtime: runtime, surface: "panelTab")
+        // At least as tall as the tab, so top-level `spacer` nodes have room to
+        // push: a short tab can centre its content or pin a section to the
+        // bottom instead of huddling under the tab bar. Taller trees scroll.
+        GeometryReader { geo in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    AppViewRenderer(runtime: runtime, surface: "panelTab")
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { runtime.sendLifecycle(phase: "activate", surface: "panelTab") }
         .onDisappear { runtime.sendLifecycle(phase: "deactivate", surface: "panelTab") }

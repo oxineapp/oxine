@@ -7,14 +7,17 @@ import AppKit
 struct MainView: View {
     @StateObject var clipboardManager = ClipboardManager()
     @StateObject var notesManager = QuickNotesManager()
-    @ObservedObject private var sous = SousManager.shared
-    @ObservedObject private var temper = TemperManager.shared
     /// Observed so a tint change in Settings re-renders the whole tree and every
     /// computed `accent` picks up the new colour.
     @ObservedObject private var theme = ThemeManager.shared
     /// The user's customizable tab bar (which tabs, in what order). Observed so
     /// edits in Settings / the tour reorder the live bar.
     @ObservedObject private var tabConfig = TabBarConfig.shared
+    /// App tabs resolve against the installed apps. The panel is built before
+    /// the apps subsystem starts, and `.onReceive` isn't subscribed until the
+    /// view is on screen, so the launch-time `.appsChanged` can be missed;
+    /// observing the manager itself can't be.
+    @ObservedObject private var installedApps = AppsManager.shared
     @State var activeTab: PanelTab = TabBarConfig.shared.enabled.first ?? .builtin(.notes)
     /// Settings is a route, not a tab (opened from the footer gear).
     @State private var showingSettings = false
@@ -240,7 +243,7 @@ struct MainView: View {
         case .builtin(let t): builtinContent(t)
         case .app(let appID):
             if let app = AppsManager.shared.app(appID) {
-                AppTabView(runtime: app.runtime)
+                if let native = app.nativePanelTab { native() } else { AppTabView(runtime: app.runtime) }
             } else {
                 Text("This app is no longer installed.")
                     .font(.system(size: 12))
@@ -280,10 +283,6 @@ struct MainView: View {
             AuthView()
         case .scripts:
             ScriptsView(clipboardManager: clipboardManager, notesManager: notesManager)
-        case .sous:
-            SousView(sous: sous)
-        case .temper:
-            TemperView(temper: temper)
         }
     }
 
@@ -388,12 +387,16 @@ struct TabBarItem: View {
     let namespace: Namespace.ID
     let action: () -> Void
 
+    private var showsTitle: Bool { !compact || isActive }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: compact ? 0 : 4) {
+            // Compact bars are icons only, except the tab you're on: its name
+            // rides along inside the pill, growing in as the pill arrives.
+            HStack(spacing: showsTitle ? 4 : 0) {
                 Image(systemName: icon)
                     .font(.system(size: compact ? 14.5 : 12.5))
-                if !compact {
+                if showsTitle {
                     Text(title)
                         .font(.system(size: 12.5))
                         .lineLimit(1)
@@ -428,7 +431,7 @@ struct TabBarItem: View {
         // content (e.g. clipboard) focus defaulted to the first tab and drew a
         // stray blue outline around "Notes".
         .focusEffectDisabled()
-        .help(compact ? title : "")
+        .help(showsTitle ? "" : title)
     }
 }
 

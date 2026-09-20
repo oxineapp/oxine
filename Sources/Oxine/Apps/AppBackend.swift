@@ -156,7 +156,9 @@ class InternalAppBackend: AppBackend {
     var onTermination: ((Int32) -> Void)?
 
     func start() throws { }
-    func stop() { }
+    /// Same goodbye a child process gets, so an in-process app tears down what
+    /// it started (an event tap, an overlay, a keep-awake assertion).
+    func stop() { receive(.bye) }
 
     final func send(_ msg: HostMessage) { receive(msg) }
     /// App-side send: deliver to the host on the next runloop turn, mirroring

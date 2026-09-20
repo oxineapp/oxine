@@ -96,7 +96,9 @@ private struct AppNodeView: View {
             Text(node.string("text") ?? "")
                 .font(textFont)
                 .foregroundColor(.white.opacity(textOpacity))
+                .multilineTextAlignment(node.string("align") == "center" ? .center : .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: node.string("align") == "center" ? .infinity : nil)
         case "icon":
             Image(systemName: node.string("symbol") ?? "questionmark")
                 .font(.system(size: node.number("size").map { CGFloat($0) } ?? 14))

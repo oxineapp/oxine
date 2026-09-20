@@ -55,8 +55,9 @@ struct AppsStoreView: View {
 
     // MARK: - Catalog
 
-    /// First-party, in shelf order: the installable pair first, then the
-    /// built-ins. Each row carries the installed app when there is one.
+    /// First-party, in shelf order: what's new to install first, then the apps
+    /// every install starts with. Each row carries the installed app when
+    /// there is one.
     private struct FirstParty: Identifiable {
         let manifest: AppManifest
         let app: OxApp?
@@ -65,11 +66,10 @@ struct AppsStoreView: View {
     }
 
     private var firstParty: [FirstParty] {
-        let catalog = BundledApps.catalog.map { entry in
+        let catalog = BundledApps.catalog
+        return (catalog.filter { !$0.seeded } + catalog.filter(\.seeded)).map { entry in
             FirstParty(manifest: entry.manifest, app: manager.app(entry.manifest.id), bundled: entry)
         }
-        let builtin = manager.apps.filter(\.isInternal).map { FirstParty(manifest: $0.manifest, app: $0, bundled: nil) }
-        return catalog + builtin
     }
 
     private var installedExternal: [OxApp] { manager.apps.filter { !$0.isFirstParty } }
@@ -81,7 +81,10 @@ struct AppsStoreView: View {
     }
 
     private var heroes: [StoreHeroItem] {
-        var items = BundledApps.catalog.map { entry -> StoreHeroItem in
+        // Heroes advertise what isn't there yet: the add-ons always, a seeded
+        // app only once it has been uninstalled.
+        let shown = BundledApps.catalog.filter { !$0.seeded || manager.app($0.manifest.id) == nil }
+        var items = shown.map { entry -> StoreHeroItem in
             let m = entry.manifest
             let app = manager.app(m.id)
             return StoreHeroItem(
@@ -609,6 +612,7 @@ enum AppPermissionLabels {
         case "accessibility":   return "Accessibility"
         case "screenrecording", "screen-recording", "screen": return "Screen Recording"
         case "microphone":      return "Microphone"
+        case "systemaudio", "system-audio": return "System Audio Recording"
         case "camera":          return "Camera"
         case "location":        return "Location"
         case "automation":      return "Automation"
@@ -623,6 +627,7 @@ enum AppPermissionLabels {
         case "accessibility":   return "figure.wave"
         case "screenrecording", "screen-recording", "screen": return "rectangle.dashed.badge.record"
         case "microphone":      return "mic"
+        case "systemaudio", "system-audio": return "waveform"
         case "camera":          return "camera"
         case "location":        return "location"
         case "automation":      return "gearshape.2"
@@ -637,6 +642,7 @@ enum AppPermissionLabels {
         case "accessibility":   return "Watch keys and the trackpad system-wide, and send media keys."
         case "screenrecording", "screen-recording", "screen": return "See what's on screen."
         case "microphone":      return "Listen through the microphone."
+        case "systemaudio", "system-audio": return "Read the sound other apps play, which is how their volume gets changed. Nothing is recorded or kept."
         case "camera":          return "Use the camera."
         case "location":        return "Know where this Mac is."
         case "automation":      return "Control other apps with Apple events."

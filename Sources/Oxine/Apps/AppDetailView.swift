@@ -43,11 +43,16 @@ struct AppDetailView: View {
                 manager.uninstall(app, keepData: false); onUninstalled()
             }
         } message: {
-            Text(app.isBundled
+            Text(hasHelper
+                 ? "The app stops immediately and its background helper is removed, so macOS will ask for your password. Its settings can be kept for a reinstall."
+                 : app.isBundled
                  ? "The app stops immediately. Its settings can be kept for a reinstall."
                  : "The app stops immediately. Its saved data can be kept for a reinstall.")
         }
     }
+
+    /// Sous and Temper: a privileged helper that uninstall takes out too.
+    private var hasHelper: Bool { app.manifest.osPermissions?.contains("helper") == true }
 
     // MARK: - Hero
 
@@ -246,6 +251,7 @@ struct AppDetailView: View {
         case "accessibility":   anchor = "Privacy_Accessibility"
         case "screenrecording", "screen-recording", "screen": anchor = "Privacy_ScreenCapture"
         case "microphone":      anchor = "Privacy_Microphone"
+        case "systemaudio", "system-audio": anchor = "Privacy_AudioCapture"
         case "camera":          anchor = "Privacy_Camera"
         case "location":        anchor = "Privacy_LocationServices"
         case "automation":      anchor = "Privacy_Automation"
@@ -391,7 +397,9 @@ struct AppDetailView: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                Text(app.isBundled
+                Text(hasHelper
+                     ? "Stops it, hands the hardware back to macOS and removes its helper. Turning it off instead keeps the helper installed but idle. You can keep its settings for a reinstall."
+                     : app.isBundled
                      ? "Stops it and frees its footer slot. You can keep its settings for a reinstall."
                      : "Stops it and removes its files. You can keep its saved data for a reinstall.")
                     .font(.system(size: 9.5)).foregroundColor(.white.opacity(0.3))

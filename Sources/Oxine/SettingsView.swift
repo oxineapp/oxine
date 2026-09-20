@@ -118,6 +118,7 @@ enum SettingIndex {
         SettingEntry("Edit tab bar", .tabs, ["reorder", "rearrange", "add", "remove", "hide", "customize", "organize", "arrange"]),
         SettingEntry("Swipe sensitivity", .tabs, ["two", "finger", "trackpad", "gesture", "scroll"]),
         SettingEntry("One tab per swipe", .tabs, ["single", "step", "swipe", "one"]),
+        SettingEntry("Invert swipe direction", .tabs, ["invert", "reverse", "direction", "swipe", "natural"]),
         SettingEntry("Haptic feedback", .tabs, ["vibration", "tick", "buzz", "trackpad"]),
         // Notes
         SettingEntry("Notes folder location", .notes, ["folder", "path", "directory", "where", "save", "store"]),
@@ -292,7 +293,7 @@ enum SettingIndex {
         case "Window size": return "Window"
         case "Accent color": return "Appearance"
         case "Edit tab bar": return "Tabs"
-        case "Swipe sensitivity", "One tab per swipe", "Haptic feedback": return "Navigation"
+        case "Swipe sensitivity", "One tab per swipe", "Invert swipe direction", "Haptic feedback": return "Navigation"
         case "Notes folder location", "Lock notes with Touch ID": return "Notes"
         case "Markdown editor", "Obsidian vault": return "Editor"
         case "Clipboard history size", "Lock clipboard with Touch ID",
@@ -324,6 +325,7 @@ struct SettingsView: View {
     @AppStorage("swipeSensitivity", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSensitivity = 0.7
     @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
     @AppStorage("swipeSingleStep", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSingleStep = false
+    @AppStorage("swipeInverted", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeInverted = false
     @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) var notchEnabled = true
     @AppStorage("notchFauxOnExternal", store: UserDefaults(suiteName: "com.oxine.settings")) var notchFauxOnExternal = false
     @AppStorage("notchOpenTrigger", store: UserDefaults(suiteName: "com.oxine.settings")) var notchOpenTrigger = "hover"
@@ -331,6 +333,7 @@ struct SettingsView: View {
     @AppStorage("notchHomeSlot", store: UserDefaults(suiteName: "com.oxine.settings")) var notchHomeSlot = "camera"
     @AppStorage("notchNowPlayingSource", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNowPlayingSource = "system"
     @AppStorage("notchSystemHUD", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSystemHUD = true
+    @AppStorage("notchRealAudioBars", store: UserDefaults(suiteName: "com.oxine.settings")) var notchRealAudioBars = true
     @AppStorage("notchLeftEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchLeftEar = "smart"
     @AppStorage("notchRightEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchRightEar = "smart"
     @AppStorage("notchBar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBar = false
@@ -986,6 +989,18 @@ struct SettingsView: View {
 
                 Divider().opacity(0.1)
 
+                Toggle(isOn: $swipeInverted) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Invert swipe direction")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Swipe right for the next tab and left for the previous one.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+
+                Divider().opacity(0.1)
+
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Haptic feedback")
@@ -1294,6 +1309,20 @@ struct SettingsView: View {
                         Text("Sneak peek on track change")
                             .foregroundColor(.white.opacity(0.85))
                         Text("Briefly shows the new song's title beside the notch.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $notchRealAudioBars) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Music bars follow the sound")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("The bars beside the notch show the real bass, mids and highs of what's playing. Needs System Audio Recording (the same access Decant uses); without it they animate on their own.")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }

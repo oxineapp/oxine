@@ -33,6 +33,8 @@ extension AppDelegate {
         // "One tab per swipe": cap each gesture at a single step instead of letting
         // a held swipe glide through several tabs.
         let singleStep = (store?.object(forKey: "swipeSingleStep") as? Bool) ?? false
+        // "Invert swipe direction": swipe left goes back instead of forward.
+        let inverted = (store?.object(forKey: "swipeInverted") as? Bool) ?? false
 
         // Trackpad only (mouse wheels get no tab nav), and only the live finger
         // gesture — never its inertia tail.
@@ -73,7 +75,7 @@ extension AppDelegate {
         // tab, swipe left advances — matching browser back/forward.
         while abs(swipeAccumX) >= step {
             if singleStep && swipeStepped { break }   // one step only this gesture
-            let dir: SwipeDirection = swipeAccumX < 0 ? .next : .previous
+            let dir: SwipeDirection = (swipeAccumX < 0) != inverted ? .next : .previous
             swipeAccumX -= swipeAccumX < 0 ? -step : step
             swipeStepped = true
             NotificationCenter.default.post(name: .swipeNavigate, object: dir)

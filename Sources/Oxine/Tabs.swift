@@ -6,7 +6,7 @@ import PanelKit
 /// tab must not shift the meaning of the others. Settings is deliberately *not*
 /// a `TabID`: it's a separate route opened from the footer gear (see `Route`).
 enum TabID: String, CaseIterable, Codable, Identifiable {
-    case notes, history, auth, scripts, sous, temper
+    case notes, history, auth, scripts
 
     var id: String { rawValue }
 
@@ -20,8 +20,6 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         case .auth:    return "lock.shield"
         case .scripts: return "puzzlepiece.extension"
-        case .sous:    return "heart.badge.bolt"
-        case .temper:  return "fanblades.fill"
         }
     }
 
@@ -31,8 +29,6 @@ enum TabID: String, CaseIterable, Codable, Identifiable {
         case .history: return "History"
         case .auth:    return "Auth"
         case .scripts: return "Scripts"
-        case .sous:    return "Sous"
-        case .temper:  return "Temper"
         }
     }
 }
@@ -59,6 +55,10 @@ enum PanelTab: Hashable, Identifiable, Codable {
     init?(rawValue: String) {
         if rawValue.hasPrefix("app:") {
             self = .app(String(rawValue.dropFirst(4)))
+        } else if rawValue == "sous" || rawValue == "temper" {
+            // Sous and Temper were built-in tabs before they became apps; a
+            // saved bar keeps their places.
+            self = .app("oxine." + rawValue)
         } else if let t = TabID(rawValue: rawValue) {
             self = .builtin(t)
         } else {
@@ -66,22 +66,23 @@ enum PanelTab: Hashable, Identifiable, Codable {
         }
     }
 
-    /// The built-in bar, in canonical order.
-    static var canonical: [PanelTab] { TabID.canonical.map { .builtin($0) } }
+    /// The default bar, in canonical order: the built-ins, then the two apps
+    /// every install starts with (they filter out once disabled or uninstalled).
+    static var canonical: [PanelTab] {
+        TabID.canonical.map { .builtin($0) } + [.app("oxine.sous"), .app("oxine.temper")]
+    }
 
     /// Everything that can be on the bar right now: built-ins + enabled apps
     /// declaring a panelTab surface.
     @MainActor static var allAvailable: [PanelTab] {
-        canonical.filter(\.isResolvable) + AppsManager.shared.panelTabApps.map { .app($0.id) }
+        let base = canonical.filter(\.isResolvable)
+        return base + AppsManager.shared.panelTabApps.map { PanelTab.app($0.id) }.filter { !base.contains($0) }
     }
 
-    /// Whether this entry can render right now. Built-ins always, except Sous
-    /// and Temper, which are apps in the store and hide with their switch; app
-    /// tabs only while their app is installed, enabled, and offers the surface.
+    /// Whether this entry can render right now. Built-ins always; app tabs only
+    /// while their app is installed, enabled, and offers the surface.
     @MainActor var isResolvable: Bool {
         switch self {
-        case .builtin(.sous): return AppsManager.shared.app("oxine.sous")?.enabled ?? true
-        case .builtin(.temper): return AppsManager.shared.app("oxine.temper")?.enabled ?? true
         case .builtin: return true
         case .app(let appID):
             guard let a = AppsManager.shared.app(appID) else { return false }
@@ -256,10 +257,16 @@ struct TabEditor: View {
     @State private var dragSize: CGSize = .zero      // captured once at lift, stable
     @State private var ignoreDrag = false            // this press began off any chip
     @State private var frames: [String: CGRect] = [:]
+    /// Natural width of the bar row with every name showing (hidden probe).
+    @State private var barNatural: CGFloat = 0
 
     private let space = "tabcomposer"
     private var barZone: CGRect { frames["zone.bar"] ?? .zero }
     private var trayZone: CGRect { frames["zone.tray"] ?? .zero }
+    /// More tabs than names fit: the bar row goes icon-only, exactly as the real
+    /// tab bar does, instead of squeezing every name down to "N…". The name
+    /// comes back on the chip you lift, and on hover.
+    private var barCompact: Bool { barZone.width > 0 && barNatural > barZone.width - 16 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -274,6 +281,11 @@ struct TabEditor: View {
             }
         }
         .coordinateSpace(name: space)
+        .background(
+            HStack(spacing: 6) { ForEach(bar) { ComposerChip(tab: $0) } }
+                .fixedSize().hidden().allowsHitTesting(false)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barNatural = $0 }
+        )
         .onPreferenceChange(ChipFrames.self) { frames = $0 }
         .contentShape(Rectangle())                 // whole area is grabbable
         .gesture(containerDrag)
@@ -292,7 +304,7 @@ struct TabEditor: View {
         HStack(spacing: zone == .bar ? 6 : 8) {
             // Bar chips stretch to share the width (like the real tab bar); tray
             // chips stay natural and pack to the left.
-            ForEach(tabs) { chip($0, fill: zone == .bar) }
+            ForEach(tabs) { chip($0, fill: zone == .bar, compact: zone == .bar && barCompact) }
             if zone == .tray { Spacer(minLength: 0) }
         }
         .frame(maxWidth: .infinity, minHeight: 46)
@@ -311,12 +323,12 @@ struct TabEditor: View {
         )
     }
 
-    private func chip(_ tab: PanelTab, fill: Bool) -> some View {
+    private func chip(_ tab: PanelTab, fill: Bool, compact: Bool) -> some View {
         // No per-chip gesture: the single container gesture (see body) hit-tests
         // these recorded frames. Attaching it here would let `reflow()` reorder
         // the chip out from under its own recognizer mid-drag — SwiftUI then
         // cancels the gesture WITHOUT calling onEnded, freezing `dragging`.
-        ComposerChip(tab: tab, fill: fill)
+        ComposerChip(tab: tab, fill: fill, compact: compact)
             .opacity(dragging == tab ? 0.0 : 1.0)        // hidden placeholder keeps the slot
             .overlay {
                 GeometryReader { g in
@@ -328,8 +340,9 @@ struct TabEditor: View {
     /// The lifted chip drawn at the finger. Size is snapshotted at lift so it
     /// never re-reads reflowing frames mid-drag.
     private func floatingChip(_ tab: PanelTab) -> some View {
+        // Always named, so a chip lifted off an icon-only bar says what it is.
         ComposerChip(tab: tab, fill: true, lifted: true)
-            .frame(width: max(dragSize.width, 56), height: max(dragSize.height, 32))
+            .frame(width: max(dragSize.width, 96), height: max(dragSize.height, 32))
             .position(dragPoint)
             .allowsHitTesting(false)
             .transaction { $0.animation = nil }          // follow the finger 1:1, no lag
@@ -429,12 +442,17 @@ private struct ComposerChip: View {
     let tab: PanelTab
     var fill: Bool = false
     var lifted: Bool = false
+    /// Icon only (a crowded bar row). Never applies to a lifted chip.
+    var compact: Bool = false
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: tab.icon).font(.system(size: 12))
-            Text(tab.title).font(.system(size: 12, weight: .medium))
-                .lineLimit(1).minimumScaleFactor(0.8).fixedSize(horizontal: !fill, vertical: false)
+            Image(systemName: tab.icon).font(.system(size: compact ? 13.5 : 12))
+            if !compact {
+                Text(tab.title).font(.system(size: 12, weight: .medium))
+                    .lineLimit(1).minimumScaleFactor(0.8).fixedSize(horizontal: !fill, vertical: false)
+            }
         }
+        .help(compact ? tab.title : "")
         .foregroundColor(.white.opacity(lifted ? 0.95 : 0.8))
         .padding(.horizontal, 8)
         .frame(maxWidth: fill ? .infinity : nil)

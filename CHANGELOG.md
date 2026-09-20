@@ -4,6 +4,21 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.4.0
+- **New app: Decant.** App-level volume control. Turn one app down without touching the rest, mute it, boost a quiet one past 100%, or send it to different speakers; live meters show who's making the noise. No audio driver, no change to your system output, and apps you leave alone aren't touched at all. Install it from Settings → Apps. Needs System Audio Recording.
+- **New app: Sear.** Opens the brightness an XDR display keeps back for HDR video and uses it for everything, up to about twice as bright, for working in sunlight. The other way, it dims past the lowest brightness step on any display. One footer click with a level menu; it pauses by itself when the Mac runs hot, and optionally on battery. Screenshots are unaffected. Install it from Settings → Apps.
+- New: the music bars beside the notch follow the real sound — bass on the left, highs on the right — once Oxine has System Audio Recording. Settings → Notch → Music bars follow the sound.
+- **New: Sous and Temper are real apps.** Turn either one off from its page and it lets go of the hardware: Sous hands charging back to macOS, Temper puts every fan back on the system curve, and both stop polling, so another battery or fan tool can take over. Turn it back on and your limit, curve and modes return. Uninstall removes the app, its tab and its background helper (macOS asks for your password); reinstall from Settings → Apps.
+- New: Caffeine and Focus can be uninstalled too, and reinstalled from the store. Every Oxine-made app now installs, turns off and uninstalls the same way.
+- New: in a crowded tab bar the tab you're on shows its name next to its icon, and the pill stretches to fit as you move between tabs.
+- New: Settings → Tabs & Navigation → Invert swipe direction.
+- New for app makers: `align: center` on text, and tabs are now at least as tall as the panel, so `spacer` can centre content or pin a section to the bottom.
+- New: an app copied into the apps folder by hand gets its tab on the bar the first time Oxine sees it.
+- fix: turning off a built-in app now actually stops it. Caffeine no longer keeps the Mac awake, Focus lifts its dim, FnGestures releases its event tap and ScreenLyrics takes its pill down.
+- fix: app tabs show up as soon as Oxine launches, not only after Settings has been opened.
+- fix: the tab bar editor no longer squeezes names down to "N…" when there are many tabs; the row goes icon-only like the real bar, and the chip you lift shows its name.
+- fix: the `sous.state` and `temper.metrics` capabilities report nothing while their app is off, instead of stale readings.
+
 ## 2.3.0
 - **New: the Apps store looks like a store.** Search at the top, artwork heroes you page through, and every shelf as cards two across: Made by Oxine, the community, the curated picks. Get or Open right on the card.
 - **New: app pages.** Click any card or hero for the app's listing: artwork, a Settings shortcut for installed apps, the facts strip (rating, author, origin or GitHub stars, network), what it does, where it shows up, what it asks for, and ratings and reviews.

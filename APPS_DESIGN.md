@@ -414,3 +414,50 @@ Deferred (next):
   is never anonymous.
 - Setup tour gained an Extras step (after Notch) offering ScreenLyrics (notch
   Macs) and FnGestures with the same install as the store.
+
+
+## Update (2026-09-20) — every first-party app is a bundled app
+
+- **No fixed apps left.** Sous, Temper, Caffeine and Focus moved from
+  `.internalApp` into `BundledApps.catalog` as `seeded` entries: installed out
+  of the box (and once on the update, recorded in `appsBundledSeeded` so an
+  uninstalled one stays gone), removable, reinstallable from the store. The
+  `.internalApp` kind is unused.
+- **The backend owns the feature's life.** `InternalAppBackend.stop()` now
+  delivers `bye` (it was a no-op, so no in-process app ever tore down on
+  disable). Caffeine drops its assertion, Focus lifts the dim. `SousManager`
+  and `TemperManager` no longer start in `init`: `start()` on `hello`, `stop()`
+  on `bye`. `stop()` cancels polling and pushes a *released* config to the
+  daemon without saving it (Sous `enabled = false`, Temper every fan
+  `.default`), so the hardware goes back to macOS and the saved settings come
+  back on re-enable. One-shot runs (top up, discharge, calibration) are
+  dropped on stop. While off: no bead tint, no notch fan readout, and the
+  `sous.state` / `temper.metrics` capabilities return nothing.
+- **Disable vs uninstall.** Disable leaves the daemon installed but idle — it
+  is a root LaunchDaemon with KeepAlive, and unloading it needs an admin
+  prompt, which a switch shouldn't raise. Uninstall runs the entry's `onRemove`
+  (always, even with "keep its settings"): release, then remove the helper
+  with the password prompt. `onUninstall` still wipes settings only when the
+  user doesn't keep them.
+- **Native surfaces.** `Entry.nativePanelTab` joins `nativeSettings`: the Sous
+  and Temper tabs are declared in the manifest (`panelTab`) and live on the bar
+  as `app:oxine.sous` / `app:oxine.temper`, but draw native SwiftUI — the power
+  flow and the fan curve are past the v1 vocabulary. `TabID` lost `.sous` and
+  `.temper`; `PanelTab(rawValue:)` maps the old tokens so saved bars keep their
+  order. Installing a bundled app with a panel tab adds it to the bar.
+- **Sideloads.** An external app first seen at launch (copied into the apps
+  folder, not installed) gets its tab added once (`appsKnownExternal`).
+- **Update safety.** Nothing is removed or reset by the update: the four apps
+  are seeded as installed, enabled state / grants / footer slots / settings
+  keys are read as before, and old tab tokens map in place. One semantic
+  carry-over (`migrateTabOnlySwitches`, once): through 2.3.0 the Sous/Temper
+  switch only hid the tab while the limit and fans kept running, so an app that
+  was "off" stays on with its tab off the bar, rather than silently dropping a
+  charge limit. External apps already installed are recorded as known and left
+  exactly as they are.
+- **Launch.** `start()` ends with `surfacesChanged()`: the panel is built
+  before the apps exist, and app tabs (now including Sous and Temper) would
+  otherwise stay unresolved until something else re-rendered the bar.
+- **Vocabulary (additive).** `text` takes `align: "center"`. `AppTabView`
+  gives the tree a minimum height of the tab, so top-level `spacer` nodes push
+  (centre content, or pin a section to the bottom).

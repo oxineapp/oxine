@@ -4,70 +4,33 @@ import SousKit
 import SwiftUI
 import TemperKit
 
-/// The compiled-in dogfood apps: Caffeine (keep awake) and Focus (dim others),
-/// re-plumbed to speak the real apps protocol through `InternalAppBackend`.
-/// They exist to keep `api: 1` honest — if the footer archetypes can't be
-/// expressed through the wire contract, the contract isn't done. The managers
-/// they wrap are unchanged; only the footer UI now reaches them this way.
-enum InternalApps {
-    @MainActor static func all() -> [OxApp] {
-        func makeApp(_ manifest: AppManifest, native: (() -> AnyView)? = nil,
-                     _ factory: @escaping () -> InternalAppBackend) -> OxApp {
-            let app = OxApp(manifest: manifest,
-                            kind: .internalApp(factory),
-                            grants: AppsManager.defaultGrants(for: manifest),
-                            enabled: AppsManager.storedEnabled(manifest.id))
-            app.nativeSettings = native
-            return app
+/// Sous as an app. Its tab and settings pane are native SwiftUI (the power
+/// flow and the charts are beyond the view tree), so nothing is drawn over the
+/// protocol; what the backend owns is the feature's life. On: the manager polls
+/// and keeps the daemon in sync. Off: polling stops and charging goes back to
+/// macOS, so another battery tool can take over.
+@MainActor
+final class SousAppBackend: InternalAppBackend {
+    override func receive(_ msg: HostMessage) {
+        switch msg {
+        case .hello: SousManager.shared.start()
+        case .bye: SousManager.shared.stop()
+        default: break
         }
-        return [
-            makeApp(AppManifest(
-                id: "oxine.caffeine", name: "Caffeine",
-                tagline: "Keep your Mac awake", author: "alfaoz",
-                description: "Keeps the display and the Mac awake for a set time from one footer click. Optionally nudges input so chat apps stay available.",
-                icon: "bolt.horizontal",
-                api: AppsProtocolVersion, minOxine: nil, run: nil,
-                surfaces: .init(settings: .init(subtitle: "Default duration, keep apps active"),
-                                quickToggle: .init(icon: "bolt.horizontal", tooltip: "Keep your Mac awake", menu: true)),
-                capabilities: [], osPermissions: nil, network: false)) { CaffeineAppBackend() },
-            makeApp(AppManifest(
-                id: "oxine.focus", name: "Focus",
-                tagline: "Dim background windows", author: "shadox",
-                description: "Fades and blurs every window but the front one so it stops pulling your eye. One footer click on, one off.",
-                icon: "moon",
-                api: AppsProtocolVersion, minOxine: nil, run: nil,
-                surfaces: .init(settings: .init(subtitle: "Dim level & blur"),
-                                quickToggle: .init(icon: "moon", tooltip: "Dim background windows", menu: false)),
-                capabilities: [], osPermissions: nil, network: false)) { FocusAppBackend() },
-            // Sous and Temper keep their own panel tabs and native settings panes;
-            // being apps gives them a store page and a switch that hides the tab.
-            makeApp(AppManifest(
-                id: "oxine.sous", name: "Sous",
-                tagline: "Battery health: charge limit, sailing, heat protection", author: "alfaoz",
-                description: "Caps how far the battery charges, lets it sail between limits, pauses charging when hot, and tracks health over time. A small helper talks to the hardware.",
-                icon: "heart.badge.bolt",
-                api: AppsProtocolVersion, minOxine: nil, run: nil,
-                surfaces: .init(settings: .init(subtitle: "Sous · Battery")),
-                capabilities: [], osPermissions: ["helper"], network: false),
-                native: { AnyView(SousSettings(sous: SousManager.shared)) }) { PassiveAppBackend() },
-            makeApp(AppManifest(
-                id: "oxine.temper", name: "Temper",
-                tagline: "Temperatures, thermal pressure and fan control", author: "alfaoz",
-                description: "Live temperatures, CPU load and thermal pressure on any Mac. With the fan helper installed, manual, smart or curve-based fan control.",
-                icon: "fanblades.fill",
-                api: AppsProtocolVersion, minOxine: nil, run: nil,
-                surfaces: .init(settings: .init(subtitle: "Temper · Thermal & Fans")),
-                capabilities: [], osPermissions: ["helper"], network: false),
-                native: { AnyView(TemperSettings(temper: TemperManager.shared)) }) { PassiveAppBackend() },
-        ]
     }
 }
 
-/// A backend for built-ins whose whole surface is native (their panel tab and
-/// settings pane): nothing to render over the protocol, nothing to receive.
+/// Temper as an app: same shape as Sous. Off stops the sensor reads and hands
+/// every fan back to macOS's own curve.
 @MainActor
-final class PassiveAppBackend: InternalAppBackend {
-    override func receive(_ msg: HostMessage) {}
+final class TemperAppBackend: InternalAppBackend {
+    override func receive(_ msg: HostMessage) {
+        switch msg {
+        case .hello: TemperManager.shared.start()
+        case .bye: TemperManager.shared.stop()
+        default: break
+        }
+    }
 }
 
 /// Caffeine as an app: primary click toggles at the saved default; the menu
@@ -75,6 +38,10 @@ final class PassiveAppBackend: InternalAppBackend {
 /// Its settings pane (default duration, keep-apps-active) lives on its store page.
 @MainActor
 final class CaffeineAppBackend: InternalAppBackend {
+    static func resetSettings() {
+        for key in ["caffeineDefaultDuration", "caffeineKeepAppsActive"] { UserDefaults.standard.removeObject(forKey: key) }
+    }
+
     private var cancellables: Set<AnyCancellable> = []
     private let mgr = CaffeineManager.shared
 
@@ -110,6 +77,7 @@ final class CaffeineAppBackend: InternalAppBackend {
             push()
         case .bye:
             cancellables = []
+            mgr.stop()      // an app that's off can't be keeping the Mac awake
         default: break
         }
     }
@@ -148,6 +116,10 @@ final class CaffeineAppBackend: InternalAppBackend {
 /// Focus as an app: one toggle, no menu; dim level and blur on its page.
 @MainActor
 final class FocusAppBackend: InternalAppBackend {
+    static func resetSettings() {
+        for key in ["focusOverlayOpacity", "focusBlurIntensity"] { UserDefaults.standard.removeObject(forKey: key) }
+    }
+
     private var cancellables: Set<AnyCancellable> = []
     private let mgr = FocusModeManager.shared
 
@@ -171,6 +143,7 @@ final class FocusAppBackend: InternalAppBackend {
             push()
         case .bye:
             cancellables = []
+            if mgr.isEnabled { mgr.toggle() }   // lift the dim with the app
         default: break
         }
     }

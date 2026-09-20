@@ -5,16 +5,18 @@ import Foundation
 import PanelKit
 import SwiftUI
 
-/// One app the store knows about: identity + manifest + how to run it. The two
-/// kinds are indistinguishable above the backend — internal apps are the
-/// compiled-in dogfood (Caffeine, Focus) that keep the protocol honest.
+/// One app the store knows about: identity + manifest + how to run it. The
+/// kinds are indistinguishable above the backend — bundled apps are compiled in
+/// and run in-process, but speak the same protocol an external app does.
 @MainActor
 final class OxApp: ObservableObject, Identifiable {
     enum Kind {
-        /// Compiled in and always present; the factory makes its in-process backend.
+        /// Compiled in and always present. Nothing ships this way any more (every
+        /// first-party app is `bundled`, so it can be removed); kept for an app
+        /// that truly can't be.
         case internalApp(() -> InternalAppBackend)
-        /// Compiled in but *installed* from the store (ScreenLyrics, FnGestures):
-        /// first-party, in-process, removable. See `BundledApps`.
+        /// Compiled in but installed/removed like any app: first-party,
+        /// in-process. See `BundledApps`.
         case bundled(() -> InternalAppBackend, onUninstall: () -> Void)
         /// Installed from GitHub; runs `bin/<binary>` as a child process.
         case external(repo: String, tag: String, binary: String, verified: Bool)
@@ -26,9 +28,10 @@ final class OxApp: ObservableObject, Identifiable {
     @Published var enabled: Bool
     /// Set when a newer release tag was seen upstream.
     @Published var updateAvailable: String?
-    /// Built-in apps whose settings predate the view-tree protocol (Sous,
-    /// Temper) hand the store a native SwiftUI pane for their page instead.
+    /// Bundled apps whose UI is beyond the view tree (Sous, Temper) hand the
+    /// host native SwiftUI for their store page and their panel tab instead.
     var nativeSettings: (() -> AnyView)?
+    var nativePanelTab: (() -> AnyView)?
 
     private(set) lazy var runtime = AppRuntime(app: self)
 
@@ -43,7 +46,7 @@ final class OxApp: ObservableObject, Identifiable {
         self.manifestID = manifest.id
     }
 
-    /// Built-in (Caffeine, Focus): always installed, never removable.
+    /// Always installed, never removable (unused today, see `Kind`).
     var isInternal: Bool { if case .internalApp = kind { return true }; return false }
     /// First-party but installable/removable (see `BundledApps`).
     var isBundled: Bool { if case .bundled = kind { return true }; return false }
@@ -137,12 +140,36 @@ final class AppsManager: ObservableObject {
     /// Bring the subsystem up: register the internal apps, scan the install
     /// root, start everything enabled. Call once at launch.
     func start() {
-        var list: [OxApp] = InternalApps.all()
-        list.append(contentsOf: installedBundled())
+        migrateTabOnlySwitches()
+        seedBundled()
+        var list: [OxApp] = installedBundled()
         list.append(contentsOf: scanInstalled())
         apps = list
         NSLog("AppsManager: %d apps (%@)", apps.count, apps.map(\.id).joined(separator: ","))
         for app in apps { bind(app); if app.enabled { app.runtime.start() } }
+        welcomeSideloaded()
+        // The panel is built before this runs, with no apps to resolve its app
+        // tabs against; tell it (and the notch, the footer) they exist now.
+        surfacesChanged()
+    }
+
+    /// An app copied into the apps folder by hand skipped the installer, which
+    /// is what starts a new app and puts its tab on the bar. Do both the first
+    /// time one is seen.
+    private func welcomeSideloaded() {
+        guard let stored = suite?.stringArray(forKey: "appsKnownExternal") else {
+            // First launch with this record: everything already here was
+            // installed the normal way. Leave it exactly as the user has it.
+            suite?.set(apps.filter { !$0.isFirstParty }.map(\.id).sorted(), forKey: "appsKnownExternal")
+            return
+        }
+        var known = Set(stored)
+        for app in apps where !app.isFirstParty && !known.contains(app.id) {
+            known.insert(app.id)
+            setEnabled(app, true)
+            if app.manifest.surfaces.panelTab != nil { TabBarConfig.shared.add(.app(app.id)) }
+        }
+        suite?.set(Array(known).sorted(), forKey: "appsKnownExternal")
     }
 
     private func bind(_ app: OxApp) {
@@ -248,16 +275,51 @@ final class AppsManager: ObservableObject {
     }
 
     private func makeBundled(_ entry: BundledApps.Entry, enabled: Bool) -> OxApp {
-        OxApp(manifest: entry.manifest,
-              kind: .bundled(entry.make, onUninstall: entry.onUninstall),
-              grants: storedGrants(for: entry.manifest.id) ?? Self.defaultGrants(for: entry.manifest),
-              enabled: enabled)
+        let app = OxApp(manifest: entry.manifest,
+                        kind: .bundled(entry.make, onUninstall: entry.onUninstall),
+                        grants: storedGrants(for: entry.manifest.id) ?? Self.defaultGrants(for: entry.manifest),
+                        enabled: enabled)
+        app.nativeSettings = entry.nativeSettings
+        app.nativePanelTab = entry.nativePanelTab
+        return app
     }
 
+    /// Catalog order, so the seeded apps lead the list as the built-ins did.
     private func installedBundled() -> [OxApp] {
-        return installedBundledIDs.compactMap { id in
-            BundledApps.entry(id).map { makeBundled($0, enabled: Self.storedEnabled(id, suite: suite)) }
+        let installed = installedBundledIDs
+        return BundledApps.catalog.filter { installed.contains($0.manifest.id) }.map {
+            makeBundled($0, enabled: Self.storedEnabled($0.manifest.id, suite: suite))
         }
+    }
+
+    /// Through 2.3.0 the Sous and Temper switches only hid their tab; the charge
+    /// limit and the fan curve kept running. Off now means off, so carry the
+    /// old meaning over instead of the old flag: the app stays on (nothing
+    /// lapses after an update) and its tab stays off the bar. Once.
+    private func migrateTabOnlySwitches() {
+        guard suite?.bool(forKey: "appsLifecycleMigrated") != true else { return }
+        suite?.set(true, forKey: "appsLifecycleMigrated")
+        guard var disabled = suite?.stringArray(forKey: "appsDisabled") else { return }
+        for id in ["oxine.sous", "oxine.temper"] where disabled.contains(id) {
+            disabled.removeAll { $0 == id }
+            TabBarConfig.shared.remove(.app(id))
+        }
+        suite?.set(disabled, forKey: "appsDisabled")
+    }
+
+    /// Install the `seeded` apps once per id: on a fresh install, and on the
+    /// update where Sous, Temper, Caffeine and Focus stopped being fixed parts
+    /// of Oxine. The record of what was seeded is what keeps an uninstalled one
+    /// from coming back at the next launch.
+    private func seedBundled() {
+        var seeded = Set(suite?.stringArray(forKey: "appsBundledSeeded") ?? [])
+        let fresh = BundledApps.catalog.filter { $0.seeded && !seeded.contains($0.manifest.id) }
+        guard !fresh.isEmpty else { return }
+        for entry in fresh {
+            seeded.insert(entry.manifest.id)
+            installedBundledIDs.insert(entry.manifest.id)
+        }
+        suite?.set(Array(seeded).sorted(), forKey: "appsBundledSeeded")
     }
 
     /// Install a bundled app: live, no download, starts immediately.
@@ -272,7 +334,9 @@ final class AppsManager: ObservableObject {
         persistEnabled()
         installed.runtime.start()
         // The footer is the user's: nothing claims a slot on install. Its page
-        // (and the store's Footer card) offer the toggle.
+        // (and the store's Footer card) offer the toggle. A tab is the app's
+        // whole face, though, so that does go on the bar.
+        if entry.manifest.surfaces.panelTab != nil { TabBarConfig.shared.add(.app(entry.manifest.id)) }
         surfacesChanged()
     }
 
@@ -467,6 +531,7 @@ final class AppsManager: ObservableObject {
         if case .bundled(_, let onUninstall) = app.kind {
             // Nothing on disk but its data dir; its settings live in the suite.
             installedBundledIDs.remove(app.id)
+            BundledApps.entry(app.id)?.onRemove()
             if !keepData { try? fm.removeItem(at: dir); onUninstall() }
         } else if keepData {
             for sub in ["bin", "manifest.json", "meta.json", "app.log"] {

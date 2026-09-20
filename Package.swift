@@ -22,7 +22,11 @@ let package = Package(
         .library(name: "TemperHelperCore", targets: ["TemperHelperCore"]),
         // NotchKit: the brand-neutral notch-companion engine + built-in modules,
         // built on PanelKit chrome. Reusable like the other kits.
-        .library(name: "NotchKit", targets: ["NotchKit"])
+        .library(name: "NotchKit", targets: ["NotchKit"]),
+        // TapKit: the shared audio engine (Core Audio process taps) behind every
+        // audio app. One hub owns the taps, so Decant and Sommelier never need
+        // each other installed and never fight over a process.
+        .library(name: "TapKit", targets: ["TapKit"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
@@ -101,9 +105,14 @@ let package = Package(
                 .product(name: "DynamicNotchKit", package: "DynamicNotchKit")
             ]
         ),
+        // Per-app audio without a virtual device: process taps, the private
+        // aggregate devices that replay them, app grouping, and the hub that
+        // arbitrates between the apps using them. No UI.
+        .target(name: "TapKit"),
         .executableTarget(
             name: "Oxine",
             dependencies: [
+                "TapKit",
                 "SousShared",
                 "PanelKit",
                 "SousKit",
