@@ -18,6 +18,8 @@ public final class NotchController: ObservableObject {
     /// A transient system HUD (volume / brightness) taking over the compact ears.
     /// Highest priority of the collapsed-notch overlays.
     @Published public private(set) var hud: NotchHUD?
+    /// Hex colors requested by apps with unread items that need persistent attention.
+    @Published public private(set) var attentionColors: [String] = []
 
     public let modules: [any NotchModule]
 
@@ -45,7 +47,14 @@ public final class NotchController: ObservableObject {
     public var idleModule: (any NotchModule)? { idleModuleID.flatMap(module) }
 
     /// Select which tab is active (from the tab bar).
-    public func select(_ id: String) { activeModuleID = id }
+    public func select(_ id: String) {
+        activeModuleID = id
+        module(id)?.requestFocus()
+    }
+
+    public func setAttentionColors(_ colors: [String]) {
+        if colors != attentionColors { attentionColors = colors }
+    }
 
     /// Flash a sneak-peek line beside the cutout for a couple of seconds.
     public func peek(_ text: String, seconds: TimeInterval = 2.5) {

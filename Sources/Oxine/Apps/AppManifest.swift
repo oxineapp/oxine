@@ -36,7 +36,18 @@ struct AppManifest: Codable, Equatable, Sendable {
         struct PanelTabDecl: Codable, Equatable, Sendable { var icon: String? = nil; var title: String? = nil }
         struct SettingsDecl: Codable, Equatable, Sendable { var subtitle: String? = nil }
         struct QuickToggleDecl: Codable, Equatable, Sendable { var icon: String? = nil; var tooltip: String? = nil; var menu: Bool? = nil }
-        struct NotchTabDecl: Codable, Equatable, Sendable { var icon: String? = nil; var title: String? = nil }
+        /// `height` is the preferred expanded content height in points. Older
+        /// hosts ignore the additive field; current hosts clamp it to a safe
+        /// 100...360 range so one app cannot take over the screen.
+        struct NotchTabDecl: Codable, Equatable, Sendable {
+            var icon: String? = nil
+            var title: String? = nil
+            /// Optional tab-button side. Unknown and omitted values stay left.
+            var placement: String? = nil
+            var height: Double? = nil
+            /// Optional content inset for dense, app-like surfaces.
+            var padding: Double? = nil
+        }
         struct BarMetricDecl: Codable, Equatable, Sendable { var label: String? = nil }
     }
 

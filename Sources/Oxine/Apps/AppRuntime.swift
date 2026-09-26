@@ -1,4 +1,5 @@
 import Foundation
+import AppScrollCore
 import SwiftUI
 
 /// The live state of one running app: its rendered surface trees, quick-toggle
@@ -23,6 +24,7 @@ final class AppRuntime: ObservableObject {
     /// Runtime health, surfaced in the store ("crashed 3× — disabled").
     @Published private(set) var runtimeError: String?
     @Published private(set) var running = false
+    @Published private(set) var attentionColors: [String] = []
 
     private var backend: (any AppBackend)?
     private var subTimers: [String: Timer] = [:]
@@ -34,6 +36,9 @@ final class AppRuntime: ObservableObject {
     private var peekRefillAt = Date()
     /// Last user interaction with one of this app's surfaces (gates openURL).
     private var lastUserEventAt: Date?
+    /// Scroll positions live outside the transient notch view so collapsing and
+    /// reopening a remote chat does not reset the reader to the newest message.
+    private var chatScrollOffsets = ChatScrollOffsetStore()
 
     init(app: OxApp) { self.app = app }
 
@@ -68,6 +73,8 @@ final class AppRuntime: ObservableObject {
         running = false
         trees = [:]
         toggleActive = false; toggleText = nil; toggleMenu = []; toggleWarning = false
+        attentionColors = []
+        NotchCoordinator.shared.setAttention(appID: app.id, colors: [])
     }
 
     private func handleTermination(_ code: Int32) {
@@ -75,6 +82,8 @@ final class AppRuntime: ObservableObject {
         running = false
         subTimers.values.forEach { $0.invalidate() }
         subTimers = [:]
+        attentionColors = []
+        NotchCoordinator.shared.setAttention(appID: app.id, colors: [])
         let now = Date()
         crashTimes = crashTimes.filter { now.timeIntervalSince($0) < 300 } + [now]
         if crashTimes.count >= 3 {
@@ -100,6 +109,14 @@ final class AppRuntime: ObservableObject {
         backend?.send(.lifecycle(phase: phase, surface: surface))
     }
 
+    func chatScrollOffset(for key: String) -> CGFloat? {
+        chatScrollOffsets.offset(for: key)
+    }
+
+    func saveChatScrollOffset(_ offset: CGFloat, for key: String) {
+        chatScrollOffsets.save(offset, for: key)
+    }
+
     // MARK: - App → host
 
     private func handle(_ msg: AppMessage) {
@@ -107,7 +124,10 @@ final class AppRuntime: ObservableObject {
         case .ready:
             break
         case .view(let surface, let body):
-            trees[surface] = body
+            // Polling apps often resend an identical tree. Avoid invalidating
+            // the entire SwiftUI hierarchy (and its hover/scroll state) unless
+            // something the user can actually see changed.
+            if trees[surface] != body { trees[surface] = body }
         case .toggle(let active, let icon, let text, let menu, let warning):
             toggleActive = active
             toggleIcon = icon
@@ -120,6 +140,10 @@ final class AppRuntime: ObservableObject {
         case .peek(let text, _):
             guard app.manifest.surfaces.peek == true, admitPeek() else { return }
             NotchCoordinator.shared.peek(text)
+        case .attention(let colors):
+            let valid = colors.filter(Self.isHexColor).prefix(16)
+            attentionColors = Array(valid)
+            NotchCoordinator.shared.setAttention(appID: app.id, colors: attentionColors)
         case .call(let id, let fn, let args):
             let (data, error) = AppCapabilityBroker.shared.call(
                 fn: fn, args: args, appID: app.id, grants: app.grants,
@@ -162,5 +186,10 @@ final class AppRuntime: ObservableObject {
         guard peekTokens >= 1 else { return false }
         peekTokens -= 1
         return true
+    }
+
+    private static func isHexColor(_ value: String) -> Bool {
+        guard value.count == 7, value.first == "#" else { return false }
+        return value.dropFirst().allSatisfy { $0.isHexDigit }
     }
 }

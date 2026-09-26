@@ -38,7 +38,9 @@ let package = Package(
         // Pure lyric plumbing (LRC parsing, line lookup, overlay layout math):
         // no AppKit, so it stays unit-testable in isolation.
         .target(name: "LyricsCore"),
+        .target(name: "AppScrollCore"),
         .testTarget(name: "LyricsCoreTests", dependencies: ["LyricsCore"]),
+        .testTarget(name: "AppScrollCoreTests", dependencies: ["AppScrollCore"]),
         .testTarget(name: "NotchKitTests", dependencies: ["NotchKit", "LyricsCore"]),
         // Types shared verbatim across the app↔daemon XPC boundary.
         .target(
@@ -112,6 +114,7 @@ let package = Package(
         .executableTarget(
             name: "Oxine",
             dependencies: [
+                "AppScrollCore",
                 "TapKit",
                 "SousShared",
                 "PanelKit",

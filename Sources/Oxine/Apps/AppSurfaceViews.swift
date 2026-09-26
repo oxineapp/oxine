@@ -70,17 +70,29 @@ struct AppQuickToggleButton: View {
 struct AppTabView: View {
     @ObservedObject var runtime: AppRuntime
 
+    private var usesFixedLayout: Bool {
+        runtime.trees["panelTab"]?.first?.type == "chatLayout"
+    }
+
     var body: some View {
         // At least as tall as the tab, so top-level `spacer` nodes have room to
         // push: a short tab can centre its content or pin a section to the
         // bottom instead of huddling under the tab bar. Taller trees scroll.
         GeometryReader { geo in
-            ScrollView {
+            if usesFixedLayout {
                 VStack(alignment: .leading, spacing: 12) {
                     AppViewRenderer(runtime: runtime, surface: "panelTab")
                 }
                 .padding(12)
-                .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: geo.size.height, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        AppViewRenderer(runtime: runtime, surface: "panelTab")
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
+                }
             }
         }
         .onAppear { runtime.sendLifecycle(phase: "activate", surface: "panelTab") }
@@ -99,6 +111,12 @@ final class RemoteNotchModule: NotchModule {
     var id: String { "app:\(app.id)" }
     var title: String { app.manifest.surfaces.notchTab?.title ?? app.name }
     var icon: String { app.manifest.surfaces.notchTab?.icon ?? app.icon }
+    var tabPlacement: NotchTabPlacement {
+        app.manifest.surfaces.notchTab?.placement?.lowercased() == "right" ? .right : .left
+    }
+    var expandedHeight: CGFloat {
+        min(max(CGFloat(app.manifest.surfaces.notchTab?.height ?? 100), 100), 360)
+    }
     var onIdleChange: (() -> Void)?
 
     func expandedView() -> AnyView {
@@ -106,10 +124,12 @@ final class RemoteNotchModule: NotchModule {
             VStack(alignment: .leading, spacing: 8) {
                 AppViewRenderer(runtime: app.runtime, surface: "notchTab")
             }
-            .padding(10)
+            .padding(min(max(CGFloat(app.manifest.surfaces.notchTab?.padding ?? 10), 0), 16))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
     }
 
     func activate() { app.runtime.sendLifecycle(phase: "activate", surface: "notchTab") }
     func deactivate() { app.runtime.sendLifecycle(phase: "deactivate", surface: "notchTab") }
+    func requestFocus() { app.runtime.sendLifecycle(phase: "focus", surface: "notchTab") }
 }

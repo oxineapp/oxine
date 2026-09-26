@@ -61,6 +61,7 @@ public final class NotchPresenter {
     }
     private var openTrigger: OpenTrigger = .hover
     private var clickMonitors: [Any] = []
+    private var focusAfterExpansion = false
     /// The tab we auto-switched away from for a drag, so we can switch back when
     /// the drag ends. nil when we haven't auto-flipped.
     private var autoFlippedFrom: String?
@@ -96,9 +97,10 @@ public final class NotchPresenter {
         let hub = PeekHub(nowPlaying: home?.nowPlaying)
         hub.start()
         self.peekHub = hub
-        // The opt-in bar outline (click-through, hidden in fullscreen).
-        if hasNotch && PeekContent.barEnabled {
-            let bar = NotchBarOverlay(hub: hub, screen: screen)
+        // The click-through outline is also used for persistent app attention.
+        // Metric fill remains opt-in; an unread-contact pulse can wake the bar.
+        if hasNotch {
+            let bar = NotchBarOverlay(hub: hub, screen: screen, baseEnabled: PeekContent.barEnabled)
             bar.start()
             self.barOverlay = bar
         }
@@ -137,6 +139,9 @@ public final class NotchPresenter {
                 guard let self else { return }
                 self.barOverlay?.setSuppressed(self.controller.hud != nil || peek != nil)
             }
+            .store(in: &cancellables)
+        controller.$attentionColors
+            .sink { [weak self] colors in self?.barOverlay?.setAttentionColors(colors) }
             .store(in: &cancellables)
 
         // Sneak peek: flash the new track's title beside the cutout on change.
@@ -229,10 +234,18 @@ public final class NotchPresenter {
     /// a global monitor (mouse events need no permission) plus a local one for
     /// the rare case our own window is live.
     private func startClickTracking() {
-        guard openTrigger != .hover else { return }
         let handler: (NSEvent) -> Void = { [weak self] event in
-            guard let self, let screen = self.screen, !self.wantExpanded,
+            guard let self, let screen = self.screen,
                   self.closedRegion(screen).contains(NSEvent.mouseLocation) else { return }
+            if self.openTrigger == .hover {
+                if self.wantExpanded {
+                    self.controller.activeModule?.requestFocus()
+                } else {
+                    self.focusAfterExpansion = true
+                }
+                return
+            }
+            guard !self.wantExpanded else { return }
             if self.openTrigger == .commandClick, !event.modifierFlags.contains(.command) { return }
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
             self.wantExpanded = true
@@ -380,7 +393,8 @@ public final class NotchPresenter {
         let f = screen.frame
         let n = NotchGeometry.notchFrame(for: screen)
         let w = NotchExpandedRoot.openWidth(tabs: controller.modules.count, notchWidth: n.width)
-        let h = n.height + NotchExpandedRoot.openHeightBelowNotch
+        let h = n.height + NotchExpandedRoot.openHeightBelowNotch(
+            contentHeight: controller.activeModule?.expandedHeight ?? NotchExpandedRoot.baseContentHeight)
         return CGRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h + topSlop)
     }
 
@@ -402,6 +416,12 @@ public final class NotchPresenter {
                 if target {
                     barOverlay?.setExpanded(true)
                     await notch.expand(on: screen)
+                    // Click-triggered opening should be immediately usable. In
+                    // hover mode, a click on the physical cutout sets the flag.
+                    if openTrigger != .hover || focusAfterExpansion {
+                        focusAfterExpansion = false
+                        controller.activeModule?.requestFocus()
+                    }
                 } else {
                     await notch.compact(on: screen)
                     // Fully minimised now — bring the bar back unless we've since

@@ -29,6 +29,8 @@ enum AppMessage: Sendable {
     case metric(value: Double, text: String?)
     /// Request a transient notch peek. Rate-limited by the host.
     case peek(text: String, icon: String?)
+    /// Persistent notch attention colors. An empty array clears the pulse.
+    case attention(colors: [String])
     /// Capability call; host answers with `.ret` carrying the same id.
     case call(id: Int, fn: String, args: JSONValue?)
     /// Subscribe to a capability stream at ~hz (host clamps).
@@ -65,6 +67,9 @@ enum AppMessage: Sendable {
         case "peek":
             guard let text = v["text"]?.stringValue else { return nil }
             return .peek(text: text, icon: v["icon"]?.stringValue)
+        case "attention":
+            let colors = v["colors"]?.arrayValue?.compactMap(\.stringValue) ?? []
+            return .attention(colors: colors)
         case "call":
             guard let id = v["id"]?.numberValue, let fn = v["fn"]?.stringValue else { return nil }
             return .call(id: Int(id), fn: fn, args: v["args"])

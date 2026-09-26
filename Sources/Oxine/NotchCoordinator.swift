@@ -13,6 +13,7 @@ final class NotchCoordinator {
     private var controller: NotchController?
     private var presenter: NotchPresenter?
     private let suite = UserDefaults(suiteName: "com.oxine.settings")
+    private var attentionByApp: [String: [String]] = [:]
 
     private init() {}
 
@@ -73,6 +74,12 @@ final class NotchCoordinator {
         controller?.peek(text)
     }
 
+    func setAttention(appID: String, colors: [String]) {
+        if colors.isEmpty { attentionByApp.removeValue(forKey: appID) }
+        else { attentionByApp[appID] = colors }
+        controller?.setAttentionColors(attentionByApp.keys.sorted().flatMap { attentionByApp[$0] ?? [] })
+    }
+
 
     /// Tear down and (re)build from the current settings — covers enable/disable
     /// and the faux-notch toggle in one path.
@@ -92,6 +99,7 @@ final class NotchCoordinator {
         ]
         modules.append(contentsOf: AppsManager.shared.notchTabApps.map { RemoteNotchModule(app: $0) })
         let controller = NotchController(modules: modules)
+        controller.setAttentionColors(attentionByApp.keys.sorted().flatMap { attentionByApp[$0] ?? [] })
         let presenter = NotchPresenter(controller: controller, allowFauxNotch: fauxOnExternal)
         self.controller = controller
         self.presenter = presenter

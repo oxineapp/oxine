@@ -41,6 +41,7 @@ enum NotchBarMetrics {
 final class NotchBarOverlay {
     private let hub: PeekHub
     private let screen: NSScreen
+    private let baseEnabled: Bool
     private var panel: NSPanel?
     private var timer: Timer?
     /// Set by the presenter: the notch is open, so the bar (which traces the
@@ -70,9 +71,10 @@ final class NotchBarOverlay {
 
     private var bag = Set<AnyCancellable>()
 
-    init(hub: PeekHub, screen: NSScreen) {
+    init(hub: PeekHub, screen: NSScreen, baseEnabled: Bool = true) {
         self.hub = hub
         self.screen = screen
+        self.baseEnabled = baseEnabled
     }
 
     func start() {
@@ -101,7 +103,8 @@ final class NotchBarOverlay {
     /// True whenever the bar should not be on screen (notch open, a takeover owns
     /// the ears, or the post-takeover settle window hasn't elapsed).
     private var isHidden: Bool {
-        expanded || suppressed || (holdHiddenUntil.map { Date() < $0 } ?? false)
+        expanded || suppressed || (!baseEnabled && fill.attentionColors.isEmpty)
+            || (holdHiddenUntil.map { Date() < $0 } ?? false)
     }
 
     /// Read the selected metric(s) into the fill model — the only place that touches
@@ -109,6 +112,8 @@ final class NotchBarOverlay {
     /// most ~2×/sec instead of on every hub publish.
     private func refreshFill() {
         guard !isHidden else { return }   // nothing visible to update
+        fill.updateAttention(at: Date())
+        guard baseEnabled else { return }
         func value(_ c: BarMetricChoice) -> Double {
             switch c {
             case .builtin(let m):
@@ -133,6 +138,12 @@ final class NotchBarOverlay {
         bag.removeAll()
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    func setAttentionColors(_ colors: [String]) {
+        fill.setAttentionColors(colors)
+        refreshFill()
+        tick()
     }
 
     private func build() {
@@ -278,6 +289,27 @@ final class NotchBarOverlay {
 final class BarFillModel: ObservableObject {
     @Published var primary: Double = 0
     @Published var secondary: Double = 0
+    @Published private(set) var attentionColors: [String] = []
+    @Published private(set) var attentionColorHex: String?
+    @Published private(set) var attentionOpacity: Double = 0
+
+    func setAttentionColors(_ colors: [String]) {
+        attentionColors = colors
+        updateAttention(at: Date())
+    }
+
+    func updateAttention(at date: Date) {
+        guard !attentionColors.isEmpty else {
+            attentionColorHex = nil
+            attentionOpacity = 0
+            return
+        }
+        let seconds = date.timeIntervalSince1970
+        let index = Int(seconds / 4.0) % attentionColors.count
+        attentionColorHex = attentionColors[index]
+        let phase = seconds.truncatingRemainder(dividingBy: 3.2) / 3.2
+        attentionOpacity = 0.28 + 0.72 * (0.5 - 0.5 * cos(phase * 2 * .pi))
+    }
 }
 
 /// The silhouette progress bar: a dim full-length track with a bright fill that
@@ -298,7 +330,9 @@ private struct NotchBarView: View {
             NotchBarShape()
                 .stroke(Color.white.opacity(debug ? 0.4 : 0.14),
                         style: StrokeStyle(lineWidth: lw, lineCap: .round))
-            if debug {
+            if !fill.attentionColors.isEmpty, !debug {
+                AttentionPulseStroke(colors: fill.attentionColors)
+            } else if debug {
                 stroke(tint: .red, lw: lw)
             } else if BarMetric.splitEnabled {
                 // Each half fills from its outer edge inward to the centre.
@@ -332,6 +366,62 @@ private struct NotchBarView: View {
                 LinearGradient(colors: [tint, tint.opacity(debug ? 1 : 0.8)],
                                startPoint: .leading, endPoint: .trailing),
                 style: StrokeStyle(lineWidth: lw, lineCap: .round))
+    }
+}
+
+/// Draws attention at display cadence. The overlay's data timer intentionally
+/// stays at 2 Hz for efficiency; deriving the breathing curve from TimelineView
+/// avoids the visible half-second opacity steps without polling wacli or sensors
+/// any faster. Each contact gets one complete, eased breath before the next.
+private struct AttentionPulseStroke: View {
+    let colors: [String]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 30.0)) { timeline in
+            let seconds = timeline.date.timeIntervalSince1970
+            let pulse = AttentionPulseCurve.state(at: seconds, colorCount: colors.count,
+                                                  reduceMotion: reduceMotion)
+            let hex = colors.isEmpty ? "#FFFFFF" : colors[pulse.colorIndex]
+            let color = Color(hexRGB: hex) ?? .white
+
+            NotchBarShape()
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .opacity(pulse.opacity)
+                .shadow(color: color.opacity(pulse.opacity * 0.72), radius: 3 + 3 * pulse.eased)
+        }
+    }
+}
+
+struct AttentionPulseState: Equatable {
+    let colorIndex: Int
+    let eased: Double
+    let opacity: Double
+}
+
+enum AttentionPulseCurve {
+    static let cycle: TimeInterval = 3.6
+
+    static func state(at seconds: TimeInterval, colorCount: Int,
+                      reduceMotion: Bool = false) -> AttentionPulseState {
+        let count = max(colorCount, 1)
+        let cycleIndex = Int(floor(seconds / cycle))
+        let phase = seconds.truncatingRemainder(dividingBy: cycle) / cycle
+        let eased = 0.5 - 0.5 * cos(phase * 2 * .pi)
+        return AttentionPulseState(
+            colorIndex: cycleIndex % count,
+            eased: eased,
+            opacity: reduceMotion ? 0.62 : 0.14 + 0.82 * eased)
+    }
+}
+
+private extension Color {
+    init?(hexRGB value: String) {
+        guard value.count == 7, value.first == "#",
+              let rgb = UInt64(value.dropFirst(), radix: 16) else { return nil }
+        self.init(red: Double((rgb >> 16) & 0xff) / 255,
+                  green: Double((rgb >> 8) & 0xff) / 255,
+                  blue: Double(rgb & 0xff) / 255)
     }
 }
 
