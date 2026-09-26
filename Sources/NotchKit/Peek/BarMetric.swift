@@ -69,3 +69,59 @@ public extension NotchKit {
     /// Read on the main actor.
     @MainActor static var fanReadout: (() -> MetricReadout?)?
 }
+
+// MARK: - App-contributed metrics
+
+/// A bar metric contributed by an Oxine app (or any host feature) beyond the
+/// built-in enum. `id` is the token persisted in the metric settings
+/// ("app:<app-id>"); `readout` is polled at the bar's cadence.
+public struct ExternalBarMetric: Identifiable {
+    public let id: String
+    public let label: String
+    public let color: Color
+    public let readout: @MainActor () -> MetricReadout?
+
+    public init(id: String, label: String, color: Color,
+                readout: @escaping @MainActor () -> MetricReadout?) {
+        self.id = id
+        self.label = label
+        self.color = color
+        self.readout = readout
+    }
+}
+
+public extension NotchKit {
+    /// Host-supplied provider of app-contributed bar metrics (NotchKit stays
+    /// apps-system-free, same pattern as `fanReadout`).
+    @MainActor static var externalBarMetrics: (() -> [ExternalBarMetric])?
+
+    @MainActor static func externalBarMetric(id: String) -> ExternalBarMetric? {
+        externalBarMetrics?().first { $0.id == id }
+    }
+}
+
+/// A stored bar-metric token resolved: one of the built-ins, or an external id.
+/// The overlay reads through this so app metrics slot in transparently.
+public enum BarMetricChoice {
+    case builtin(BarMetric)
+    case external(String)
+
+    public static func parse(_ raw: String) -> BarMetricChoice {
+        if let b = BarMetric(rawValue: raw) { return .builtin(b) }
+        return .external(raw)
+    }
+
+    @MainActor public static var selected: BarMetricChoice {
+        parse(NotchKit.settingsDefaults.string(forKey: "notchBarMetric") ?? "cpu")
+    }
+    @MainActor public static var secondary: BarMetricChoice {
+        parse(NotchKit.settingsDefaults.string(forKey: "notchBarMetricRight") ?? "gpu")
+    }
+
+    @MainActor public var color: Color {
+        switch self {
+        case .builtin(let m):   return m.color
+        case .external(let id): return NotchKit.externalBarMetric(id: id)?.color ?? .panelAccent
+        }
+    }
+}

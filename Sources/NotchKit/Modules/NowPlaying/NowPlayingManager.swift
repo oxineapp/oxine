@@ -15,9 +15,16 @@ public final class NowPlayingManager: ObservableObject {
     @Published public private(set) var elapsedAt: Date = .init()
 
     @Published public private(set) var selectedPlayer: PlaybackPlayer
+    /// The sources worth offering right now: Automatic, plus each player that is
+    /// actually running. With only Automatic there is nothing to switch to, so
+    /// the switch hides; a pinned player that quits falls back to Automatic
+    /// rather than leaving the notch stuck on "Nothing playing in …".
+    @Published public private(set) var availablePlayers: [PlaybackPlayer] = [.automatic]
     private var source: NowPlayingSource
     private let makeSource: ((PlaybackPlayer) -> NowPlayingSource)?
     private let saveSelection: ((PlaybackPlayer) -> Void)?
+    private let availability: () -> Set<PlaybackPlayer>
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var sourceGeneration = UUID()
     private var started = false
 
@@ -32,17 +39,51 @@ public final class NowPlayingManager: ObservableObject {
             return ScriptingBridgeSource(player: player)
         }
         self.init(source: factory(selection), selectedPlayer: selection, makeSource: factory,
-                  saveSelection: { defaults.set($0.rawValue, forKey: "notchPlaybackPlayer") })
+                  saveSelection: { defaults.set($0.rawValue, forKey: "notchPlaybackPlayer") },
+                  availability: Self.runningPlayers)
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            workspaceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshAvailability() }
+            })
+        }
     }
 
+    /// `availability` answers which explicit players can be offered (tests
+    /// default to all of them; the app asks the workspace what's running).
     init(source: NowPlayingSource, selectedPlayer: PlaybackPlayer = .automatic,
          makeSource: ((PlaybackPlayer) -> NowPlayingSource)? = nil,
-         saveSelection: ((PlaybackPlayer) -> Void)? = nil) {
+         saveSelection: ((PlaybackPlayer) -> Void)? = nil,
+         availability: @escaping () -> Set<PlaybackPlayer> = { Set(PlaybackPlayer.allCases) }) {
         self.source = source
         self.selectedPlayer = selectedPlayer
         self.makeSource = makeSource
         self.saveSelection = saveSelection
+        self.availability = availability
         observeSource()
+        refreshAvailability()
+    }
+
+    // Workspace observers are removed in `stop()` (the manager lives as long as
+    // its notch); a nonisolated deinit can't touch actor state.
+
+    private static func runningPlayers() -> Set<PlaybackPlayer> {
+        let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+        return Set(PlaybackPlayer.allCases.filter { $0.bundleIdentifier.map(running.contains) ?? true })
+    }
+
+    private func refreshAvailability() {
+        let now = availability().union([.automatic])
+        let ordered = PlaybackPlayer.allCases.filter(now.contains)
+        if ordered != availablePlayers { availablePlayers = ordered }
+        if !now.contains(selectedPlayer) { selectPlayer(.automatic) }
+    }
+
+    /// What one click of the switch would move to (the next available source).
+    public var nextPlayer: PlaybackPlayer {
+        let players = availablePlayers
+        guard let index = players.firstIndex(of: selectedPlayer) else { return players.first ?? .automatic }
+        return players[(index + 1) % players.count]
     }
 
     private func observeSource() {
@@ -66,10 +107,29 @@ public final class NowPlayingManager: ObservableObject {
     }
 
     /// Change observation and transport together, without starting/stopping playback.
+    /// Bring the app that's playing to the front (launching it if the track's
+    /// bundle id names an installed app that isn't running).
+    public func openPlayerApp() {
+        let ws = NSWorkspace.shared
+        let hint = track?.app ?? selectedPlayer.bundleIdentifier
+        if let hint, hint.contains("."), let url = ws.urlForApplication(withBundleIdentifier: hint) {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            ws.openApplication(at: url, configuration: config)
+            return
+        }
+        if let hint, let running = ws.runningApplications.first(where: { $0.localizedName == hint || $0.bundleIdentifier == hint }) {
+            running.activate()
+            return
+        }
+        if let id = selectedPlayer.bundleIdentifier, let url = ws.urlForApplication(withBundleIdentifier: id) {
+            ws.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+
     public func cyclePlayer() {
-        let players = PlaybackPlayer.allCases
-        guard let index = players.firstIndex(of: selectedPlayer) else { return }
-        selectPlayer(players[(index + 1) % players.count])
+        guard availablePlayers.count > 1 else { return }
+        selectPlayer(nextPlayer)
     }
 
     public func selectPlayer(_ player: PlaybackPlayer) {
@@ -92,6 +152,8 @@ public final class NowPlayingManager: ObservableObject {
         source.start()
     }
     public func stop() {
+        for o in workspaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(o) }
+        workspaceObservers = []
         started = false
         sourceGeneration = UUID()
         source.onChange = nil

@@ -10,9 +10,9 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Tabs. The Notch step is
-    /// inserted only on Macs that have a hardware notch (for now).
-    static let baseStepCount = 6
+    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Apps, Tabs. The Notch
+    /// step is inserted only on Macs that have a hardware notch (for now).
+    static let baseStepCount = 7
     /// Only offer the notch on Macs that physically have one.
     private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
     private var stepCount: Int { hasNotch ? SetupView.baseStepCount + 1 : SetupView.baseStepCount }
@@ -65,10 +65,13 @@ struct SetupView: View {
                     Step4Sous().transition(stepTransition)
                 } else if currentStep == 4 {
                     Step5Temper().transition(stepTransition)
-                } else {
-                    // Step 5, reached only on notch Macs (else the leak/Tabs step
-                    // is last). Enable or disable the notch companion.
+                } else if currentStep == 5, hasNotch {
+                    // Notch Macs only: enable or disable the notch companion.
                     Step6Notch().transition(stepTransition)
+                } else {
+                    // The installable extras (ScreenLyrics, FnGestures); the
+                    // leak/Tabs step follows as the last one.
+                    Step7Apps(hasNotch: hasNotch).transition(stepTransition)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -720,6 +723,119 @@ struct Step6Notch: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
+    }
+}
+
+/// Apps step: a slice of the store. The heroes up top are the installable
+/// first-party apps as artwork cards with Get right on them, paged sideways
+/// when there are two; under them, the four apps already built in, so the
+/// step says both "here is what you can add" and "here is what you have".
+/// Sized to fit the smallest panel without scrolling; a scroll view backs
+/// it up on a very short window.
+struct Step7Apps: View {
+    var hasNotch: Bool
+    @ObservedObject private var manager = AppsManager.shared
+    private var accent: Color { .panelAccent }
+    private static let green = Color(red: 0.3, green: 0.85, blue: 0.5)
+
+    private var featured: [BundledApps.Entry] {
+        (hasNotch ? ["oxine.screenlyrics", "oxine.fngestures"] : ["oxine.fngestures"])
+            .compactMap(BundledApps.entry)
+    }
+    private var builtins: [OxApp] {
+        ["oxine.sous", "oxine.temper", "oxine.caffeine", "oxine.focus"].compactMap(manager.app)
+    }
+
+    private var heroes: [StoreHeroItem] {
+        featured.map { entry in
+            let m = entry.manifest
+            let installed = manager.app(m.id) != nil
+            return StoreHeroItem(
+                id: m.id,
+                kicker: installed ? "Made by Oxine" : "New from Oxine",
+                name: m.name, author: m.author, tagline: m.tagline ?? "",
+                icon: m.icon ?? "shippingbox", tint: AppArt.tint(for: m.id),
+                action: action(entry, installed: installed))
+        }
+    }
+
+    private func action(_ entry: BundledApps.Entry, installed: Bool) -> StoreAction {
+        if entry.manifest.id == "oxine.fngestures", installed, !FnGestureEngine.accessibilityGranted {
+            return .grant { FnGestureEngine.requestAccessibility() }
+        }
+        if installed { return .installed }
+        return .get {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
+        }
+    }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 14) {
+                header
+                StoreHeroCarousel(items: heroes, height: 150)
+                    .padding(.top, 2)
+                builtinStrip
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var header: some View {
+        VStack(spacing: 5) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 24))
+                .foregroundColor(accent)
+                .padding(.bottom, 2)
+            Text("Apps")
+                .font(.system(size: 19, weight: .bold))
+                .foregroundColor(.white)
+            Text("Add-ons with their own page and only the access they declare. The whole store lives in Settings → Apps.")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The built-ins as a strip of small tiles: already installed, nothing to do.
+    private var builtinStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Already in")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                Text("Built in and on by default")
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.white.opacity(0.4))
+                Spacer()
+            }
+            .padding(.horizontal, 2)
+            HStack(spacing: 8) {
+                ForEach(builtins) { app in builtinTile(app) }
+            }
+        }
+    }
+
+    private func builtinTile(_ app: OxApp) -> some View {
+        VStack(spacing: 6) {
+            AppIconTile(symbol: app.icon, size: 32)
+            Text(app.name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark").font(.system(size: 7.5, weight: .bold))
+                Text("Installed")
+            }
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(Self.green.opacity(0.9))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
     }
 }
 

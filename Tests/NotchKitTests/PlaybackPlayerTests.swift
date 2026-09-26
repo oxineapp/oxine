@@ -86,9 +86,9 @@ func selectionBeforeStartIsRememberedWithoutStartingAnObserver() {
 
 @MainActor @Test
 func pinnedSpotifyNeverQueriesMusicAndControlsSpotifyEvenWhenPaused() {
-    var scripts: [String] = []
+    let log = ScriptLog()
     let source = ScriptingBridgeSource(player: .spotify) { script in
-        scripts.append(script)
+        log.scripts.append(script)
         return playbackDescriptor(state: "paused", elapsed: 20, duration: 180000)
     }
     var track: NowPlayingTrack?
@@ -97,25 +97,32 @@ func pinnedSpotifyNeverQueriesMusicAndControlsSpotifyEvenWhenPaused() {
     #expect(track?.app == "Spotify" && track?.isPlaying == false)
     #expect(track?.duration == 180 && track?.elapsed == 20)
     source.playPause(); source.next(); source.previous(); source.seek(to: 45)
-    #expect(scripts.allSatisfy { $0.contains("application \"Spotify\"") && !$0.contains("application \"Music\"") })
-    #expect(scripts.contains { $0.contains("set player position to 45.0") })
+    #expect(log.scripts.allSatisfy { $0.contains("application \"Spotify\"") && !$0.contains("application \"Music\"") })
+    #expect(log.scripts.contains { $0.contains("set player position to 45.0") })
     source.stop()
 }
 
 @MainActor @Test
 func missingPinnedMusicDoesNotFallBackToSpotify() {
-    var scripts: [String] = []
+    let log = ScriptLog()
     let source = ScriptingBridgeSource(player: .music) { script in
-        scripts.append(script)
+        log.scripts.append(script)
         return NSAppleEventDescriptor(string: "stopped")
     }
     let manager = NowPlayingManager(source: source, selectedPlayer: .music)
     manager.start()
     #expect(manager.track == nil)
-    #expect(scripts.count == 1 && scripts[0].contains("application \"Music\""))
+    #expect(log.scripts.count == 1 && log.scripts[0].contains("application \"Music\""))
     manager.playPause()
-    #expect(scripts.count == 1)
+    #expect(log.scripts.count == 1)
     manager.stop()
+}
+
+/// Records the scripts a `ScriptingBridgeSource` runs. The executor is
+/// `@Sendable` (production runs it off-main), so the log is a lock-free box the
+/// inline test executor writes and the test reads back on the same thread.
+private final class ScriptLog: @unchecked Sendable {
+    var scripts: [String] = []
 }
 
 private func playbackDescriptor(state: String = "playing", elapsed: Double, duration: Double,
@@ -147,10 +154,12 @@ func numericSpotifyPositionDrivesLyricsWithoutLocaleOrNewlineCoercion() throws {
 
 @MainActor @Test
 func unavailableNumericPositionDoesNotInventLyricsAtZero() {
-    let result = playbackDescriptor(elapsed: 30, duration: 200)
-    result.remove(at: 5)
-    result.insert(NSAppleEventDescriptor.null(), at: 5)
-    let source = ScriptingBridgeSource(player: .music) { _ in result }
+    let source = ScriptingBridgeSource(player: .music) { _ in
+        let result = playbackDescriptor(elapsed: 30, duration: 200)
+        result.remove(at: 5)
+        result.insert(NSAppleEventDescriptor.null(), at: 5)
+        return result
+    }
     let manager = NowPlayingManager(source: source, selectedPlayer: .music)
     manager.start()
     #expect(manager.track?.hasPlaybackPosition == false)

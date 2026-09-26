@@ -31,6 +31,12 @@ public enum NotchKit {
         self.branding = branding
     }
 
+    /// Optional live audio for the music visualiser: given a bar count, returns
+    /// that many 0…1 band levels for what the Mac is playing right now, or nil
+    /// when the host can't (or may not) listen. NotchKit asks once per frame and
+    /// only while bars are on screen; nil falls back to the built-in animation.
+    @MainActor public static var audioBands: ((Int) -> [Float]?)?
+
     /// The configured settings suite (or `.standard` if it can't be opened).
     public static var settingsDefaults: UserDefaults {
         UserDefaults(suiteName: branding.settingsSuite) ?? .standard

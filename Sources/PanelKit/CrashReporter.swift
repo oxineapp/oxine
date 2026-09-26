@@ -17,8 +17,10 @@ public enum CrashReporter {
     /// ingest token ships in the app, so it's effectively public; it only permits
     /// *submitting* a crash. Viewing is gated by a separate admin token that
     /// lives only on the server.
-    static let endpoint = URL(string: "https://watchtower.justtype.io/ingest")!
-    static let ingestToken = "13e9106f084c6a6ed5c6de5b284951713aded4af6717eae1"
+    public static let baseURL = URL(string: "https://watchtower.justtype.io")!
+    static let endpoint = baseURL.appendingPathComponent("ingest")
+    /// Also gates the store's review posts (see `AppsManager`), same trust level.
+    public static let ingestToken = "13e9106f084c6a6ed5c6de5b284951713aded4af6717eae1"
 
     static var crashURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!

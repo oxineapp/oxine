@@ -109,16 +109,21 @@ final class NotchBarOverlay {
     /// most ~2×/sec instead of on every hub publish.
     private func refreshFill() {
         guard !isHidden else { return }   // nothing visible to update
-        func value(_ m: BarMetric) -> Double {
-            switch m {
-            case .cpu:    return hub.usage.cpu
-            case .gpu:    return hub.usage.gpu
-            case .fan:    return NotchKit.fanReadout?()?.fraction ?? 0
-            case .claude: return hub.claude.readout?.fraction ?? 0
+        func value(_ c: BarMetricChoice) -> Double {
+            switch c {
+            case .builtin(let m):
+                switch m {
+                case .cpu:    return hub.usage.cpu
+                case .gpu:    return hub.usage.gpu
+                case .fan:    return NotchKit.fanReadout?()?.fraction ?? 0
+                case .claude: return hub.claude.readout?.fraction ?? 0
+                }
+            case .external(let id):
+                return NotchKit.externalBarMetric(id: id)?.readout()?.fraction ?? 0
             }
         }
-        fill.primary = value(BarMetric.selected)
-        if BarMetric.splitEnabled { fill.secondary = value(BarMetric.secondary) }
+        fill.primary = value(BarMetricChoice.selected)
+        if BarMetric.splitEnabled { fill.secondary = value(BarMetricChoice.secondary) }
     }
 
     func stop() {
@@ -297,14 +302,14 @@ private struct NotchBarView: View {
                 stroke(tint: .red, lw: lw)
             } else if BarMetric.splitEnabled {
                 // Each half fills from its outer edge inward to the centre.
-                stroke(tint: BarMetric.selected.color, lw: lw)
+                stroke(tint: BarMetricChoice.selected.color, lw: lw)
                     .mask { reveal(0.5 * fill.primary, .leading) }
                     .animation(.easeInOut(duration: 0.55), value: fill.primary)
-                stroke(tint: BarMetric.secondary.color, lw: lw)
+                stroke(tint: BarMetricChoice.secondary.color, lw: lw)
                     .mask { reveal(0.5 * fill.secondary, .trailing) }
                     .animation(.easeInOut(duration: 0.55), value: fill.secondary)
             } else {
-                stroke(tint: BarMetric.selected.color, lw: lw)
+                stroke(tint: BarMetricChoice.selected.color, lw: lw)
                     .mask { reveal(fill.primary, .leading) }
                     .animation(.easeInOut(duration: 0.55), value: fill.primary)
             }
