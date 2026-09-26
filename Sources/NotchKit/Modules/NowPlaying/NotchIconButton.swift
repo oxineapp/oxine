@@ -45,14 +45,18 @@ final class NotchClickButton: NSButton {
         imagePosition = .imageOnly
         imageScaling = .scaleProportionallyDown
         setButtonType(.momentaryChange)
-        target = self
-        action = #selector(press)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    @objc private func press() { onPress?() }
+    /// The click goes straight to `onPress` instead of through the responder
+    /// chain's target/action dispatch, which needs a running NSApplication (and
+    /// a first responder) — neither of which a nonactivating panel guarantees.
+    override func sendAction(_ action: Selector?, to target: Any?) -> Bool {
+        onPress?()
+        return true
+    }
 
     override func rightMouseDown(with event: NSEvent) {
         guard let menu = contextMenu?() else { return }
@@ -75,7 +79,7 @@ final class PlaybackMenuItem: NSMenuItem {
 extension NowPlayingManager {
     func playbackMenu() -> NSMenu {
         let menu = NSMenu()
-        for player in PlaybackPlayer.allCases {
+        for player in availablePlayers {
             let item = PlaybackMenuItem(player: player, selected: player == selectedPlayer) { [weak self] in
                 self?.selectPlayer(player)
             }

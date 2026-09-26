@@ -40,6 +40,10 @@ public final class TemperManager: ObservableObject {
     @Published public private(set) var metrics = TemperMetrics()
     @Published public private(set) var status = TemperStatus()
     @Published public private(set) var menuTint: MenuTint = .none
+    /// Whether Temper is on. The app's backend drives this (`start()` on enable,
+    /// `stop()` on disable/uninstall); while off nothing reads sensors, nothing
+    /// is sent to the daemon, and every fan has been handed back to macOS.
+    @Published public private(set) var running = false
     /// User-arranged order of the Temper cards; persisted on change.
     @Published public var widgetOrder: [TemperWidget] { didSet { persistWidgetOrder() } }
     /// Which sensor key drives the big header temperature, or nil for "auto"
@@ -100,7 +104,7 @@ public final class TemperManager: ObservableObject {
         fansLinked = defaults.bool(forKey: fansLinkedKey)
         extendedSensors = defaults.bool(forKey: extendedSensorsKey)
         verboseSmart = defaults.bool(forKey: verboseSmartKey)
-        startPolling()
+        // Polling starts with `start()`, when the Temper app comes up.
         // Snappy tint updates the instant macOS changes thermal pressure.
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -114,6 +118,60 @@ public final class TemperManager: ObservableObject {
         }
     }
 
+    // MARK: Lifecycle
+
+    /// Temper on: start the metrics + daemon poll loop. Idempotent.
+    public func start() {
+        guard !running else { return }
+        running = true
+        startPolling()
+        reevaluateFastMetrics()
+    }
+
+    /// Temper off: stop polling and put every fan back on macOS's own curve.
+    /// The saved modes and curve are untouched, so turning Temper back on
+    /// restores them.
+    public func stop() {
+        guard running else { return }
+        running = false
+        pollTask?.cancel(); pollTask = nil
+        stopFastMetrics()
+        if helper.installState == .installed {
+            var released = config
+            released.fans = released.fans.map { var f = $0; f.mode = .default; return f }
+            helper.apply(released)
+        }
+        // Empty readings, so the bead tint and the notch's fan metric go quiet.
+        metrics = TemperMetrics()
+        status = TemperStatus()
+        menuTint = .none
+    }
+
+    /// Uninstall: release the fans, then remove the privileged helper (macOS
+    /// asks for the password). A no-op when the helper was never installed.
+    public func removeHelper() async {
+        stop()
+        await helper.refresh()
+        if helper.installState == .installed { await helper.uninstall() }
+    }
+
+    /// Forget every Temper setting (uninstall without "keep its settings").
+    public func resetSettings() {
+        stop()
+        config = TemperConfig()
+        widgetOrder = TemperWidget.allCases
+        displaySensorKey = nil
+        tempUnit = .celsius
+        fansLinked = false
+        extendedSensors = false
+        verboseSmart = false
+        // Last: the assignments above re-save through their didSets.
+        for key in [configKey, widgetOrderKey, displaySensorKey_, tempUnitKey,
+                    fansLinkedKey, extendedSensorsKey, verboseSmartKey] {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     /// Panel shown/hidden: stop or resume the fast UI refresh (and snap a fresh
     /// reading on reopen, since `.onAppear` won't fire again for an already-mounted
     /// view). The always-on `pollTask` keeps the control logic alive either way.
@@ -121,11 +179,11 @@ public final class TemperManager: ObservableObject {
         guard panelOpen != open else { return }
         panelOpen = open
         reevaluateFastMetrics()
-        if open { refreshNow() }
+        if open, running { refreshNow() }
     }
 
-    /// Fast metrics want both a mounted viewer and a visible panel.
-    private var fastMetricsWanted: Bool { activeViewers > 0 && panelOpen }
+    /// Fast metrics want Temper on, a mounted viewer and a visible panel.
+    private var fastMetricsWanted: Bool { running && activeViewers > 0 && panelOpen }
     private func reevaluateFastMetrics() {
         if fastMetricsWanted { startFastMetrics() } else { stopFastMetrics() }
     }
@@ -289,7 +347,7 @@ public final class TemperManager: ObservableObject {
 
     private func commit() {
         if let data = try? JSONEncoder().encode(config) { defaults.set(data, forKey: configKey) }
-        if helper.installState == .installed { helper.apply(config) }
+        if running, helper.installState == .installed { helper.apply(config) }
     }
 
     private func updateMenuTint() {
@@ -306,6 +364,7 @@ public final class TemperManager: ObservableObject {
     }
 
     private func refreshMetricsOnly(updateCPU: Bool = true) {
+        guard running else { return }
         metrics = reader.read(updateCPU: updateCPU, extended: extendedSensors)
         reconcileFans(count: metrics.fans.count)
         updateMenuTint()
@@ -340,6 +399,8 @@ public final class TemperManager: ObservableObject {
 
     private func poll() async {
         await helper.refresh()
+        // Off (a one-off refresh from Setup): helper state only, fans untouched.
+        guard running else { return }
         metrics = reader.read()
         if helper.installState == .installed {
             helper.apply(config)                 // keep the daemon in sync (idempotent)

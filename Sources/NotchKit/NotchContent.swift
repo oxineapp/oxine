@@ -172,6 +172,10 @@ struct NotchExpandedRoot: View {
     /// because our hosting view already starts below DynamicNotchKit's inset, so
     /// the tabs kept landing low. This is the true value.
     let bandHeight: CGFloat
+    /// The physical cutout's width (from the presenter, which knows the screen).
+    /// The tab strip lives in the ear beside it, so the open width grows with
+    /// the tab count until every tab clears the cutout.
+    let notchWidth: CGFloat
 
     /// Reports the cards' real frame in SwiftUI global (window) coordinates, so the
     /// presenter can derive the click-through region by measurement, not constants.
@@ -181,8 +185,30 @@ struct NotchExpandedRoot: View {
     /// jump that was clipping things. These are the single source of truth: the
     /// presenter derives the open hover region from them, so the zone and the
     /// rendered window can never drift apart.
-    static let contentWidth: CGFloat = 580
-    static let contentHeight: CGFloat = 100
+    static let baseContentWidth: CGFloat = 580
+    static let baseContentHeight: CGFloat = 100
+    /// Tab pill width + spacing (see `glassButton` / `tabStrip`).
+    static let tabWidth: CGFloat = 38
+    static let tabSpacing: CGFloat = 6
+
+    /// The content width for a given tab count: the base width, widened when
+    /// the tabs (in the left ear) would otherwise run under the cutout. Both
+    /// ears grow together so the island stays centred on the notch.
+    static func contentWidth(tabs: Int, notchWidth: CGFloat) -> CGFloat {
+        let strip = CGFloat(tabs) * tabWidth + CGFloat(max(tabs - 1, 0)) * tabSpacing
+        let breathing: CGFloat = 14
+        let needed = notchWidth + 2 * (strip + breathing) - hPadding * 2
+        return max(baseContentWidth, needed.rounded(.up))
+    }
+    static func openWidth(tabs: Int, notchWidth: CGFloat) -> CGFloat {
+        contentWidth(tabs: tabs, notchWidth: notchWidth) + hPadding * 2 + 36
+    }
+
+    private var contentWidth: CGFloat { Self.contentWidth(tabs: controller.modules.count, notchWidth: notchWidth) }
+    private var contentHeight: CGFloat {
+        min(max(controller.activeModule?.expandedHeight ?? Self.baseContentHeight, Self.baseContentHeight), 360)
+    }
+    private var footprintWidth: CGFloat { contentWidth + Self.hPadding * 2 }
     // DynamicNotchKit already insets the expanded content by ~30pt per side
     // (corner radius + its own safe-area inset), so we add only a hair more here —
     // a big hPadding stacked on top of that was the dead left/right column.
@@ -194,10 +220,10 @@ struct NotchExpandedRoot: View {
     static let bottomPadding: CGFloat = 16
 
     /// The full footprint we render into (cards + padding).
-    static var openWidth: CGFloat { contentWidth + hPadding * 2 + 36 }
-    static var openHeightBelowNotch: CGFloat { topPadding + contentHeight + bottomPadding + 22 }
-    private static var footprintWidth: CGFloat { contentWidth + hPadding * 2 }
-    private static var footprintHeight: CGFloat { topPadding + contentHeight + bottomPadding }
+    static func openHeightBelowNotch(contentHeight: CGFloat) -> CGFloat {
+        topPadding + min(max(contentHeight, baseContentHeight), 360) + bottomPadding + 22
+    }
+    private var footprintHeight: CGFloat { Self.topPadding + contentHeight + Self.bottomPadding }
 
     /// Intrinsic height of the tab strip (see `tabStrip`).
     private static let stripHeight: CGFloat = 24
@@ -209,7 +235,7 @@ struct NotchExpandedRoot: View {
                 .id(controller.activeModuleID)
                 .transition(.opacity)
         }
-        .frame(width: Self.contentWidth, height: Self.contentHeight)
+        .frame(width: contentWidth, height: contentHeight)
         .animation(.easeInOut(duration: 0.22), value: controller.activeModuleID)
         .padding(.horizontal, Self.hPadding)
     }
@@ -234,17 +260,27 @@ struct NotchExpandedRoot: View {
                 )
 
             tabStrip
-                .frame(width: Self.footprintWidth, height: Self.stripHeight)
-                .position(x: Self.footprintWidth / 2, y: -bandHeight / 2)
+                .frame(width: footprintWidth, height: Self.stripHeight)
+                .position(x: footprintWidth / 2, y: -bandHeight / 2)
         }
-        .frame(width: Self.footprintWidth, height: Self.footprintHeight, alignment: .top)
+        .frame(width: footprintWidth, height: footprintHeight, alignment: .top)
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: contentHeight)
     }
 
-    /// Tabs in the left ear, the pin in the right ear, the cutout in the gap.
+    private var leftModules: [any NotchModule] {
+        controller.modules.filter { $0.tabPlacement == .left }
+    }
+
+    private var rightModules: [any NotchModule] {
+        controller.modules.filter { $0.tabPlacement == .right }
+    }
+
+    /// Tabs choose an ear, the pin stays at the far right, and the cutout fills the gap.
     private var tabStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(controller.modules, id: \.id) { tab(for: $0) }
+        HStack(spacing: Self.tabSpacing) {
+            ForEach(leftModules, id: \.id) { tab(for: $0) }
             Spacer(minLength: 0)              // gap = the physical cutout
+            ForEach(rightModules, id: \.id) { tab(for: $0) }
             glassButton(
                 icon: controller.pinned ? "pin.fill" : "pin",
                 active: controller.pinned,
@@ -271,7 +307,7 @@ struct NotchExpandedRoot: View {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(active ? Color.panelAccent : .white.opacity(0.7))
-                .frame(width: 38, height: Self.stripHeight)
+                .frame(width: Self.tabWidth, height: Self.stripHeight)
                 .contentShape(Rectangle())          // whole pill is the hit target
         }
         .buttonStyle(.plain)

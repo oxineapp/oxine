@@ -1,5 +1,10 @@
 import SwiftUI
 
+public enum NotchTabPlacement: Sendable {
+    case left
+    case right
+}
+
 /// A tab in the notch. This is NotchKit's extension point — each tab is a
 /// top-level surface (Home, Shelf, Calendar…). A module supplies idle "peek"
 /// content that flanks the physical cutout when the notch is closed, the full
@@ -19,6 +24,8 @@ public protocol NotchModule: AnyObject {
     var title: String { get }
     /// SF Symbol for the tab bar.
     var icon: String { get }
+    /// Which side of the physical cutout owns this tab button.
+    var tabPlacement: NotchTabPlacement { get }
 
     /// When several modules want the idle peek at once, the highest priority wins.
     var idlePriority: Int { get }
@@ -36,16 +43,25 @@ public protocol NotchModule: AnyObject {
     /// The expanded content shown when the notch is open and this tab is active.
     func expandedView() -> AnyView
 
+    /// Preferred height for the expanded content. Most glanceable modules use
+    /// the 100pt default; conversation-style modules can ask for more room.
+    var expandedHeight: CGFloat { get }
+
     /// Start/stop live work alongside the notch's lifecycle.
     func activate()
     func deactivate()
+    /// Ask the module to put keyboard focus in its primary interaction.
+    func requestFocus()
 }
 
 public extension NotchModule {
+    var tabPlacement: NotchTabPlacement { .left }
     var idlePriority: Int { 0 }
     var wantsIdle: Bool { false }
     func leftPeek() -> AnyView { AnyView(EmptyView()) }
     func rightPeek() -> AnyView { AnyView(EmptyView()) }
+    var expandedHeight: CGFloat { 100 }
     func activate() {}
     func deactivate() {}
+    func requestFocus() {}
 }

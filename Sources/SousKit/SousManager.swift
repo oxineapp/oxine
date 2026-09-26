@@ -55,6 +55,10 @@ public final class SousManager: ObservableObject {
     /// rate (~3 Hz). Power Flow itself keeps using the live `metrics`.
     @Published public private(set) var lifeMetrics = BatteryMetrics()
     @Published public private(set) var menuTint: MenuTint = .none
+    /// Whether Sous is on. The app's backend drives this (`start()` on enable,
+    /// `stop()` on disable/uninstall); while off nothing polls, nothing is sent
+    /// to the daemon, and the daemon has been told to let go of charging.
+    @Published public private(set) var running = false
     /// When the last calibration cycle completed, persisted across launches.
     @Published public private(set) var lastCalibration: Date?
     /// User-arranged order of the Sous tab cards; persisted on change.
@@ -111,13 +115,67 @@ public final class SousManager: ObservableObject {
         } else {
             widgetOrder = SousWidget.allCases
         }
-        // The poll loop pings the daemon, re-asserts config, and refreshes status.
-        startPolling()
+        // Polling starts with `start()`, when the Sous app comes up.
         panelOpen = PanelVisibility.shared.isOpen
         visibilityObserver = NotificationCenter.default.addObserver(
             forName: .panelVisibilityChanged, object: nil, queue: .main) { [weak self] note in
             let open = (note.object as? Bool) ?? false
             Task { @MainActor in self?.setPanelOpen(open) }
+        }
+    }
+
+    // MARK: Lifecycle
+
+    /// Sous on: the poll loop pings the daemon, re-asserts config, and refreshes
+    /// status. Idempotent.
+    public func start() {
+        guard !running else { return }
+        running = true
+        startPolling()
+        reevaluateFastMetrics()
+    }
+
+    /// Sous off: stop polling and hand charging back to macOS. The saved limit
+    /// and options are untouched, so turning Sous back on restores them; only
+    /// the one-shot runs (top up, discharge, calibration) are dropped, since
+    /// resuming one of those unannounced would be a surprise.
+    public func stop() {
+        guard running else { return }
+        config.topUpActive = false
+        config.dischargeActive = false
+        config.calibrationActive = false
+        running = false
+        pollTask?.cancel(); pollTask = nil
+        stopFastMetrics()
+        if helper.installState == .installed {
+            var released = config
+            released.enabled = false
+            released.controlLED = false
+            helper.apply(released)
+        }
+        status = SousStatus()
+        menuTint = .none
+    }
+
+    /// Uninstall: release charging, then remove the privileged helper (macOS
+    /// asks for the password). A no-op when the helper was never installed.
+    public func removeHelper() async {
+        stop()
+        await helper.refresh()
+        if helper.installState == .installed { await helper.uninstall() }
+    }
+
+    /// Forget every Sous setting (uninstall without "keep its settings").
+    public func resetSettings() {
+        stop()
+        config = SousConfig()
+        lastCalibration = nil
+        scheduleAnchor = nil
+        calibrationSchedule = .off
+        widgetOrder = SousWidget.allCases
+        // Last: the assignments above re-save through their didSets.
+        for key in [configKey, lastCalibrationKey, widgetOrderKey, scheduleKey, scheduleAnchorKey] {
+            defaults.removeObject(forKey: key)
         }
     }
 
@@ -128,11 +186,11 @@ public final class SousManager: ObservableObject {
         guard panelOpen != open else { return }
         panelOpen = open
         reevaluateFastMetrics()
-        if open { refreshNow() }
+        if open, running { refreshNow() }
     }
 
-    /// Fast metrics want both a mounted viewer and a visible panel.
-    private var fastMetricsWanted: Bool { activeViewers > 0 && panelOpen }
+    /// Fast metrics want Sous on, a mounted viewer and a visible panel.
+    private var fastMetricsWanted: Bool { running && activeViewers > 0 && panelOpen }
     private func reevaluateFastMetrics() {
         if fastMetricsWanted { startFastMetrics() } else { stopFastMetrics() }
     }
@@ -282,12 +340,12 @@ public final class SousManager: ObservableObject {
 
     private func commit() {
         if let data = try? JSONEncoder().encode(config) { defaults.set(data, forKey: configKey) }
-        if helper.installState == .installed { helper.apply(config) }
+        if running, helper.installState == .installed { helper.apply(config) }
         updateMenuTint()
     }
 
     private func updateMenuTint() {
-        guard capable && (config.enabled || config.calibrationActive) else { menuTint = .none; return }
+        guard running, capable && (config.enabled || config.calibrationActive) else { menuTint = .none; return }
         switch displayState {
         case .holding, .sailing:                       menuTint = .holding
         case .charging, .toppingUp, .discharging, .heatProtect, .calibrating: menuTint = .working
@@ -330,6 +388,8 @@ public final class SousManager: ObservableObject {
     private func poll() async {
         await helper.refresh()
         metrics = BatteryReader.read()
+        // Off (a one-off refresh from Setup): look, don't touch.
+        guard running else { return }
         if helper.installState == .installed {
             helper.apply(config)                 // keep the daemon in sync (idempotent)
             if let s = await helper.fetchStatus() { status = s }

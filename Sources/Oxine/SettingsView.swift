@@ -11,7 +11,7 @@ import ServiceManagement
 /// flat list so related settings live together (e.g. the editor moved under
 /// Notes, Focus + Caffeine pair up).
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, tabs, notes, clipboard, focus, sous, temper, notch, integrations, shortcuts, about
+    case general, tabs, footer, apps, notes, clipboard, notch, integrations, shortcuts, about
 
     var id: String { rawValue }
 
@@ -19,12 +19,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "General"
         case .tabs:         return "Tabs & Navigation"
+        case .footer:       return "Footer"
         case .notes:        return "Notes"
         case .clipboard:    return "Clipboard"
-        case .focus:        return "Focus & Caffeine"
-        case .sous:         return "Sous · Battery"
-        case .temper:       return "Temper · Thermal"
         case .notch:        return "Notch"
+        case .apps:         return "Apps"
         case .integrations: return "Integrations"
         case .shortcuts:    return "Shortcuts"
         case .about:        return "About & Updates"
@@ -35,12 +34,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "slider.horizontal.3"
         case .tabs:         return "rectangle.3.group"
+        case .footer:       return "rectangle.bottomhalf.inset.filled"
         case .notes:        return "square.and.pencil"
         case .clipboard:    return "clock.arrow.circlepath"
-        case .focus:        return "moon.stars"
-        case .sous:         return "heart.badge.bolt"
-        case .temper:       return "fanblades.fill"
         case .notch:        return "macbook.gen2"
+        case .apps:         return "shippingbox"
         case .integrations: return "link"
         case .shortcuts:    return "command"
         case .about:        return "info.circle"
@@ -52,12 +50,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return "Startup, glass, window size, accent"
         case .tabs:         return "Arrange the bar, swipe & haptics"
+        case .footer:       return "Quick toggles along the bottom"
         case .notes:        return "Location, lock, editor"
         case .clipboard:    return "History size, lock, clear"
-        case .focus:        return "Dimming and keep-awake"
-        case .sous:         return "Charge limits & battery health"
-        case .temper:       return "Temperatures & fans"
         case .notch:        return "Media, mirror, shelf at the notch"
+        case .apps:         return "Install, manage & app settings"
         case .integrations: return "justtype sync"
         case .shortcuts:    return "Keyboard shortcuts"
         case .about:        return "Version, updates, setup"
@@ -70,12 +67,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .general:      return ["launch", "login", "startup", "glass", "tint", "opacity", "window", "size", "accent", "color", "colour", "appearance", "theme", "preview"]
         case .tabs:         return ["tab", "bar", "reorder", "navigation", "swipe", "haptic", "gesture"]
+        case .footer:       return ["footer", "slot", "toggle", "quick", "bottom", "strip"]
         case .notes:        return ["notes", "folder", "location", "obsidian", "editor", "markdown", "touch id", "lock", "biometrics"]
         case .clipboard:    return ["clipboard", "history", "paste", "clear", "touch id", "lock"]
-        case .focus:        return ["focus", "dim", "blur", "caffeine", "awake", "sleep"]
-        case .sous:         return ["sous", "battery", "charge", "limit", "health", "power"]
-        case .temper:       return ["temper", "thermal", "temperature", "fan", "heat", "cpu"]
         case .notch:        return ["notch", "dynamic", "island", "media", "now playing", "music", "mirror", "camera", "shelf", "airdrop", "drop"]
+        case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures", "sous", "battery", "charge", "temper", "thermal", "fan", "heat"]
         case .integrations: return ["integration", "justtype", "sync", "connect", "account"]
         case .shortcuts:    return ["shortcut", "keyboard", "hotkey", "popup"]
         case .about:        return ["about", "version", "update", "software", "quit", "setup"]
@@ -123,6 +119,7 @@ enum SettingIndex {
         SettingEntry("Edit tab bar", .tabs, ["reorder", "rearrange", "add", "remove", "hide", "customize", "organize", "arrange"]),
         SettingEntry("Swipe sensitivity", .tabs, ["two", "finger", "trackpad", "gesture", "scroll"]),
         SettingEntry("One tab per swipe", .tabs, ["single", "step", "swipe", "one"]),
+        SettingEntry("Invert swipe direction", .tabs, ["invert", "reverse", "direction", "swipe", "natural"]),
         SettingEntry("Haptic feedback", .tabs, ["vibration", "tick", "buzz", "trackpad"]),
         // Notes
         SettingEntry("Notes folder location", .notes, ["folder", "path", "directory", "where", "save", "store"]),
@@ -134,29 +131,33 @@ enum SettingIndex {
         SettingEntry("Lock clipboard with Touch ID", .clipboard, ["touchid", "biometrics", "lock", "fingerprint", "faceid", "password", "passcode", "secure", "privacy", "protect"]),
         SettingEntry("Clear all history", .clipboard, ["wipe", "delete", "erase", "remove", "clean"]),
         SettingEntry("Clear clipboard", .clipboard, ["pasteboard", "empty", "copy"]),
-        // Focus & Caffeine
-        SettingEntry("Focus dim level", .focus, ["dim", "darken", "background", "fade", "dark"]),
-        SettingEntry("Focus blur intensity", .focus, ["blur", "background", "frosted"]),
-        SettingEntry("Keep Mac awake", .focus, ["caffeine", "sleep", "insomnia", "stay", "awake", "prevent", "screensaver", "coffee"]),
-        SettingEntry("Keep apps active", .focus, ["apps", "active", "teams", "slack", "idle", "jiggle", "away", "presence", "available"]),
+        // Apps (each opens the app's own page)
+        SettingEntry("Focus dim level", .apps, ["focus", "dim", "darken", "background", "fade", "dark"]),
+        SettingEntry("Focus blur intensity", .apps, ["focus", "blur", "background", "frosted"]),
+        SettingEntry("Keep Mac awake", .apps, ["caffeine", "sleep", "insomnia", "stay", "awake", "prevent", "screensaver", "coffee"]),
+        SettingEntry("Keep apps active", .apps, ["caffeine", "apps", "active", "teams", "slack", "idle", "jiggle", "away", "presence", "available"]),
         // Sous · Battery
-        SettingEntry("Charge limit / sailing range", .sous, ["charge", "limit", "sailing", "range", "battery", "percent", "cap", "ceiling", "stop", "maximum", "80"]),
-        SettingEntry("Heat protection", .sous, ["heat", "protection", "temperature", "hot", "thermal", "pause"]),
-        SettingEntry("MagSafe LED", .sous, ["magsafe", "led", "light", "indicator", "green", "amber"]),
-        SettingEntry("Auto-calibrate battery", .sous, ["calibrate", "calibration", "gauge", "accuracy", "cycle"]),
-        SettingEntry("Battery health", .sous, ["battery", "health", "wear", "capacity", "cycles", "condition"]),
-        SettingEntry("Reinstall / repair battery helper", .sous, ["reinstall", "repair", "helper", "daemon", "fix", "privileged", "smc", "broken"]),
-        SettingEntry("Remove battery helper", .sous, ["remove", "uninstall", "delete", "helper", "daemon"]),
+        SettingEntry("Charge limit / sailing range", .apps, ["charge", "limit", "sailing", "range", "battery", "percent", "cap", "ceiling", "stop", "maximum", "80"]),
+        SettingEntry("Heat protection", .apps, ["heat", "protection", "temperature", "hot", "thermal", "pause"]),
+        SettingEntry("MagSafe LED", .apps, ["magsafe", "led", "light", "indicator", "green", "amber"]),
+        SettingEntry("Auto-calibrate battery", .apps, ["calibrate", "calibration", "gauge", "accuracy", "cycle"]),
+        SettingEntry("Battery health", .apps, ["battery", "health", "wear", "capacity", "cycles", "condition"]),
+        SettingEntry("Reinstall / repair battery helper", .apps, ["reinstall", "repair", "helper", "daemon", "fix", "privileged", "smc", "broken"]),
+        SettingEntry("Remove battery helper", .apps, ["remove", "uninstall", "delete", "helper", "daemon"]),
         // Temper · Thermal
-        SettingEntry("Temperature unit", .temper, ["celsius", "fahrenheit", "degrees", "unit", "temperature"]),
-        SettingEntry("Extended temperature view", .temper, ["extended", "sensors", "cpu", "gpu", "ssd", "detailed", "map", "thermal", "heat"]),
-        SettingEntry("Verbose Smart output", .temper, ["verbose", "smart", "diagram", "debug", "explain"]),
-        SettingEntry("Fan speed / curve", .temper, ["fan", "speed", "rpm", "cooling", "curve", "manual", "mode", "blades", "loud", "quiet"]),
-        SettingEntry("Reinstall / repair fan helper", .temper, ["reinstall", "repair", "helper", "daemon", "fix", "fan", "privileged", "smc", "broken"]),
-        SettingEntry("Remove fan helper", .temper, ["remove", "uninstall", "delete", "helper", "fan", "daemon"]),
+        SettingEntry("Temperature unit", .apps, ["celsius", "fahrenheit", "degrees", "unit", "temperature"]),
+        SettingEntry("Extended temperature view", .apps, ["extended", "sensors", "cpu", "gpu", "ssd", "detailed", "map", "thermal", "heat"]),
+        SettingEntry("Verbose Smart output", .apps, ["verbose", "smart", "diagram", "debug", "explain"]),
+        SettingEntry("Fan speed / curve", .apps, ["fan", "speed", "rpm", "cooling", "curve", "manual", "mode", "blades", "loud", "quiet"]),
+        SettingEntry("Reinstall / repair fan helper", .apps, ["reinstall", "repair", "helper", "daemon", "fix", "fan", "privileged", "smc", "broken"]),
+        SettingEntry("Remove fan helper", .apps, ["remove", "uninstall", "delete", "helper", "fan", "daemon"]),
         // Notch
         SettingEntry("Show the notch companion", .notch, ["notch", "dynamic", "island", "companion", "enable", "media", "music"]),
         SettingEntry("Show on displays without a notch", .notch, ["faux", "external", "monitor", "display", "synthesised", "fake"]),
+        SettingEntry("Open the notch (game mode)", .notch, ["game", "mode", "click", "hover", "command", "cmd", "open", "trigger", "fullscreen", "accidental"]),
+        // Apps
+        SettingEntry("ScreenLyrics", .apps, ["lyrics", "screenlyrics", "song", "words", "lrclib", "subtitles", "karaoke", "notch"]),
+        SettingEntry("FnGestures", .apps, ["fn", "gestures", "trackpad", "scroll", "volume", "brightness", "swipe", "globe", "fngestures"]),
         // Integrations
         SettingEntry("justtype sync", .integrations, ["justtype", "sync", "account", "connect", "sign", "login", "cloud"]),
         // Shortcuts
@@ -272,24 +273,32 @@ enum SettingIndex {
     /// The on-screen `SettingSection` a matched label lives in, so a tapped hit
     /// can scroll to and flash that exact card. `nil` = no scroll target (the
     /// row just opens at the top — e.g. Re-run Setup / Quit live on the root).
+    /// Search hits that live on an app's page (Settings → Apps → app).
+    static func appID(for label: String) -> String? {
+        switch label {
+        case "Focus dim level", "Focus blur intensity": return "oxine.focus"
+        case "Keep Mac awake", "Keep apps active": return "oxine.caffeine"
+        case "ScreenLyrics": return "oxine.screenlyrics"
+        case "FnGestures": return "oxine.fngestures"
+        case "Charge limit / sailing range", "Heat protection", "MagSafe LED", "Auto-calibrate battery",
+             "Battery health", "Reinstall / repair battery helper", "Remove battery helper": return "oxine.sous"
+        case "Temperature unit", "Extended temperature view", "Verbose Smart output", "Fan speed / curve",
+             "Reinstall / repair fan helper", "Remove fan helper": return "oxine.temper"
+        default: return nil
+        }
+    }
+
     static func anchor(for label: String) -> String? {
         switch label {
         case "Launch at login", "Show item preview", "Glass tint": return "General"
         case "Window size": return "Window"
         case "Accent color": return "Appearance"
         case "Edit tab bar": return "Tabs"
-        case "Swipe sensitivity", "One tab per swipe", "Haptic feedback": return "Navigation"
+        case "Swipe sensitivity", "One tab per swipe", "Invert swipe direction", "Haptic feedback": return "Navigation"
         case "Notes folder location", "Lock notes with Touch ID": return "Notes"
         case "Markdown editor", "Obsidian vault": return "Editor"
         case "Clipboard history size", "Lock clipboard with Touch ID",
              "Clear all history", "Clear clipboard": return "Clipboard"
-        case "Focus dim level", "Focus blur intensity": return "Focus"
-        case "Keep Mac awake", "Keep apps active": return "Caffeine"
-        case "Charge limit / sailing range", "Heat protection", "MagSafe LED",
-             "Auto-calibrate battery", "Battery health",
-             "Reinstall / repair battery helper", "Remove battery helper": return "Sous · Battery"
-        case "Temperature unit", "Extended temperature view", "Verbose Smart output",
-             "Fan speed / curve", "Reinstall / repair fan helper", "Remove fan helper": return "Temper · Thermal & Fans"
         case "justtype sync": return "Integrations"
         case "Toggle popup shortcut": return "Keyboard Shortcuts"
         case "App version": return "About"
@@ -317,12 +326,15 @@ struct SettingsView: View {
     @AppStorage("swipeSensitivity", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSensitivity = 0.7
     @AppStorage("swipeHapticStrength", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeHapticStrength = 3
     @AppStorage("swipeSingleStep", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeSingleStep = false
+    @AppStorage("swipeInverted", store: UserDefaults(suiteName: "com.oxine.settings")) var swipeInverted = false
     @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) var notchEnabled = true
     @AppStorage("notchFauxOnExternal", store: UserDefaults(suiteName: "com.oxine.settings")) var notchFauxOnExternal = false
+    @AppStorage("notchOpenTrigger", store: UserDefaults(suiteName: "com.oxine.settings")) var notchOpenTrigger = "hover"
     @AppStorage("notchSneakPeek", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSneakPeek = true
     @AppStorage("notchHomeSlot", store: UserDefaults(suiteName: "com.oxine.settings")) var notchHomeSlot = "camera"
     @AppStorage("notchNowPlayingSource", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNowPlayingSource = "system"
     @AppStorage("notchSystemHUD", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSystemHUD = true
+    @AppStorage("notchRealAudioBars", store: UserDefaults(suiteName: "com.oxine.settings")) var notchRealAudioBars = true
     @AppStorage("notchLeftEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchLeftEar = "smart"
     @AppStorage("notchRightEar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchRightEar = "smart"
     @AppStorage("notchBar", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBar = false
@@ -331,8 +343,6 @@ struct SettingsView: View {
     @AppStorage("notchBarMetricRight", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetricRight = "gpu"
     @State private var agentHookStatus = ""
     @StateObject private var permissions = NotchPermissions()
-    @ObservedObject private var sous = SousManager.shared
-    @ObservedObject private var temper = TemperManager.shared
     @ObservedObject private var tabConfig = TabBarConfig.shared
     @State private var editingTabs = false
 
@@ -340,8 +350,17 @@ struct SettingsView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var updater = UpdaterManager.shared
 
+    @ObservedObject private var appsManager = AppsManager.shared
+
     /// Which category is open. `nil` = the root list. Drives the two-level slide.
     @State private var category: SettingsCategory?
+    /// An installed app's page inside the Apps category (its settings live
+    /// there, with its footer slot, access and uninstall). Root rows for apps
+    /// with settings jump straight to it.
+    @State private var storeDetailAppID: String?
+    /// An app's store page (listing) inside the Apps category. Sits between
+    /// the store and the app's settings page when opened from the store.
+    @State private var storeListing: StoreListing?
     /// Slide direction for the root↔detail transition (true = going deeper).
     @State private var slideForward = true
     /// What the user is typing (drives the field). `activeQuery` is the debounced
@@ -361,15 +380,7 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
-    /// Human label for the saved caffeine default, for the Settings menu button.
-    private var defaultDurationLabel: String {
-        CaffeineManager.presets.first { $0.seconds == caffeine.defaultDuration }?.label ?? "1 hour"
-    }
-
     @State var showClearConfirm = false
-    @State var focusDimLevel = FocusModeManager.shared.overlayOpacity
-    @State var focusBlurIntensity = FocusModeManager.shared.blurIntensity
-    @ObservedObject private var caffeine = CaffeineManager.shared
     @State private var obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured
     @State private var obsidianIntegrating = false
     @State private var obsidianError: String?
@@ -417,10 +428,38 @@ struct SettingsView: View {
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = cat }
     }
 
+    /// Open a search hit: an app's setting lands on that app's page.
+    private func openHit(_ cat: SettingsCategory, label: String?) {
+        if cat == .apps, let label, let id = SettingIndex.appID(for: label), appsManager.app(id) != nil {
+            openApp(id)
+        } else {
+            open(cat, anchor: label.flatMap { SettingIndex.anchor(for: $0) })
+        }
+    }
+
     private func popToRoot() {
         slideForward = false
         flashAnchor = nil
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = nil }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = nil; storeDetailAppID = nil; storeListing = nil }
+    }
+
+    /// Push an installed app's page (Apps → app). From the root it opens the
+    /// Apps category already on that page, so back lands on the store.
+    private func openApp(_ id: String) {
+        slideForward = true
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = .apps; storeDetailAppID = id }
+    }
+
+    /// Pop the app's settings page: back to its listing if that's how we got
+    /// here, otherwise to the store.
+    private func popToStore() {
+        slideForward = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = nil }
+    }
+
+    private func popListing() {
+        slideForward = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeListing = nil }
     }
 
     var body: some View {
@@ -438,6 +477,15 @@ struct SettingsView: View {
             }
     }
 
+    /// One id per screen in the stack, so a change at any level slides.
+    private var screenID: String {
+        guard let category else { return "__root__" }
+        var id = category.rawValue
+        if let listing = storeListing { id += "/" + listing.id }
+        if let app = storeDetailAppID { id += "/" + app }
+        return id
+    }
+
     /// The id-keyed screen swap. Root and detail slide past each other on the same
     /// spring the tab bar uses; `slideForward` flips the direction for back.
     private var content: some View {
@@ -448,7 +496,7 @@ struct SettingsView: View {
                 rootScreen
             }
         }
-        .id(category?.rawValue ?? "__root__")
+        .id(screenID)
         .transition(slideForward
             ? .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
             : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing)))
@@ -480,6 +528,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         categoryCard(hits: hits)
+                        if activeQuery.isEmpty { appSettingsCard }
                         // Meta actions live at the foot of the root, out of the way.
                         if activeQuery.isEmpty { rootFooter }
                         Spacer(minLength: 0)
@@ -544,8 +593,8 @@ struct SettingsView: View {
         }
         // A tapped hit aims at the first matched setting's section, so the detail
         // opens scrolled to (and flashing) exactly what you searched for.
-        let targetAnchor = matched?.first.flatMap { SettingIndex.anchor(for: $0) }
-        return Button(action: { open(cat, anchor: targetAnchor) }) {
+        let firstHit = matched?.first
+        return Button(action: { openHit(cat, label: firstHit) }) {
             HStack(spacing: 12) {
                 Image(systemName: cat.icon)
                     .font(.system(size: 14, weight: .medium))
@@ -579,6 +628,54 @@ struct SettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Rows for installed apps that declare a settings surface — they sit under
+    /// the built-in categories, one row per app, same visual language.
+    @ViewBuilder private var appSettingsCard: some View {
+        let appsWithSettings = appsManager.settingsApps
+        if !appsWithSettings.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(appsWithSettings.enumerated()), id: \.element.id) { idx, app in
+                    Button(action: { openApp(app.id) }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: app.icon)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color.panelAccent)
+                                .frame(width: 26)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(app.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.9))
+                                Text(app.manifest.surfaces.settings?.subtitle ?? app.tagline)
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.45))
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.25))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if idx < appsWithSettings.count - 1 {
+                        Divider().opacity(0.06).padding(.leading, 50)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+            )
+        }
     }
 
     private var rootFooter: some View {
@@ -665,16 +762,38 @@ struct SettingsView: View {
     // MARK: - Detail
 
     private func detailScreen(_ cat: SettingsCategory) -> some View {
-        VStack(spacing: 0) {
-            HStack { backButton(cat.title, action: popToRoot); Spacer() }
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
-                .padding(.bottom, 4)
+        // Inside Apps, an installed app's page is one level deeper: the header
+        // names the app and back returns to the store, not the root.
+        let storeApp = cat == .apps ? storeDetailAppID.flatMap { appsManager.app($0) } : nil
+        let listing = cat == .apps && storeApp == nil ? storeListing : nil
+        return VStack(spacing: 0) {
+            HStack {
+                if let app = storeApp {
+                    backButton(app.name, action: popToStore)
+                } else if let listing {
+                    backButton(listing.name, action: popListing)
+                } else {
+                    backButton(cat.title, action: popToRoot)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
 
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        detailSections(cat)
+                        if let app = storeApp {
+                            AppDetailView(app: app, onUninstalled: popToStore)
+                        } else if let listing {
+                            AppListingView(listing: listing, onOpenSettings: { app in
+                                slideForward = true
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = app.id }
+                            })
+                        } else {
+                            detailSections(cat)
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(8)
@@ -719,20 +838,23 @@ struct SettingsView: View {
         case .tabs:
             anchored("Tabs", tabsSection)
             anchored("Navigation", navigationSection)
+        case .footer:
+            anchored("Footer", FooterSection())
         case .notes:
             anchored("Notes", notesSection)
             anchored("Editor", editorSection)
         case .clipboard:
             anchored("Clipboard", clipboardSection)
-        case .focus:
-            anchored("Focus", focusSection)
-            anchored("Caffeine", caffeineSection)
-        case .sous:
-            anchored("Sous · Battery", sousSection)
-        case .temper:
-            anchored("Temper · Thermal & Fans", temperSection)
         case .notch:
             anchored("Notch", notchSection)
+        case .apps:
+            AppsStoreView(onOpen: { app in
+                slideForward = true
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeDetailAppID = app.id }
+            }, onOpenListing: { listing in
+                slideForward = true
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeListing = listing }
+            })
         case .integrations:
             anchored("Integrations", justtypeSection)
         case .shortcuts:
@@ -861,6 +983,18 @@ struct SettingsView: View {
                         Text("One tab per swipe")
                             .foregroundColor(.white.opacity(0.85))
                         Text("Each swipe moves a single tab instead of gliding through several.")
+                            .font(.caption2).foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $swipeInverted) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Invert swipe direction")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("Swipe right for the next tab and left for the previous one.")
                             .font(.caption2).foregroundColor(.white.opacity(0.5))
                     }
                 }
@@ -1059,101 +1193,6 @@ struct SettingsView: View {
         }
     }
 
-    private var focusSection: some View {
-        SettingSection(title: "Focus") {
-            VStack(spacing: 6) {
-                HStack {
-                    Text("Dim level")
-                        .foregroundColor(.white.opacity(0.8))
-                    Spacer()
-                    Text("\(Int(focusDimLevel * 100))%")
-                        .foregroundColor(.white.opacity(0.4))
-                        .font(.caption)
-                }
-                Slider(value: $focusDimLevel, in: 0.0...0.8, step: 0.05)
-                    .tint(Color.panelAccent)
-                    .onChange(of: focusDimLevel) { _, newValue in
-                        FocusModeManager.shared.overlayOpacity = newValue
-                    }
-            }
-
-            Divider().opacity(0.1)
-
-            VStack(spacing: 6) {
-                HStack {
-                    Text("Blur intensity")
-                        .foregroundColor(.white.opacity(0.8))
-                    Spacer()
-                    Text("\(Int(focusBlurIntensity * 100))%")
-                        .foregroundColor(.white.opacity(0.4))
-                        .font(.caption)
-                }
-                Slider(value: $focusBlurIntensity, in: 0.0...1.0, step: 0.05)
-                    .tint(Color.panelAccent)
-                    .onChange(of: focusBlurIntensity) { _, newValue in
-                        FocusModeManager.shared.blurIntensity = newValue
-                    }
-            }
-        }
-    }
-
-    private var caffeineSection: some View {
-        SettingSection(title: "Caffeine") {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Keep Mac awake")
-                        .foregroundColor(.white.opacity(0.9))
-                    Text(caffeine.isActive
-                        ? "Active · \(caffeine.statusText) remaining"
-                        : "Starts from the footer bolt")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                Spacer()
-                Menu {
-                    ForEach(CaffeineManager.presets, id: \.label) { preset in
-                        Button {
-                            caffeine.defaultDuration = preset.seconds
-                        } label: {
-                            if caffeine.defaultDuration == preset.seconds {
-                                Label(preset.label, systemImage: "checkmark")
-                            } else {
-                                Text(preset.label)
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(defaultDurationLabel)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(Color.panelAccent)
-                    .font(.caption)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-
-            Divider().opacity(0.1)
-
-            Toggle(isOn: Binding(
-                get: { caffeine.keepAppsActive },
-                set: { caffeine.keepAppsActive = $0 }
-            )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Keep apps active")
-                        .foregroundColor(.white.opacity(0.9))
-                    Text("Nudges input when idle so Teams/Slack stay available (needs Accessibility)")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Color.panelAccent)
-        }
-    }
-
     private var justtypeSection: some View {
         SettingSection(title: "Integrations") {
             HStack {
@@ -1206,18 +1245,6 @@ struct SettingsView: View {
         }
     }
 
-    private var sousSection: some View {
-        SettingSection(title: "Sous · Battery") {
-            SousSettings(sous: sous)
-        }
-    }
-
-    private var temperSection: some View {
-        SettingSection(title: "Temper · Thermal & Fans") {
-            TemperSettings(temper: temper)
-        }
-    }
-
     private var notchSection: some View {
         SettingSection(title: "Notch") {
             VStack(alignment: .leading, spacing: 10) {
@@ -1254,11 +1281,49 @@ struct SettingsView: View {
 
                 Divider().opacity(0.1)
 
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Open the notch")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(notchOpenTrigger == "hover"
+                             ? "Opens when the cursor reaches it."
+                             : "Game mode: a cursor at the top of the screen never opens it — only \(notchOpenTrigger == "click" ? "a click" : "⌘-click") on the notch does.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Picker("", selection: $notchOpenTrigger) {
+                        ForEach(NotchPresenter.OpenTrigger.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                    .onChange(of: notchOpenTrigger) { _, _ in
+                        NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                    }
+                }
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
                 Toggle(isOn: $notchSneakPeek) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Sneak peek on track change")
                             .foregroundColor(.white.opacity(0.85))
                         Text("Briefly shows the new song's title beside the notch.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                Toggle(isOn: $notchRealAudioBars) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Music bars follow the sound")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text("The bars beside the notch show the real bass, mids and highs of what's playing. Needs System Audio Recording (the same access Decant uses); without it they animate on their own.")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -1355,6 +1420,10 @@ struct SettingsView: View {
                         Spacer()
                         Picker("", selection: $notchBarMetric) {
                             ForEach(BarMetric.allCases) { Text($0.label).tag($0.rawValue) }
+                            ForEach(appsManager.barMetricApps) { app in
+                                Text(app.manifest.surfaces.barMetric?.label ?? app.name)
+                                    .tag("app:" + app.id)
+                            }
                         }
                         .labelsHidden()
                         .frame(width: 150)
@@ -1385,6 +1454,10 @@ struct SettingsView: View {
                             Spacer()
                             Picker("", selection: $notchBarMetricRight) {
                                 ForEach(BarMetric.allCases) { Text($0.label).tag($0.rawValue) }
+                                ForEach(appsManager.barMetricApps) { app in
+                                    Text(app.manifest.surfaces.barMetric?.label ?? app.name)
+                                        .tag("app:" + app.id)
+                                }
                             }
                             .labelsHidden()
                             .frame(width: 150)
@@ -1408,8 +1481,40 @@ struct SettingsView: View {
                 Divider().opacity(0.1)
 
                 agentsBlock
+
+                Divider().opacity(0.1)
+
+                lyricsLink
             }
         }
+    }
+
+    /// ScreenLyrics belongs to the notch, so the notch pane points at it: the
+    /// app's page when it's installed, the store shelf when it isn't.
+    private var lyricsLink: some View {
+        let installed = appsManager.app("oxine.screenlyrics") != nil
+        return Button(action: {
+            if installed { openApp("oxine.screenlyrics") } else { open(.apps) }
+        }) {
+            HStack(spacing: 10) {
+                Image(systemName: "quote.bubble")
+                    .font(.system(size: 13)).foregroundColor(Color.panelAccent).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ScreenLyrics")
+                        .foregroundColor(.white.opacity(0.9))
+                    Text(installed ? "Live lyrics under the notch — style, timing & layout"
+                                   : "Live lyrics under the notch — install from Apps")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Re-check / re-ask the permissions the notch modules need. Useful after an

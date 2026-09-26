@@ -13,7 +13,9 @@ public final class SystemUsageMonitor: ObservableObject {
     private var timer: Timer?
     private var prev: (total: Double, busy: Double)?
 
-    func start() {
+    public init() {}
+
+    public func start() {
         guard timer == nil else { return }
         sample(); sampleGPU()
         let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -23,7 +25,7 @@ public final class SystemUsageMonitor: ObservableObject {
         timer = t
     }
 
-    func stop() { timer?.invalidate(); timer = nil }
+    public func stop() { timer?.invalidate(); timer = nil }
 
     /// GPU busy fraction from the accelerator's PerformanceStatistics. Keys differ
     /// by silicon (Apple Silicon = "Device Utilization %"), so we try the common

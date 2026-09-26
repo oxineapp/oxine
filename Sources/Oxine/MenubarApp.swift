@@ -56,6 +56,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var scrollMonitor: Any?
     var resignObserver: Any?
     // Per-gesture state for two-finger swipe tab nav (see handleSwipeScroll).
+    /// True while Settings or setup is showing: their content scrolls sideways
+    /// itself (the store's hero pages), so tab-swipe stays out of the way.
+    static var swipeNavigationSuspended = false
     var swipeAccumX: CGFloat = 0
     var swipeAccumY: CGFloat = 0
     var swipeHorizontal = false   // gesture committed to the horizontal axis
@@ -101,8 +104,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         observeSous()
         observeTemper()
         observeCaffeine()
+        // The apps subsystem: register the built-in dogfood apps, scan installs,
+        // start what's enabled. Before the notch, which asks it for app tabs.
+        AppsManager.shared.start()
         // The notch companion: its own top-of-screen surface, independent of the
         // dropdown panel. Safe to start late — it brings itself up if enabled.
+        NotchAudioReactor.shared.install()
         NotchCoordinator.shared.start()
         if Bundle.main.object(forInfoDictionaryKey: "OxineBeta") as? Bool == true,
            !UserDefaults.standard.bool(forKey: "betaWelcomeShown") {
@@ -421,7 +428,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // hidden tab is never stranded.
         let tabsItem = NSMenuItem(title: "Open Tab", action: nil, keyEquivalent: "")
         let tabsMenu = NSMenu()
-        for tab in TabID.canonical {
+        for tab in PanelTab.allAvailable {
             let item = NSMenuItem(title: tab.title, action: #selector(menuOpenTab(_:)), keyEquivalent: "")
             item.image = NSImage(systemSymbolName: tab.icon, accessibilityDescription: nil)
             item.representedObject = tab.rawValue

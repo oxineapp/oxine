@@ -39,10 +39,29 @@ public final class NotchPresenter {
     private var systemHUD: SystemHUDMonitor?
     private var peekHub: PeekHub?
     private var barOverlay: NotchBarOverlay?
-    private var lyrics: NotchLyrics?
 
     private var wantExpanded = false
     private var reconciling = false
+    /// How the notch opens. `hover` is the classic behaviour; the other two are
+    /// "game mode": a cursor parked at the top of the screen never opens it —
+    /// only a click (or ⌘-click) on the collapsed island does. Closing is
+    /// always by leaving the open region, so nothing gets stuck.
+    public enum OpenTrigger: String, CaseIterable, Sendable {
+        case hover, click, commandClick
+        public var label: String {
+            switch self {
+            case .hover: "Hover"
+            case .click: "Click"
+            case .commandClick: "⌘-click"
+            }
+        }
+        static var current: OpenTrigger {
+            OpenTrigger(rawValue: NotchKit.settingsDefaults.string(forKey: "notchOpenTrigger") ?? "") ?? .hover
+        }
+    }
+    private var openTrigger: OpenTrigger = .hover
+    private var clickMonitors: [Any] = []
+    private var focusAfterExpansion = false
     /// The tab we auto-switched away from for a drag, so we can switch back when
     /// the drag ends. nil when we haven't auto-flipped.
     private var autoFlippedFrom: String?
@@ -69,27 +88,26 @@ public final class NotchPresenter {
         // strip can ride up into it. Derived from the actual notched screen, not
         // measured from a GeometryReader (which reads ~0 inside the inset content).
         let bandHeight = NotchGeometry.notchFrame(for: screen).height
+        let notchWidth = NotchGeometry.notchFrame(for: screen).width
         let layout = self.layout
         // Live data for the collapsed ears (now-playing + agents + CPU).
         let home = controller.modules.compactMap { $0 as? HomeModule }.first
-        if let home {
-            let lyrics = NotchLyrics(player: home.nowPlaying)
-            lyrics.start()
-            self.lyrics = lyrics
-        }
+        // ScreenLyrics (if its app is installed) follows the same player feed.
+        if let home { ScreenLyrics.shared.attach(home.nowPlaying) }
         let hub = PeekHub(nowPlaying: home?.nowPlaying)
         hub.start()
         self.peekHub = hub
-        // The opt-in bar outline (click-through, hidden in fullscreen).
-        if hasNotch && PeekContent.barEnabled {
-            let bar = NotchBarOverlay(hub: hub, screen: screen)
+        // The click-through outline is also used for persistent app attention.
+        // Metric fill remains opt-in; an unread-contact pulse can wake the bar.
+        if hasNotch {
+            let bar = NotchBarOverlay(hub: hub, screen: screen, baseEnabled: PeekContent.barEnabled)
             bar.start()
             self.barOverlay = bar
         }
         let dn = DynamicNotch(
             hoverBehavior: [.keepVisible],
             style: hasNotch ? .notch : .floating,
-            expanded: { NotchExpandedRoot(controller: controller, bandHeight: bandHeight) { layout.cardsWindowFrame = $0 }.environment(\.controlActiveState, .active) },
+            expanded: { NotchExpandedRoot(controller: controller, bandHeight: bandHeight, notchWidth: notchWidth) { layout.cardsWindowFrame = $0 }.environment(\.controlActiveState, .active) },
             compactLeading: { NotchCompactLeading(controller: controller, hub: hub).environment(\.controlActiveState, .active) },
             compactTrailing: { NotchCompactTrailing(controller: controller, hub: hub).environment(\.controlActiveState, .active) }
         )
@@ -122,6 +140,9 @@ public final class NotchPresenter {
                 self.barOverlay?.setSuppressed(self.controller.hud != nil || peek != nil)
             }
             .store(in: &cancellables)
+        controller.$attentionColors
+            .sink { [weak self] colors in self?.barOverlay?.setAttentionColors(colors) }
+            .store(in: &cancellables)
 
         // Sneak peek: flash the new track's title beside the cutout on change.
         if let home = controller.modules.compactMap({ $0 as? HomeModule }).first {
@@ -139,7 +160,9 @@ public final class NotchPresenter {
         }
 
         startSystemHUD()
+        openTrigger = OpenTrigger.current
         startHoverTracking()
+        startClickTracking()
         reconcile()                      // begin collapsed + click-through
     }
 
@@ -154,7 +177,9 @@ public final class NotchPresenter {
     }
 
     public func hide() {
-        lyrics?.stop(); lyrics = nil
+        ScreenLyrics.shared.detach()
+        clickMonitors.forEach { NSEvent.removeMonitor($0) }
+        clickMonitors = []
         hoverTimer?.invalidate(); hoverTimer = nil
         systemHUD?.stop(); systemHUD = nil
         barOverlay?.stop(); barOverlay = nil
@@ -182,10 +207,13 @@ public final class NotchPresenter {
         // Hysteresis: when open, test the larger open region so small movements
         // don't snap it shut; when collapsed, test the small notch region.
         let region = wantExpanded ? openRegion(screen) : closedRegion(screen)
+        let hovering = region.contains(NSEvent.mouseLocation)
         // Native source menus extend outside the card. Keep their anchor alive
         // while AppKit tracks a menu/drag, then resume normal hover dismissal.
         let trackingInteraction = wantExpanded && RunLoop.current.currentMode == .eventTracking
-        let want = controller.pinned || trackingInteraction || region.contains(NSEvent.mouseLocation)
+        // Game mode: hovering can keep it open, never open it (see `startClickTracking`).
+        let hoverOpens = openTrigger == .hover || wantExpanded
+        let want = controller.pinned || trackingInteraction || (hoverOpens && hovering)
         if want != wantExpanded {
             // A firm tap as it springs open — DynamicNotchKit fires this from its
             // own hover, which we bypass, so we do it here. `.levelChange` is the
@@ -198,6 +226,37 @@ public final class NotchPresenter {
         }
         updateAutoFlip()
         updateClickThrough(screen)
+    }
+
+    /// Game mode's opener: a left click on the collapsed island (⌘ held, for the
+    /// `commandClick` trigger). The collapsed window is click-through, so the
+    /// click itself goes to whatever is underneath — we only *observe* it, via
+    /// a global monitor (mouse events need no permission) plus a local one for
+    /// the rare case our own window is live.
+    private func startClickTracking() {
+        let handler: (NSEvent) -> Void = { [weak self] event in
+            guard let self, let screen = self.screen,
+                  self.closedRegion(screen).contains(NSEvent.mouseLocation) else { return }
+            if self.openTrigger == .hover {
+                if self.wantExpanded {
+                    self.controller.activeModule?.requestFocus()
+                } else {
+                    self.focusAfterExpansion = true
+                }
+                return
+            }
+            guard !self.wantExpanded else { return }
+            if self.openTrigger == .commandClick, !event.modifierFlags.contains(.command) { return }
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            self.wantExpanded = true
+            self.reconcile()
+        }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: handler) {
+            clickMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { handler($0); return $0 }) {
+            clickMonitors.append(local)
+        }
     }
 
     /// If a file is being dragged and the active tab has no drop zone (Home with a
@@ -333,15 +392,16 @@ public final class NotchPresenter {
     private func openRegion(_ screen: NSScreen) -> CGRect {
         let f = screen.frame
         let n = NotchGeometry.notchFrame(for: screen)
-        let w = NotchExpandedRoot.openWidth
-        let h = n.height + NotchExpandedRoot.openHeightBelowNotch
+        let w = NotchExpandedRoot.openWidth(tabs: controller.modules.count, notchWidth: n.width)
+        let h = n.height + NotchExpandedRoot.openHeightBelowNotch(
+            contentHeight: controller.activeModule?.expandedHeight ?? NotchExpandedRoot.baseContentHeight)
         return CGRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h + topSlop)
     }
 
     // MARK: reconcile toward desired state
 
     private func reconcile() {
-        lyrics?.setExpanded(wantExpanded)
+        ScreenLyrics.shared.setNotchExpanded(wantExpanded)
         // The bar traces the *collapsed* island. Hide it the instant the notch
         // starts opening; it stays hidden through the whole open and only returns
         // once a collapse has fully settled back to compact (revealed below, after
@@ -356,6 +416,12 @@ public final class NotchPresenter {
                 if target {
                     barOverlay?.setExpanded(true)
                     await notch.expand(on: screen)
+                    // Click-triggered opening should be immediately usable. In
+                    // hover mode, a click on the physical cutout sets the flag.
+                    if openTrigger != .hover || focusAfterExpansion {
+                        focusAfterExpansion = false
+                        controller.activeModule?.requestFocus()
+                    }
                 } else {
                     await notch.compact(on: screen)
                     // Fully minimised now — bring the bar back unless we've since

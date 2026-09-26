@@ -4,6 +4,44 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.4.0
+- **New app: Decant.** App-level volume control. Turn one app down without touching the rest, mute it, boost a quiet one past 100%, or send it to different speakers; live meters show who's making the noise. No audio driver, no change to your system output, and apps you leave alone aren't touched at all. Install it from Settings → Apps. Needs System Audio Recording.
+- **New app: Sear.** Opens the brightness an XDR display keeps back for HDR video and uses it for everything, up to about twice as bright, for working in sunlight. The other way, it dims past the lowest brightness step on any display. One footer click with a level menu; it pauses by itself when the Mac runs hot, and optionally on battery. Screenshots are unaffected. Install it from Settings → Apps.
+- New: the music bars beside the notch follow the real sound — bass on the left, highs on the right — once Oxine has System Audio Recording. Settings → Notch → Music bars follow the sound.
+- **New: Sous and Temper are real apps.** Turn either one off from its page and it lets go of the hardware: Sous hands charging back to macOS, Temper puts every fan back on the system curve, and both stop polling, so another battery or fan tool can take over. Turn it back on and your limit, curve and modes return. Uninstall removes the app, its tab and its background helper (macOS asks for your password); reinstall from Settings → Apps.
+- New: Caffeine and Focus can be uninstalled too, and reinstalled from the store. Every Oxine-made app now installs, turns off and uninstalls the same way.
+- New: in a crowded tab bar the tab you're on shows its name next to its icon, and the pill stretches to fit as you move between tabs.
+- New: Settings → Tabs & Navigation → Invert swipe direction.
+- New for app makers: `align: center` on text, and tabs are now at least as tall as the panel, so `spacer` can centre content or pin a section to the bottom.
+- New: an app copied into the apps folder by hand gets its tab on the bar the first time Oxine sees it.
+- fix: turning off a built-in app now actually stops it. Caffeine no longer keeps the Mac awake, Focus lifts its dim, FnGestures releases its event tap and ScreenLyrics takes its pill down.
+- fix: app tabs show up as soon as Oxine launches, not only after Settings has been opened.
+- fix: the tab bar editor no longer squeezes names down to "N…" when there are many tabs; the row goes icon-only like the real bar, and the chip you lift shows its name.
+- fix: the `sous.state` and `temper.metrics` capabilities report nothing while their app is off, instead of stale readings.
+
+## 2.3.0
+- **New: the Apps store looks like a store.** Search at the top, artwork heroes you page through, and every shelf as cards two across: Made by Oxine, the community, the curated picks. Get or Open right on the card.
+- **New: app pages.** Click any card or hero for the app's listing: artwork, a Settings shortcut for installed apps, the facts strip (rating, author, origin or GitHub stars, network), what it does, where it shows up, what it asks for, and ratings and reviews.
+- **New: reviews.** Rate any app from its page, no account. Your review is yours to edit or remove. Developers can read their app's reviews as JSON from `watchtower.justtype.io/reviews/<app id>`.
+- New: the setup tour's Apps step is a slice of the store: the first-party apps as heroes with Get on them, and the built-ins underneath.
+- New: the footer editor has its own Settings page (Settings → Footer) instead of living at the bottom of the store.
+- New: only community apps on the Oxine approved list are shown in the store; a `creator/repo` typed in the search field still installs after the disclosure.
+- fix: two-finger swipe inside Settings no longer fights the tab-swipe gesture; tab-swipe is off while Settings or setup is open.
+- fix: an orange footer warning shows only the message next to its orange icon; the app name is in the tooltip.
+
+## 2.2.0
+- **New: Apps.** Settings → Apps is a small store. Caffeine and Focus are apps now, first-party extras install with one click, and community apps install from a GitHub `creator/repo` after you see exactly what they want. Every app has its own page: settings, footer slot, access grants, macOS permissions, uninstall. The panel footer's quick toggles are yours to pick and drag into order.
+- **New: ScreenLyrics** (install from Apps). Synced lyrics for the song that's playing, in a Liquid Glass pill right under the notch. Seven sizes, optional artist and song line, font and line-change animation, a timing offset, and a distance slider. It steps aside while the notch is open and lets clicks pass through. Lyrics come from LRCLIB, no account.
+- **New: FnGestures** (install from Apps). Hold fn and scroll for volume or brightness, flick sideways for the next or previous track. Needs Accessibility only.
+- New: game mode for the notch. Settings → Notch → "Open the notch" picks Hover, Click, or ⌘-click, so a cursor at the top never opens it mid-game.
+- New: the playback source switch is two small icons that slide when you click; it only appears while a second player is running, and right-click lists every source. A pinned player that quits falls back to Automatic.
+- New: click the album art or the title in the notch to bring the playing app forward.
+- fix: switching the playback source no longer freezes Oxine. Music and Spotify are read off the main thread, so the macOS Automation prompt can't block the app.
+- fix: a wide video thumbnail no longer pushes the now playing card under the neighbouring widget.
+- fix: the open notch widens with its tab count, so a fifth tab clears the cutout instead of colliding with it.
+- fix: album art survives metadata updates, the playback clock no longer rewinds, and now playing numbers parse correctly in every locale.
+- fix: opening a menu inside the notch no longer closes it.
+
 ## 2.1.1
 - New: split the notch bar to show two metrics at once (Settings → Notch) — each half fills inward from its edge.
 - New: Home "player only" layout (Settings → Notch → Home widget → None) gives the player the full width.

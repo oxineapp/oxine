@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// The little equaliser bars shown in the idle peek (image 3). Animates while
-/// playing, then *winds down* to flat when paused instead of snapping. Cosmetic —
-/// not driven by real audio, but shaped to *feel* musical: each bar mixes a couple
-/// of incommensurate sines (so the pattern never visibly loops) under a shared,
-/// slowly pulsing "energy" envelope, and the whole bank rides a 0…1 `energy` ramp
-/// so toggling playback eases in/out rather than cutting.
+/// playing, then *winds down* to flat when paused instead of snapping. When the
+/// host supplies `NotchKit.audioBands` the bars are the real thing: five
+/// frequency bands of what's playing, bass on the left. Otherwise they're
+/// cosmetic but shaped to *feel* musical: each bar mixes a couple of
+/// incommensurate sines (so the pattern never visibly loops) under a shared,
+/// slowly pulsing "energy" envelope. Either way the whole bank rides a 0…1
+/// `energy` ramp so toggling playback eases in/out rather than cutting.
 struct MusicVisualizer: View {
     var isPlaying: Bool
     var color: Color = .white
@@ -33,9 +35,10 @@ struct MusicVisualizer: View {
         // static row means a paused notch does zero repainting.
         Group {
             if ticking {
-                TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
                     let now = timeline.date
-                    row(energy: energy(at: now), t: now.timeIntervalSinceReferenceDate)
+                    row(energy: energy(at: now), t: now.timeIntervalSinceReferenceDate,
+                        live: NotchKit.audioBands?(bars))
                 }
             } else {
                 row(energy: 0, t: 0)            // settled: flat, no animation
@@ -61,12 +64,13 @@ struct MusicVisualizer: View {
         }
     }
 
-    private func row(energy: CGFloat, t: TimeInterval) -> some View {
+    private func row(energy: CGFloat, t: TimeInterval, live: [Float]? = nil) -> some View {
         HStack(alignment: .center, spacing: 2.5) {
             ForEach(0..<bars, id: \.self) { i in
                 Capsule()
                     .fill(color)
-                    .frame(width: 2.5, height: barHeight(i, t: t, energy: energy))
+                    .frame(width: 2.5, height: live.map { liveHeight($0, i, energy: energy) }
+                           ?? barHeight(i, t: t, energy: energy))
             }
         }
         .frame(height: maxH)
@@ -78,6 +82,11 @@ struct MusicVisualizer: View {
         let p = min(max(now.timeIntervalSince(ramp.since) / ramp.dur, 0), 1)
         let eased = p * p * (3 - 2 * p)
         return ramp.from + (ramp.to - ramp.from) * CGFloat(eased)
+    }
+
+    private func liveHeight(_ bands: [Float], _ i: Int, energy: CGFloat) -> CGFloat {
+        guard i < bands.count, energy > 0.001 else { return minH }
+        return minH + CGFloat(bands[i]) * (maxH - minH) * energy
     }
 
     private func barHeight(_ i: Int, t: TimeInterval, energy: CGFloat) -> CGFloat {
