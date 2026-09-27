@@ -109,18 +109,22 @@ private struct ChatLayout: View {
     @State private var dropTarget = false
 
     private func receiveDrop(_ providers: [NSItemProvider]) {
-        var paths: [String] = []
-        let group = DispatchGroup()
-        for provider in providers {
-            group.enter()
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                if let url, url.isFileURL { DispatchQueue.main.async { paths.append(url.path) } }
-                group.leave()
+        Task { @MainActor in
+            var paths: [String] = []
+            for provider in providers {
+                if let url = await Self.fileURL(in: provider) { paths.append(url.path) }
             }
-        }
-        group.notify(queue: .main) {
             guard !paths.isEmpty else { return }
             runtime.sendEvent(surface: surface, ref: node.id, kind: "drop", value: .array(paths.map { .string($0) }))
+        }
+    }
+
+    /// The file a dropped item stands for, if it's a file.
+    @MainActor private static func fileURL(in provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { (done: CheckedContinuation<URL?, Never>) in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                done.resume(returning: url?.isFileURL == true ? url : nil)
+            }
         }
     }
 
