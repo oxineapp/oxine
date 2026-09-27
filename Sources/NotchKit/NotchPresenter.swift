@@ -31,6 +31,10 @@ public final class NotchPresenter {
 
     private let controller: NotchController
     private var notch: (any DynamicNotchControllable)?
+    /// This notch's own panel. DynamicNotchKit rebuilds the panel on a screen
+    /// change, so it's read fresh each time; scanning `NSApp.windows` could pick
+    /// up another notch's panel.
+    private var notchWindow: () -> NSWindow? = { nil }
     private weak var window: NSWindow?
     private var cancellables = Set<AnyCancellable>()
     private var screen: NSScreen?
@@ -38,7 +42,12 @@ public final class NotchPresenter {
     private let layout = NotchLayoutBox()
     private var systemHUD: SystemHUDMonitor?
     private var peekHub: PeekHub?
-    private var barOverlay: NotchBarOverlay?
+    /// The metric bar's values, when the bar is on (it's drawn by the island).
+    private var barFeed: BarFeed?
+    /// The screen has a real cutout, so notices can attach to the notch.
+    private var hasCutout = false
+    /// The pointer was on the volume/brightness display last tick.
+    private var pointerWasOnHUD = false
 
     private var wantExpanded = false
     private var reconciling = false
@@ -59,8 +68,35 @@ public final class NotchPresenter {
             OpenTrigger(rawValue: NotchKit.settingsDefaults.string(forKey: "notchOpenTrigger") ?? "") ?? .hover
         }
     }
+    /// How far past the open notch the pointer can stray before it closes,
+    /// so a fast movement that overshoots its edge doesn't shut it.
+    public enum SafeZone: Int, CaseIterable, Sendable {
+        case off = 0, small = 16, medium = 32, large = 56
+        public var label: String {
+            switch self {
+            case .off: "Off"
+            case .small: "Small"
+            case .medium: "Medium"
+            case .large: "Large"
+            }
+        }
+        static var current: SafeZone {
+            SafeZone(rawValue: NotchKit.settingsDefaults.object(forKey: "notchSafeZone") as? Int ?? 32) ?? .medium
+        }
+    }
     private var openTrigger: OpenTrigger = .hover
     private var clickMonitors: [Any] = []
+    /// Clicked open (or opened by a notice's "Open"): if it opens by then,
+    /// the tab gets the keyboard. A deadline, so a click that didn't open it
+    /// can't hand the keyboard to some later hover.
+    private var focusWhenOpenUntil: Date?
+    private var focusWhenOpen: Bool {
+        get { focusWhenOpenUntil.map { Date() < $0 } ?? false }
+        set { focusWhenOpenUntil = newValue ? Date().addingTimeInterval(1.5) : nil }
+    }
+    /// Opened on request, not by the pointer: stay open this long even if
+    /// the pointer isn't there yet, so it can't snap shut mid-animation.
+    private var holdOpenUntil: Date?
     /// The tab we auto-switched away from for a drag, so we can switch back when
     /// the drag ends. nil when we haven't auto-flipped.
     private var autoFlippedFrom: String?
@@ -78,6 +114,7 @@ public final class NotchPresenter {
 
     public func show() {
         guard notch == nil, let screen = NotchGeometry.preferredScreen() else { return }
+        KeyHandback.shared.start()
         let hasNotch = NotchGeometry.hasNotch(screen)
         guard hasNotch || allowFauxNotch else { return }
         self.screen = screen
@@ -96,19 +133,28 @@ public final class NotchPresenter {
         let hub = PeekHub(nowPlaying: home?.nowPlaying)
         hub.start()
         self.peekHub = hub
-        // The opt-in bar outline (click-through, hidden in fullscreen).
-        if hasNotch && PeekContent.barEnabled {
-            let bar = NotchBarOverlay(hub: hub, screen: screen)
-            bar.start()
-            self.barOverlay = bar
-        }
         let dn = DynamicNotch(
             hoverBehavior: [.keepVisible],
-            style: hasNotch ? .notch : .floating,
+            style: hasNotch ? .notch(topCornerRadius: 15, bottomCornerRadius: NotchExpandedRoot.bottomCornerRadius) : .floating,
             expanded: { NotchExpandedRoot(controller: controller, bandHeight: bandHeight, notchWidth: notchWidth) { layout.cardsWindowFrame = $0 }.environment(\.controlActiveState, .active) },
             compactLeading: { NotchCompactLeading(controller: controller, hub: hub).environment(\.controlActiveState, .active) },
             compactTrailing: { NotchCompactTrailing(controller: controller, hub: hub).environment(\.controlActiveState, .active) }
         )
+        dn.expandedInset = NotchExpandedRoot.kitInset
+        // Notices grow out of the bottom of the closed notch (and peek there).
+        dn.compactBottom = AnyView(NoticeNudge(notices: NotchNotices.shared).environment(\.controlActiveState, .active))
+        hasCutout = hasNotch
+        NotchNotices.shared.context = { [weak self] in self?.noticeContext() ?? NoticeContext() }
+        NoticeBridgeListener.shared.start()
+        notchWindow = { [weak dn] in dn?.windowController?.window }
+        // Along the closed island's edge, drawn by the island itself: the
+        // glow when someone's waiting on an app, else the opt-in metric bar.
+        if hasNotch {
+            let feed = PeekContent.barEnabled ? BarFeed(hub: hub) : nil
+            barFeed = feed
+            dn.compactEdge = { edge in AnyView(IslandEdge(controller: controller, feed: feed, edge: edge)) }
+        }
+        NotchNotices.shared.returnNotchKey = { [weak self] in self?.currentWindow()?.giveBackKey() }
         // Go straight compact → expanded. By default DynamicNotchKit inserts an
         // intermediate *hide* (collapse, wait 0.25s, re-expand) on every open —
         // that's the deterministic stutter mid-animation.
@@ -124,19 +170,19 @@ public final class NotchPresenter {
             }
             .store(in: &cancellables)
 
-        // Hide the bar while the HUD or a sneak peek takes over the ears (they
-        // balloon the island; the metric bar wrapping them looks wrong).
-        controller.$hud
-            .sink { [weak self] hud in
+        // A taller tab (a chat) pushes what hangs under the open notch down.
+        controller.$activeModuleID
+            .sink { [weak self] id in
                 guard let self else { return }
-                self.barOverlay?.setSuppressed(hud != nil || self.controller.peekText != nil)
+                NotchExpandedRoot.activeContentHeight = NotchExpandedRoot.contentHeight(for: self.controller.module(id))
+                NotchNotices.shared.floating?.relayout()
             }
             .store(in: &cancellables)
-        controller.$peekText
-            .sink { [weak self] peek in
-                guard let self else { return }
-                self.barOverlay?.setSuppressed(self.controller.hud != nil || peek != nil)
-            }
+        controller.focusRequests
+            .sink { [weak self] in self?.focusActiveTab() }
+            .store(in: &cancellables)
+        controller.openRequests
+            .sink { [weak self] id in self?.open(tab: id) }
             .store(in: &cancellables)
 
         // Sneak peek: flash the new track's title beside the cutout on change.
@@ -173,15 +219,19 @@ public final class NotchPresenter {
 
     public func hide() {
         ScreenLyrics.shared.detach()
+        hasCutout = false
+        NotchNotices.shared.setNotch(present: false, open: false)
+        NotchNotices.shared.returnNotchKey = nil
         clickMonitors.forEach { NSEvent.removeMonitor($0) }
         clickMonitors = []
         hoverTimer?.invalidate(); hoverTimer = nil
         systemHUD?.stop(); systemHUD = nil
-        barOverlay?.stop(); barOverlay = nil
+        barFeed?.stop(); barFeed = nil
         peekHub?.stop(); peekHub = nil
         cancellables.removeAll()
         let n = notch
         notch = nil
+        notchWindow = { nil }
         window = nil
         Task { await n?.hide() }
         controller.stop()
@@ -201,14 +251,27 @@ public final class NotchPresenter {
         guard let screen else { return }
         // Hysteresis: when open, test the larger open region so small movements
         // don't snap it shut; when collapsed, test the small notch region.
-        let region = wantExpanded ? openRegion(screen) : closedRegion(screen)
-        let hovering = region.contains(NSEvent.mouseLocation)
+        let region = wantExpanded ? openRegion(screen, margin: CGFloat(SafeZone.current.rawValue)) : closedRegion(screen)
+        // The volume/brightness display steps aside when the pointer comes to
+        // it. Only on arrival: a pointer already resting there while the keys
+        // are pressed still sees it.
+        let onHUD = !wantExpanded && pointerOnHUD()
+        if onHUD && !pointerWasOnHUD && controller.hud != nil { controller.dismissHUD() }
+        pointerWasOnHUD = onHUD
+        // A notice on the closed notch takes the pointer first: pointing at it
+        // shows its buttons (or opens its peek), not the notch.
+        let noticeSpot = wantExpanded ? nil : noticeSpotUnderCursor()
+        NotchNotices.shared.pointerOnAttached(noticeSpot)
+        let onNotice = noticeSpot != nil
+        let mouse = NSEvent.mouseLocation
+        let hovering = !onNotice && (region.contains(mouse) || (wantExpanded && onBridgeToFloating(mouse, below: region)))
         // Native source menus extend outside the card. Keep their anchor alive
         // while AppKit tracks a menu/drag, then resume normal hover dismissal.
         let trackingInteraction = wantExpanded && RunLoop.current.currentMode == .eventTracking
         // Game mode: hovering can keep it open, never open it (see `startClickTracking`).
         let hoverOpens = openTrigger == .hover || wantExpanded
-        let want = controller.pinned || trackingInteraction || (hoverOpens && hovering)
+        let held = holdOpenUntil.map { Date() < $0 } ?? false
+        let want = controller.pinned || controller.heldOpen || trackingInteraction || held || (hoverOpens && hovering)
         if want != wantExpanded {
             // A firm tap as it springs open — DynamicNotchKit fires this from its
             // own hover, which we bypass, so we do it here. `.levelChange` is the
@@ -220,7 +283,69 @@ public final class NotchPresenter {
             reconcile()
         }
         updateAutoFlip()
-        updateClickThrough(screen)
+        updateClickThrough(screen, onNotice: onNotice)
+    }
+
+    /// Which notice spot on the closed notch the pointer is on, from the frames
+    /// the notices report (only the notice showing in a spot counts, so a
+    /// frame left by one on its way out can't block it).
+    private func noticeSpotUnderCursor() -> NoticePlacement? {
+        let notices = NotchNotices.shared
+        guard notices.hasAttached, let w = window else { return nil }
+        let wf = w.frame
+        let mouse = NSEvent.mouseLocation
+        return [NoticePlacement.left, .right, .below].first { spot in
+            guard let r = notices.attachedRect(spot) else { return false }
+            return CGRect(x: wf.minX + r.minX, y: wf.maxY - r.maxY, width: r.width, height: r.height)
+                .insetBy(dx: -4, dy: -4).contains(mouse)
+        }
+    }
+
+    /// The open notch's hover reaches down to a floating notice under it: the
+    /// pill itself plus a slim bridge over the gap, the pill's width, so the
+    /// pointer can cross to it without the notch closing and the pill moving
+    /// away.
+    private func onBridgeToFloating(_ mouse: CGPoint, below region: CGRect) -> Bool {
+        guard let card = NotchNotices.shared.floating?.cardScreenFrame else { return false }
+        let pad: CGFloat = 6
+        let bridge = CGRect(x: card.minX - pad, y: card.minY - pad,
+                            width: card.width + pad * 2, height: region.minY - card.minY + pad)
+        return bridge.contains(mouse)
+    }
+
+    /// Whether the pointer is where the HUD shows: both its ears and the
+    /// cutout between them, from the frames the ears last reported. Checked
+    /// while it's hidden too, so a pointer already there when it appears
+    /// doesn't count as arriving.
+    private func pointerOnHUD() -> Bool {
+        guard let w = window, let left = controller.hudFrames[true], let right = controller.hudFrames[false] else {
+            return false
+        }
+        let r = left.union(right)
+        let wf = w.frame
+        return CGRect(x: wf.minX + r.minX, y: wf.maxY - r.maxY, width: r.width, height: r.height)
+            .insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation)
+    }
+
+    /// What's on the closed notch's ears right now, for Smart placement.
+    private func noticeContext() -> NoticeContext {
+        var c = NoticeContext()
+        c.hudActive = controller.hud != nil
+        c.sneakPeek = controller.peekText != nil
+        let hasTrack = peekHub?.nowPlaying?.track != nil
+        let agent: NoticeContext.Ear = peekHub?.agents.primary.map { $0.status == .needs ? .important : .ambient } ?? .empty
+        func ear(_ content: PeekContent, left: Bool) -> NoticeContext.Ear {
+            switch content {
+            case .off: return .empty
+            case .albumArt, .bouncyBars: return hasTrack ? .ambient : .empty
+            case .cpuUsage: return .ambient
+            case .agentGrid: return agent
+            case .smart: return left ? (hasTrack ? .ambient : .empty) : (agent != .empty ? agent : (hasTrack ? .ambient : .empty))
+            }
+        }
+        c.left = ear(PeekContent.left, left: true)
+        c.right = ear(PeekContent.right, left: false)
+        return c
     }
 
     /// Game mode's opener: a left click on the collapsed island (⌘ held, for the
@@ -229,12 +354,16 @@ public final class NotchPresenter {
     /// a global monitor (mouse events need no permission) plus a local one for
     /// the rare case our own window is live.
     private func startClickTracking() {
-        guard openTrigger != .hover else { return }
         let handler: (NSEvent) -> Void = { [weak self] event in
-            guard let self, let screen = self.screen, !self.wantExpanded,
+            guard let self, let screen = self.screen,
                   self.closedRegion(screen).contains(NSEvent.mouseLocation) else { return }
+            // Hovering already opened it: a click on the notch means "let me
+            // type", so the open tab takes the keyboard.
+            if self.wantExpanded { self.focusActiveTab(); return }
+            guard self.openTrigger != .hover else { self.focusWhenOpen = true; return }
             if self.openTrigger == .commandClick, !event.modifierFlags.contains(.command) { return }
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            self.focusWhenOpen = true
             self.wantExpanded = true
             self.reconcile()
         }
@@ -244,6 +373,26 @@ public final class NotchPresenter {
         if let local = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { handler($0); return $0 }) {
             clickMonitors.append(local)
         }
+    }
+
+    /// The open tab takes the keyboard: the notch window becomes key (it's a
+    /// non-activating panel, so the app in front stays in front), then the
+    /// tab focuses its main field. Handed back when the notch closes.
+    private func focusActiveTab() {
+        guard wantExpanded, let window = currentWindow() else { return }
+        if !window.holdsKeyboard { window.makeKey() }
+        controller.activeModule?.focus()
+    }
+
+    /// Open on a tab without the pointer there (a notice's "Open"), ready to type.
+    private func open(tab id: String) {
+        controller.select(id)
+        NotchNotices.shared.closeList()
+        guard !wantExpanded else { focusActiveTab(); return }
+        holdOpenUntil = Date().addingTimeInterval(1.2)
+        focusWhenOpen = true
+        wantExpanded = true
+        reconcile()
     }
 
     /// If a file is being dragged and the active tab has no drop zone (Home with a
@@ -298,8 +447,9 @@ public final class NotchPresenter {
     /// the entire half-screen panel into a drag deadzone. Auto-flip to the Shelf
     /// keys off the drag pasteboard, not mouse events, so it still opens without
     /// the window needing to be live.)
-    private func updateClickThrough(_ screen: NSScreen) {
+    private func updateClickThrough(_ screen: NSScreen, onNotice: Bool = false) {
         guard let w = currentWindow() else { return }
+        if onNotice { w.ignoresMouseEvents = false; return }
         let region: CGRect
         if wantExpanded {
             // If we haven't measured the cards yet, fall back to the open region
@@ -318,11 +468,7 @@ public final class NotchPresenter {
     /// the top up to the screen edge so the tab strip (which sits in the band above
     /// the cards) is covered too. A few px of margin for the rounded corners.
     private func panelHitRegion() -> CGRect? {
-        guard let r = layout.cardsWindowFrame, let w = window, let screen else { return nil }
-        let wf = w.frame
-        let cards = CGRect(x: wf.minX + r.minX,
-                           y: wf.maxY - r.maxY,
-                           width: r.width, height: r.height)
+        guard let cards = cardsScreenFrame(), let screen else { return nil }
         let m: CGFloat = 8
         let minX = cards.minX - m
         let bottom = cards.minY - m
@@ -330,14 +476,21 @@ public final class NotchPresenter {
         return CGRect(x: minX, y: bottom, width: cards.width + m * 2, height: top - bottom)
     }
 
-    /// DynamicNotchKit creates its window lazily on the first expand/compact, so we
-    /// can't cache it at `show()`. Fetch it on demand and, the first time we see
-    /// it, patch its class so Liquid Glass stays lively while we're a background app.
+    /// The cards' measured frame flipped into screen coordinates, or nil before
+    /// the first layout.
+    private func cardsScreenFrame() -> CGRect? {
+        guard let r = layout.cardsWindowFrame, let w = window else { return nil }
+        let wf = w.frame
+        return CGRect(x: wf.minX + r.minX, y: wf.maxY - r.maxY, width: r.width, height: r.height)
+    }
+
+    /// DynamicNotchKit creates its window lazily on the first expand/compact, and
+    /// again after a hide, so we can't cache it at `show()`. Fetch it on demand
+    /// and, each time it's a new panel, patch its class so Liquid Glass stays
+    /// lively while we're a background app.
     private func currentWindow() -> NSWindow? {
-        if let window { return window }
-        guard let w = NSApp.windows.first(where: {
-            NSStringFromClass(type(of: $0)) == "DynamicNotchKit.DynamicNotchPanel"
-        }) else { return nil }
+        guard let w = notchWindow() else { return nil }
+        if w === window { return w }
         window = w
         w.forceActiveGlassAppearance()
         // DynamicNotchKit pins the panel at `.screenSaver` (1000), which sits ABOVE
@@ -372,41 +525,47 @@ public final class NotchPresenter {
     }
 
     /// The open surface's bounds: concentric with the notch (same `midX`, same
-    /// top), sized to the actual open window — the notch height plus the content's
-    /// own footprint (both from `NotchExpandedRoot`'s constants, so the zone tracks
-    /// the rendered window). Strictly contains `closedRegion`, so the hover test
-    /// can never bounce on a shared edge.
-    private func openRegion(_ screen: NSScreen) -> CGRect {
+    /// top), as wide as the open body (from `NotchExpandedRoot`'s constants) and
+    /// reaching just below the measured cards. Strictly contains `closedRegion`,
+    /// so the hover test can never bounce on a shared edge.
+    /// `margin` widens it on the sides and below: the safe zone that keeps
+    /// it open through a fast movement past its edge.
+    private func openRegion(_ screen: NSScreen, margin: CGFloat = 0) -> CGRect {
         let f = screen.frame
         let n = NotchGeometry.notchFrame(for: screen)
-        let w = NotchExpandedRoot.openWidth(tabs: controller.modules.count, notchWidth: n.width)
-        let h = n.height + NotchExpandedRoot.openHeightBelowNotch
-        return CGRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h + topSlop)
+        let w = NotchExpandedRoot.openWidth(for: controller.modules, notchWidth: n.width) + margin * 2
+        let bottom = (cardsScreenFrame().map { $0.minY - NotchExpandedRoot.openSlackBelowCards }
+            ?? f.maxY - n.height - NotchExpandedRoot.openHeightBelowNotch) - margin
+        let h = f.maxY - bottom
+        return CGRect(x: f.midX - w / 2, y: bottom, width: w, height: h + topSlop)
     }
 
     // MARK: reconcile toward desired state
 
     private func reconcile() {
         ScreenLyrics.shared.setNotchExpanded(wantExpanded)
-        // The bar traces the *collapsed* island. Hide it the instant the notch
-        // starts opening; it stays hidden through the whole open and only returns
-        // once a collapse has fully settled back to compact (revealed below, after
-        // `compact` awaits). Synced before the in-flight guard so rapid hover
-        // toggles never strand it open.
-        if wantExpanded { barOverlay?.setExpanded(true) }
+        NotchNotices.shared.setNotch(present: hasCutout && notch != nil, open: wantExpanded)
+        // The bar only shows on the closed island: no reading it while open.
+        barFeed?.paused = wantExpanded
         guard !reconciling, let notch, let screen else { return }
         reconciling = true
         Task { @MainActor in
-            while true {
+            // `notch` goes nil in `hide()`. Stop there: another expand or compact
+            // on a hidden notch would build it a fresh window nobody closes.
+            while self.notch != nil {
                 let target = wantExpanded
                 if target {
-                    barOverlay?.setExpanded(true)
                     await notch.expand(on: screen)
+                    if focusWhenOpen && wantExpanded {
+                        focusWhenOpen = false
+                        focusActiveTab()
+                    }
                 } else {
+                    focusWhenOpen = false
                     await notch.compact(on: screen)
-                    // Fully minimised now — bring the bar back unless we've since
-                    // been asked to reopen.
-                    if !wantExpanded { barOverlay?.setExpanded(false) }
+                    // Closed: whatever was typed into is gone, so the app in
+                    // front gets its keyboard back.
+                    if !wantExpanded { currentWindow()?.giveBackKey() }
                 }
                 if wantExpanded == target { break }
             }

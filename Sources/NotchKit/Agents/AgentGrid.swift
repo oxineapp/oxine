@@ -18,20 +18,25 @@ struct AgentGrid: View {
 
     var body: some View {
         let color = state.tool.color
-        TimelineView(.animation(paused: !animates)) { tl in
+        let side = CGFloat(Self.n) * cell + CGFloat(Self.n - 1) * gap
+        // One Canvas in a fixed frame, at 30fps: a tick repaints a single view.
+        // As 25 shape views in stacks at the display rate, every tick re-ran the
+        // whole notch window's layout, about half a CPU core for as long as an
+        // agent worked.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animates)) { tl in
             let t = tl.date.timeIntervalSinceReferenceDate
-            VStack(spacing: gap) {
-                ForEach(0..<Self.n, id: \.self) { r in
-                    HStack(spacing: gap) {
-                        ForEach(0..<Self.n, id: \.self) { c in
-                            RoundedRectangle(cornerRadius: 0.6, style: .continuous)
-                                .fill(color.opacity(opacity(r, c, t)))
-                                .frame(width: cell, height: cell)
-                        }
+            Canvas { ctx, _ in
+                for r in 0..<Self.n {
+                    for c in 0..<Self.n {
+                        let cellRect = CGRect(x: CGFloat(c) * (cell + gap), y: CGFloat(r) * (cell + gap),
+                                              width: cell, height: cell)
+                        ctx.fill(RoundedRectangle(cornerRadius: 0.6, style: .continuous).path(in: cellRect),
+                                 with: .color(color.opacity(opacity(r, c, t))))
                     }
                 }
             }
         }
+        .frame(width: side, height: side)
         .help("\(state.tool.rawValue.capitalized): \(state.status.rawValue)")
     }
 

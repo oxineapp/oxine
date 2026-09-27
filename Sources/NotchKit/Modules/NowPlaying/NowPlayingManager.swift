@@ -10,6 +10,11 @@ public final class NowPlayingManager: ObservableObject {
     /// Dominant colour of the current artwork — used to tint the player's glass
     /// (colour only, no artwork behind it).
     @Published public private(set) var tint: Color = .clear
+    /// The colour behind `tint`, to tell a real change from the same cover again.
+    private var tintColor: NSColor?
+    /// Goes neutral if a new song's cover never turns up (see `updateTint`).
+    private var pendingClear: Task<Void, Never>?
+    private let tintGrace: Duration
     /// When `track.elapsed` was last measured, so the scrubber can interpolate
     /// smoothly between the (coarse) source updates.
     @Published public private(set) var elapsedAt: Date = .init()
@@ -33,8 +38,8 @@ public final class NowPlayingManager: ObservableObject {
         let selection = PlaybackPlayer(rawValue: defaults.string(forKey: "notchPlaybackPlayer") ?? "") ?? .automatic
         let preferSystem = (defaults.string(forKey: "notchNowPlayingSource") ?? "system") == "system"
         let factory: (PlaybackPlayer) -> NowPlayingSource = { player in
-            if player == .automatic, preferSystem, MediaRemoteAdapterSource.isAvailable {
-                return MediaRemoteAdapterSource()
+            if player == .automatic, preferSystem, AutomaticSource.isAvailable {
+                return AutomaticSource()
             }
             return ScriptingBridgeSource(player: player)
         }
@@ -54,8 +59,10 @@ public final class NowPlayingManager: ObservableObject {
     init(source: NowPlayingSource, selectedPlayer: PlaybackPlayer = .automatic,
          makeSource: ((PlaybackPlayer) -> NowPlayingSource)? = nil,
          saveSelection: ((PlaybackPlayer) -> Void)? = nil,
-         availability: @escaping () -> Set<PlaybackPlayer> = { Set(PlaybackPlayer.allCases) }) {
+         availability: @escaping () -> Set<PlaybackPlayer> = { Set(PlaybackPlayer.allCases) },
+         tintGrace: Duration = .seconds(2)) {
         self.source = source
+        self.tintGrace = tintGrace
         self.selectedPlayer = selectedPlayer
         self.makeSource = makeSource
         self.saveSelection = saveSelection
@@ -100,10 +107,41 @@ public final class NowPlayingManager: ObservableObject {
         self.track = track
         elapsedAt = track?.elapsedAt ?? Date()
         // Artwork may arrive independently; retained identity avoids work on clock updates.
-        if titleChanged || artworkChanged {
-            let newTint = track?.artwork?.dominantColor().map { Color(nsColor: $0) } ?? .clear
-            withAnimation(.easeInOut(duration: 0.5)) { tint = newTint }
+        if titleChanged || artworkChanged { updateTint(titleChanged: titleChanged) }
+    }
+
+    /// Recolours the player from the cover. A new song often arrives a moment
+    /// before its cover (Spotify sends the details, then the image in the next
+    /// update), so a song without a cover yet keeps the current colour and only
+    /// goes neutral if none turns up. Nothing playing, or the cover being removed
+    /// from the same song, goes neutral straight away.
+    private func updateTint(titleChanged: Bool) {
+        if let art = track?.artwork {
+            pendingClear?.cancel(); pendingClear = nil
+            if let color = art.dominantColor() { setTint(color) }
+        } else if track == nil || !titleChanged {
+            pendingClear?.cancel(); pendingClear = nil
+            setTint(nil)
+        } else if tintColor != nil, pendingClear == nil {
+            pendingClear = Task { [weak self, tintGrace] in
+                try? await Task.sleep(for: tintGrace)
+                guard let self, !Task.isCancelled else { return }
+                self.pendingClear = nil
+                if self.track?.artwork == nil { self.setTint(nil) }
+            }
         }
+    }
+
+    /// Animates only a real change: the next song on the same album gives the
+    /// same colour, and redoing it made the card flicker or stick uncoloured.
+    private func setTint(_ color: NSColor?) {
+        switch (color, tintColor) {
+        case (nil, nil): return
+        case let (a?, b?) where a.isClose(to: b): return
+        default: break
+        }
+        tintColor = color
+        withAnimation(.easeInOut(duration: 0.5)) { tint = color.map { Color(nsColor: $0) } ?? .clear }
     }
 
     /// Change observation and transport together, without starting/stopping playback.
@@ -145,9 +183,14 @@ public final class NowPlayingManager: ObservableObject {
         if started { source.start() }
     }
 
+    /// The notch's running player, for apps that pause or resume what's playing
+    /// (it goes to the app actually playing, not macOS's last now-playing app).
+    public private(set) static weak var active: NowPlayingManager?
+
     public func start() {
         guard !started else { return }
         started = true
+        Self.active = self
         observeSource()
         source.start()
     }
@@ -155,6 +198,7 @@ public final class NowPlayingManager: ObservableObject {
         for o in workspaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         workspaceObservers = []
         started = false
+        if Self.active === self { Self.active = nil }
         sourceGeneration = UUID()
         source.onChange = nil
         source.stop()
@@ -189,9 +233,7 @@ extension NSImage {
     /// Average colour of the image (one CIAreaAverage pass), nudged to stay
     /// vivid-but-not-blinding so it reads well as a glass tint.
     func dominantColor() -> NSColor? {
-        guard let tiff = tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let cg = rep.cgImage else { return nil }
+        guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let ci = CIImage(cgImage: cg)
         guard let filter = CIFilter(name: "CIAreaAverage", parameters: [
             kCIInputImageKey: ci,
@@ -213,5 +255,13 @@ extension NSImage {
         c.getHue(&h, saturation: &s, brightness: &b, alpha: nil)
         return NSColor(hue: h, saturation: min(max(s, 0.4), 0.85),
                        brightness: min(max(b, 0.45), 0.8), alpha: 1)
+    }
+}
+
+private extension NSColor {
+    func isClose(to other: NSColor) -> Bool {
+        guard let a = usingColorSpace(.deviceRGB), let b = other.usingColorSpace(.deviceRGB) else { return false }
+        return abs(a.redComponent - b.redComponent) < 0.02 && abs(a.greenComponent - b.greenComponent) < 0.02
+            && abs(a.blueComponent - b.blueComponent) < 0.02
     }
 }

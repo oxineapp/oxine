@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// The notch's tab brain: owns the ordered tabs, which tab is active (persisted,
@@ -12,12 +13,24 @@ public final class NotchController: ObservableObject {
     @Published public private(set) var idleModuleID: String?
     /// Keep the notch expanded regardless of hover (toggled from the expanded UI).
     @Published public var pinned = false
+    /// Held open for the moment by something over it (a file panel opened from
+    /// a tab): like `pinned`, but not the person's choice and not shown.
+    @Published public var heldOpen = false
     /// A transient "sneak peek" line shown beside the cutout (e.g. a new track's
     /// title) for a couple of seconds, without fully opening the notch.
     @Published public private(set) var peekText: String?
     /// A transient system HUD (volume / brightness) taking over the compact ears.
     /// Highest priority of the collapsed-notch overlays.
     @Published public private(set) var hud: NotchHUD?
+    /// The colors of whoever is waiting on an app (an unread chat): the closed
+    /// notch's outline breathes in them, one after another. Empty: no glow.
+    @Published public private(set) var attention: [Color] = []
+
+    /// Put the keyboard in the open tab's main field. The presenter makes the
+    /// notch window key first, then asks the tab (see `focusActive`).
+    public let focusRequests = PassthroughSubject<Void, Never>()
+    /// Open the notch on a tab (a notice's "Open"). The presenter does it.
+    public let openRequests = PassthroughSubject<String, Never>()
 
     public let modules: [any NotchModule]
 
@@ -47,6 +60,19 @@ public final class NotchController: ObservableObject {
     /// Select which tab is active (from the tab bar).
     public func select(_ id: String) { activeModuleID = id }
 
+    /// The person clicked to type (the notch, or a tab): focus the open tab.
+    public func focusActive() { focusRequests.send() }
+
+    /// Open the notch on a tab and give it the keyboard.
+    public func open(tab id: String) {
+        guard module(id) != nil else { return }
+        openRequests.send(id)
+    }
+
+    public func setAttention(_ colors: [Color]) {
+        if colors != attention { attention = colors }
+    }
+
     /// Flash a sneak-peek line beside the cutout for a couple of seconds.
     public func peek(_ text: String, seconds: TimeInterval = 2.5) {
         peekClear?.cancel()
@@ -70,6 +96,19 @@ public final class NotchController: ObservableObject {
         hudClear = work
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
+
+    /// Take the HUD away now: the pointer came to it, so it steps aside
+    /// rather than sitting in the way.
+    public func dismissHUD() {
+        guard hud != nil else { return }
+        hudClear?.cancel()
+        hudClear = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { hud = nil }
+    }
+
+    /// The HUD's two ears in the notch window (SwiftUI global space), so the
+    /// presenter can tell when the pointer comes to it.
+    var hudFrames: [Bool: CGRect] = [:]
 
     /// Re-pick the idle module. Called when any module's `wantsIdle` flips.
     public func resolveIdle() {

@@ -9,6 +9,9 @@ final class LyricsOverlayModel: ObservableObject {
     @Published private(set) var settings = LyricsSettings()
     /// Step aside (notch expanded) — the pill slides up and fades, then returns.
     @Published private(set) var hidden = true
+    /// How far below its resting place the pill sits: the open notch's depth
+    /// while it follows the notch open, else 0. Animates with the notch.
+    @Published private(set) var drop: CGFloat = 0
     /// Monotonic per *line change*, so identical consecutive lines (a repeated
     /// chorus) still get their entrance.
     @Published private(set) var lineID = 0
@@ -18,6 +21,13 @@ final class LyricsOverlayModel: ObservableObject {
     /// the view so the controller can hit-test the cursor against a
     /// click-through panel.
     var pillFrame: CGRect = .zero
+
+    /// Move with the notch. Same curve and length as DynamicNotchKit's
+    /// compact ⇄ expanded conversion, so the pill tracks the notch's edge.
+    func setDrop(_ value: CGFloat) {
+        guard value != drop else { return }
+        withAnimation(.snappy(duration: 0.4)) { drop = value }
+    }
 
     func setHovered(_ on: Bool) {
         guard on != hovered else { return }
@@ -78,7 +88,7 @@ struct LyricsOverlayView: View {
                 pill
                     .opacity(model.hovered ? 0.28 : 1)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { model.pillFrame = $0 }
-                    .padding(.top, s.gap)
+                    .padding(.top, s.gap + model.drop)
                     .transition(pillTransition)
             }
         }
@@ -87,6 +97,22 @@ struct LyricsOverlayView: View {
     }
 
     private var pill: some View {
+        // Hugs a short line; a long one wraps to its second line at the
+        // size's width. (Fixing the width to the text's instead sized the
+        // pill for one line, so a long line was cut to "…" rather than wrapped.)
+        CappedWidth(max: m.maxWidth) {
+            pillText
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        // The pill masks the line's vertical entrance/exit.
+        .clipShape(RoundedRectangle(cornerRadius: m.radius, style: .continuous))
+        .glassEffect(.regular.tint(.black.opacity(0.45)),
+                     in: RoundedRectangle(cornerRadius: m.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: m.radius, style: .continuous)
+            .strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
+    }
+
+    private var pillText: some View {
         VStack(spacing: 3) {
             lineText
                 .font(font)
@@ -102,14 +128,6 @@ struct LyricsOverlayView: View {
         .multilineTextAlignment(.center)
         .padding(.horizontal, m.hPad)
         .padding(.vertical, m.vPad)
-        .frame(maxWidth: m.maxWidth)
-        .fixedSize(horizontal: true, vertical: false)
-        // The pill masks the line's vertical entrance/exit.
-        .clipShape(RoundedRectangle(cornerRadius: m.radius, style: .continuous))
-        .glassEffect(.regular.tint(.black.opacity(0.45)),
-                     in: RoundedRectangle(cornerRadius: m.radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: m.radius, style: .continuous)
-            .strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
     }
 
     /// The line itself. A hidden copy of the *current* line sizes the pill, so

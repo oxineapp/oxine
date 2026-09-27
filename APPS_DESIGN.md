@@ -79,6 +79,11 @@ Internal name: `apps` (the module, the protocol, the folder).
 - `run` — release **asset names** per arch. `arm64` required, `x86_64`
   allowed but never required (macOS 26 still has Intel stragglers; Sous-style
   apps may skip it).
+- `files` — other release assets the app needs beside its binary in `bin/`
+  (a helper tool it runs), per arch: `{ "arm64": ["wacli"] }`. Plain file
+  names only. A release with `files` must ship `SHA256SUMS`, and every file
+  must match it, or nothing is installed. Needs Oxine 2.5.0 (set `minOxine`),
+  since older ones ignore it.
 - `surfaces` — which extension points the app fills (see below). Static in the
   manifest so the store page can show them before install.
 - `capabilities` — ring-1 host APIs the app may call/subscribe (grant sheet).
@@ -461,3 +466,84 @@ Deferred (next):
 - **Vocabulary (additive).** `text` takes `align: "center"`. `AppTabView`
   gives the tree a minimum height of the tab, so top-level `spacer` nodes push
   (centre content, or pin a section to the bottom).
+
+## Update (2026-09-27) — conversations
+
+For a messenger companion (NotchsApp, github.com/oxineapp/notchsapp, runs
+on `wacli` and ships it as a `files` entry). All additive;
+`api` stays 1. `Chat Demo` (`./chatdemo.sh`) uses every piece and is the
+reference.
+
+- **Tall tabs in either ear.** `notchTab` takes `placement` ("left", the
+  default, or "right"), `height` (the most it grows to, up to 360) and
+  `padding` (0–16, default 10). The tab fits its tree: a short list sits
+  flush, from the standard 114 up to `height`; a `chatLayout` takes all of it. The left ear holds four tabs; the right holds
+  the ones asking for it, then the left's overflow. A taller tab grows the
+  open notch; lyrics and floating notices hang below it.
+- **Visibility.** The notch tab now hears `activate` / `deactivate` when it's
+  actually on screen (the notch open on it), not when the notch is built, so
+  an app knows when what arrived has been seen.
+- **Typing.** Clicking the notch (hover already opened it, or a click opens
+  it) or its tab puts the keyboard in the tab's `textField` with
+  `kind: "composer"` or `focused: true`, host-side, then tells the app with
+  `{"t":"lifecycle","phase":"focus","surface":"notchTab"}`. The notch is a
+  non-activating panel, so the app in front stays in front, and it gets its
+  keyboard back when the notch closes. `focusRequest` (a number the app bumps)
+  still refocuses a `focused` field. Text fields keep what's typed host-side:
+  each change is sent, and the app's `value` replaces the text only when the
+  field isn't being typed in, or when it's "" (cleared after a send). `submit`
+  now carries the text as its value.
+- **Attention.** `{"t":"attention","colors":["#FF6B8B"]}`: who's unread, as
+  "#RRGGBB". The closed island glows along its own edge in each color in
+  turn, crossfading every few seconds, and flares once when someone new is
+  waiting; `[]` clears it. It's drawn by the island itself (the same shape
+  as its mask, in the same view, wholly outside its edge), so it wraps the
+  notice ears and the notice row below and moves with them exactly. Steady:
+  no clock runs while it's up. Hidden while the notch is open. The metric bar
+  is drawn the same way now, and gives way to the glow while it's up.
+- **Message notices.** `notify.post` takes the notice vocabulary: `key` (the
+  same key replaces in place; `notify.end {key}` takes it down, e.g. read on
+  the phone), `title`, `body`, `subtitle`, `icon`, `tint`, `person {name,
+  color, image (b64)}` (makes it the message look), `reactions` (up to 5),
+  `reply` (a placeholder: shows a reply field, in the notch and floating),
+  `actions` (up to 3: `id`, `title`, `role`, `icon`, `hold`), `progress`,
+  `hero`, `emoji`, `look`, `shape`, `entrance`, `placement`, `urgent`,
+  `sticky`, `duration`, `sound`. What the person does comes back as
+  `{"t":"event","surface":"notice","ref":<key>,"kind":…}` with kind `reply`
+  or `react` (value: the text or emoji), `action` (value: the button id),
+  `open`, or `dismiss`. An action with id `open` also opens the notch on the
+  app's tab, ready to type.
+- **Vocabulary.** `chatLayout` (children: header, messages, composer; the
+  messages scroll between them, open at the newest, remember where the
+  reader left each `scrollContext`, follow a new `scrollKey` only for a reader
+  at the end, and offer a jump down otherwise), `messageBubble` (`text`,
+  `sender`, `time`, `outgoing`, `groupPosition` single/first/middle/last,
+  `reactions`, `reactionEnabled` for hover reactions + Reply and the context
+  menu, `pending`, `blurred` until pointed at, `dimmed`, `imageData` /
+  `mediaType`, `maxWidth`, `imageMaxHeight`, `tint`, `quoteSender` / `quoteText` /
+  `quoteTint` (the message it replies to), `sticker` (small, no bubble), `status` sent/delivered/read
+  for the ticks on an outgoing one; events `react` with the
+  emoji, "" to remove, and `reply`), `replyPreview` (`sender`, `text`, `tint`;
+  `tap` cancels), `chatRow` (`title`, `subtitle`, `timestamp`, `unread`,
+  `indicatorColor`, `avatarText`, `avatarImage` (base64), `pinned`, `starred`, `protected`, `watched`),
+  `swatch` (`color`, or none for automatic; `selected`; `tap`),
+  `iconButton` / `plainIconButton` `pick` ("file" or "image": the host asks
+  for files and sends "pick" with the chosen paths), a `chatLayout` with an
+  id takes dropped files ("drop", their paths), `messageBubble`
+  `quickReactions` (up to 6, the hover row), and on any node `menu` (a
+  right-click menu: items of `id`, `title`, `symbol`, `destructive`,
+  `checked`, or `divider`; a pick sends "menu" with the item id as `ref` and
+  the node's id as the value), `emptyState` `settingsLink` (a link that
+  opens the app's settings page),
+  `toolbar` (`flat`), `composer` (the notice's reply capsule around a
+  `composer` field and a send button), `iconButton` (filled), `plainIconButton`
+  (glass, `active`), `dateSeparator`, `sectionLabel`, `secureField`. Also:
+  `text` `maxLines` / `minScale` and style `chatTitle`; `icon` `color`;
+  `image` `kind: "qr"` (crisp, on white) and `label`; `row` `prominent` and
+  `indicatorColor`; `scroll` `maxHeight` (a window onto its content that
+  scrolls inside), `spacing`, and `remember` (a key: it goes back to where
+  the reader left it, per surface). A panel tab with a top-level `scroll`
+  scrolls that instead of the whole tab. People are drawn like notices draw them (initials on
+  their color), bubbles take the notice's bubble corners, hover reactions are
+  the notice's reactions. A panel tab whose tree is a `chatLayout` doesn't
+  scroll as a whole.

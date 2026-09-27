@@ -17,7 +17,9 @@ extension NSWindow {
     /// no other `NSWindow` in the app is affected. Only the read-only appearance
     /// getters are touched — overriding `canBecomeKey`/`canBecomeMain` is what
     /// crashes shortly after show, so we leave those alone.
-    func forceActiveGlassAppearance() {
+    /// `keyToo: false` fakes only the appearance, for a window that must still
+    /// really become key (a panel with a text field).
+    func forceActiveGlassAppearance(keyToo: Bool = true) {
         guard let cls: AnyClass = object_getClass(self) else { return }
         let key = ObjectIdentifier(cls)
         guard !Self.patchedGlassClasses.contains(key) else { return }
@@ -29,8 +31,9 @@ extension NSWindow {
         guard let base = class_getInstanceMethod(NSWindow.self,
                                                  #selector(getter: NSWindow.isKeyWindow)),
               let types = method_getTypeEncoding(base) else { return }
-        for sel in [#selector(getter: NSWindow.isKeyWindow),
-                    Selector(("hasKeyAppearance"))] {
+        let getters = keyToo ? [#selector(getter: NSWindow.isKeyWindow), Selector(("hasKeyAppearance"))]
+                             : [Selector(("hasKeyAppearance"))]
+        for sel in getters {
             // `DynamicNotchPanel` only inherits these from NSWindow, so addMethod
             // installs a class-specific override that shadows the inherited one.
             class_addMethod(cls, sel, imp, types)

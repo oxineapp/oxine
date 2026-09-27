@@ -330,6 +330,7 @@ struct SettingsView: View {
     @AppStorage("notchFauxOnExternal", store: UserDefaults(suiteName: "com.oxine.settings")) var notchFauxOnExternal = false
     @AppStorage("notchOpenTrigger", store: UserDefaults(suiteName: "com.oxine.settings")) var notchOpenTrigger = "hover"
     @AppStorage("notchSneakPeek", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSneakPeek = true
+    @AppStorage("notchSafeZone", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSafeZone = 32
     @AppStorage("notchHomeSlot", store: UserDefaults(suiteName: "com.oxine.settings")) var notchHomeSlot = "camera"
     @AppStorage("notchNowPlayingSource", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNowPlayingSource = "system"
     @AppStorage("notchSystemHUD", store: UserDefaults(suiteName: "com.oxine.settings")) var notchSystemHUD = true
@@ -340,6 +341,11 @@ struct SettingsView: View {
     @AppStorage("notchBarMetric", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetric = "cpu"
     @AppStorage("notchBarSplit", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarSplit = false
     @AppStorage("notchBarMetricRight", store: UserDefaults(suiteName: "com.oxine.settings")) var notchBarMetricRight = "gpu"
+    @AppStorage("notchAgentsClaude", store: UserDefaults(suiteName: "com.oxine.settings")) var notchAgentsClaude = true
+    @AppStorage("notchNoticePlacement", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNoticePlacement = "automatic"
+    @AppStorage("notchNoticeWhenOpen", store: UserDefaults(suiteName: "com.oxine.settings")) var notchNoticeWhenOpen = "automatic"
+    @State private var noticeAppPlacements: [String: String] = [:]
+    @AppStorage("notchAgentsCodex", store: UserDefaults(suiteName: "com.oxine.settings")) var notchAgentsCodex = true
     @State private var agentHookStatus = ""
     @StateObject private var permissions = NotchPermissions()
     @ObservedObject private var tabConfig = TabBarConfig.shared
@@ -449,6 +455,13 @@ struct SettingsView: View {
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { category = .apps; storeDetailAppID = id }
     }
 
+    /// An app asked for its settings page (a link in its tab): go there.
+    private func takePendingAppSettings() {
+        guard let id = AppDelegate.pendingAppSettings else { return }
+        AppDelegate.pendingAppSettings = nil
+        openApp(id)
+    }
+
     /// Pop the app's settings page: back to its listing if that's how we got
     /// here, otherwise to the store.
     private func popToStore() {
@@ -463,7 +476,12 @@ struct SettingsView: View {
 
     var body: some View {
         content
-            .onAppear { obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured }
+            .onAppear {
+                obsidianConfigured = ObsidianVaultManager.shared.isVaultConfigured
+                takePendingAppSettings()
+            }
+            // Already showing when an app's link was followed.
+            .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in takePendingAppSettings() }
             .alert("Clear all history?", isPresented: $showClearConfirm) {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
@@ -1304,6 +1322,27 @@ struct SettingsView: View {
 
                 Divider().opacity(0.1)
 
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Safe zone")
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(notchSafeZone == 0
+                             ? "Closes as soon as the cursor leaves it."
+                             : "Stays open while the cursor is within \(notchSafeZone) pt of it, so a fast movement past the edge doesn't close it.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Picker("", selection: $notchSafeZone) {
+                        ForEach(NotchPresenter.SafeZone.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                }
+                .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
                 Toggle(isOn: $notchSneakPeek) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Sneak peek on track change")
@@ -1392,6 +1431,10 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(!notchEnabled)
+
+                Divider().opacity(0.1)
+
+                noticePlacementPicker
 
                 Divider().opacity(0.1)
 
@@ -1558,6 +1601,95 @@ struct SettingsView: View {
         }
     }
 
+    /// Where apps' short notifications show (Smart by default, or per app),
+    /// what they do while the notch is open, plus a test one to see it.
+    private var noticePlacementPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Notifications")
+                        .foregroundColor(.white.opacity(0.85))
+                    Text(noticeStyleHint)
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
+                Picker("", selection: $notchNoticePlacement) {
+                    ForEach(NoticePlacement.styles) { Text($0.label).tag($0.rawValue) }
+                    // An older choice of one spot for everything still shows.
+                    if let spot = NoticePlacement(rawValue: notchNoticePlacement),
+                       !NoticePlacement.styles.contains(spot) {
+                        Text(spot.label).tag(spot.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: notchNoticePlacement) { _, _ in NotchNotices.shared.reloadSettings() }
+            }
+            HStack {
+                Text("While the notch is open")
+                    .foregroundColor(.white.opacity(0.85))
+                Spacer()
+                Picker("", selection: $notchNoticeWhenOpen) {
+                    ForEach(NoticeOpenBehavior.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: notchNoticeWhenOpen) { _, _ in NotchNotices.shared.reloadSettings() }
+            }
+            let sources = NoticePlacement.knownSources.sorted { $0.value < $1.value }
+            if !sources.isEmpty {
+                Text("Per app")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.55))
+                    .padding(.top, 2)
+                ForEach(sources, id: \.key) { id, name in
+                    HStack {
+                        Text(name).foregroundColor(.white.opacity(0.8))
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { noticeAppPlacements[id] ?? NoticePlacement.choiceForApp(id) ?? "default" },
+                            set: { value in
+                                noticeAppPlacements[id] = value
+                                NoticePlacement.setChoiceForApp(id, value == "default" ? nil : value)
+                            })) {
+                            Text("Same as above").tag("default")
+                            ForEach(NoticePlacement.choices) { Text($0.label).tag($0.rawValue) }
+                            Divider()
+                            Text("Don't show").tag(NoticePlacement.off)
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                    }
+                }
+            }
+            Button("Send a test notification") {
+                NotchNotices.shared.post(NotchNotice(
+                    icon: "bell.badge.fill", tint: .panelAccent, title: "Test notification",
+                    detail: "Pointing at it shows this. A notice with buttons that you don't answer waits in the list behind the bell in the open notch.",
+                    actions: [.init(id: "ok", title: "Got it", role: .primary)],
+                    source: "oxine.settings", sourceName: "Settings test"))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .disabled(!notchEnabled)
+    }
+
+    /// What the chosen notification style does.
+    private var noticeStyleHint: String {
+        switch NoticePlacement(rawValue: notchNoticePlacement) ?? .automatic {
+        case .notch:
+            "Part of the notch: under it, and beside it when that's taken or an app asks for it, docked at its bottom while it's open. Point at one for the full version."
+        case .floating, .floatingBeside:
+            "On glass below the notch, two side by side, so the notch itself never changes. Point at one for the full version."
+        case .automatic:
+            "On the notch while it's closed: under it, and beside it when that's taken or an app asks for it, never over an agent that's waiting on you. Urgent ones float on glass below it, and so does everything while it's open."
+        default:
+            "Every notification goes to this spot, and to the next best one when it's taken."
+        }
+    }
+
     /// A left/right ear content picker bound to the given setting.
     private func earPicker(_ title: String, _ binding: Binding<String>) -> some View {
         HStack {
@@ -1586,6 +1718,8 @@ struct SettingsView: View {
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.5))
             }
+            agentToggle("Claude Code", $notchAgentsClaude)
+            agentToggle("Codex", $notchAgentsCodex)
             HStack(spacing: 8) {
                 Button("Install Claude Code hooks") { runHook { try AgentHookInstaller.installClaude(); return "Claude Code hooks installed." } }
                     .buttonStyle(.borderedProminent)
@@ -1602,6 +1736,21 @@ struct SettingsView: View {
             }
         }
         .disabled(!notchEnabled)
+    }
+
+    /// Shows or hides one tool's working status on the notch. The hooks stay
+    /// installed either way.
+    private func agentToggle(_ tool: String, _ binding: Binding<Bool>) -> some View {
+        Toggle(isOn: binding) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tool)
+                    .foregroundColor(.white.opacity(0.85))
+                Text("Show on the notch when \(tool) is working, needs you or is done.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+        .toggleStyle(SwitchToggleStyle(tint: Color.panelAccent))
     }
 
     private func runHook(_ action: () throws -> String) {

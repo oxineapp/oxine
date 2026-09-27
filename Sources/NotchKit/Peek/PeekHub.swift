@@ -13,12 +13,6 @@ public final class PeekHub: ObservableObject {
     let usage = SystemUsageMonitor()
     let claude = ClaudeUsageMonitor()
 
-    /// Live on-screen frames of the collapsed ears, in the notch window's coordinate
-    /// space (SwiftUI `.global`), reported by the compact views. The bar flips these
-    /// through the kit window to trace the *real* island — no guessed chrome.
-    @Published var leftEarFrame: CGRect = .zero
-    @Published var rightEarFrame: CGRect = .zero
-
     private var bag = Set<AnyCancellable>()
 
     init(nowPlaying: NowPlayingManager?) {
@@ -52,15 +46,6 @@ struct EarView: View {
     var body: some View {
         let content = side == .left ? PeekContent.left : PeekContent.right
         resolve(content)
-            // Report this idle ear's real frame for the bar. Measuring *here* (not
-            // the compact wrapper) means a HUD / sneak-peek takeover — which
-            // replaces EarView entirely — can never poison the reading: EarView
-            // simply isn't in the tree then, so the last idle frame holds.
-            .background(GeometryReader { g in
-                Color.clear.onChange(of: g.frame(in: .global), initial: true) { _, f in
-                    if side == .left { hub.leftEarFrame = f } else { hub.rightEarFrame = f }
-                }
-            })
     }
 
     @ViewBuilder private func resolve(_ c: PeekContent) -> some View {

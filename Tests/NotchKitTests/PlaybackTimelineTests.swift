@@ -129,3 +129,22 @@ func legacyTimestampAndDelayedAlbumMetadataKeepThePlaybackAnchor() throws {
     try update(source, ["album": "Album", "contentItemIdentifier": "first-id"], at: 1_012)
     #expect(abs(manager.position(at: Date(timeIntervalSince1970: 1_012)) - 36.75) < 0.001)
 }
+
+// Spotify posts a fresh contentItemIdentifier on most updates for the same
+// song, often with no elapsed time. That must not wipe the clock (it left the
+// scrubber at 0:00 in Automatic); a real new song brings new metadata.
+@MainActor @Test
+func rotatingIdentifierForTheSameSongKeepsThePosition() throws {
+    let source = MediaRemoteAdapterSource()
+    let manager = NowPlayingManager(source: source)
+    try update(source, ["title": "Song", "artist": "Artist", "album": "Album", "bundleIdentifier": "com.spotify.client",
+                        "contentItemIdentifier": "first", "playing": true, "elapsedTimeMicros": 30_000_000,
+                        "timestampEpochMicros": 1_000_000_000, "durationMicros": 300_000_000], at: 1_000, diff: false)
+    try update(source, ["contentItemIdentifier": "second"], at: 1_010)
+    #expect(manager.track?.hasPlaybackPosition == true)
+    #expect(manager.position(at: Date(timeIntervalSince1970: 1_010)) == 40)
+    // A repeat of the same song still restarts the clock: it carries elapsed 0.
+    try update(source, ["contentItemIdentifier": "third", "elapsedTimeMicros": 0,
+                        "timestampEpochMicros": 1_020_000_000], at: 1_020)
+    #expect(manager.position(at: Date(timeIntervalSince1970: 1_021)) == 1)
+}

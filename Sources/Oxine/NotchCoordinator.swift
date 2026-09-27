@@ -13,6 +13,8 @@ final class NotchCoordinator {
     private var controller: NotchController?
     private var presenter: NotchPresenter?
     private let suite = UserDefaults(suiteName: "com.oxine.settings")
+    /// Who's waiting, per app, in their colors (see `setAttention`).
+    private var attention: [String: [String]] = [:]
 
     private init() {}
 
@@ -49,7 +51,7 @@ final class NotchCoordinator {
             name: .notchSettingsChanged, object: nil)
         // Display changes (lid closed, monitor plugged) move the notch screen.
         NotificationCenter.default.addObserver(
-            self, selector: #selector(settingsChanged),
+            self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
         apply()
     }
@@ -58,6 +60,32 @@ final class NotchCoordinator {
     private var fauxOnExternal: Bool { suite?.bool(forKey: "notchFauxOnExternal") ?? false }
 
     @objc private func settingsChanged() { apply() }
+
+    /// The screen the notch was last built for (see `screenSignature`).
+    private var builtFor: String?
+    private var pendingScreenCheck: DispatchWorkItem?
+
+    /// The notch's screen, where it sits, and its cutout. macOS posts
+    /// screen-parameter changes far more often than any of these move (wake,
+    /// Dock and menu bar changes, HDR headroom following the brightness), and a
+    /// rebuild restarts every notch module, so only a change here rebuilds.
+    private static func screenSignature() -> String? {
+        guard let s = NotchGeometry.preferredScreen() else { return nil }
+        let id = s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+        return "\(id) \(s.frame) \(s.backingScaleFactor) \(NotchGeometry.notchFrame(for: s))"
+    }
+
+    /// Waits for a reconfiguration burst to settle, then rebuilds only if the
+    /// notch's screen actually changed.
+    @objc private func screensChanged() {
+        pendingScreenCheck?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, Self.screenSignature() != self.builtFor else { return }
+            self.apply()
+        }
+        pendingScreenCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
 
     /// Global-shortcut action: open/close the notch by toggling its pin. Pinning
     /// keeps it expanded without hover; unpinning lets it collapse. (This is the
@@ -73,12 +101,36 @@ final class NotchCoordinator {
         controller?.peek(text)
     }
 
+    /// An app's unread people, as "#RRGGBB" colors (already checked): the
+    /// closed notch's outline breathes through everyone's, app by app.
+    func setAttention(appID: String, colors: [String]) {
+        guard attention[appID, default: []] != colors else { return }
+        attention[appID] = colors.isEmpty ? nil : colors
+        controller?.setAttention(attentionColors)
+    }
+
+    private var attentionColors: [Color] {
+        attention.keys.sorted().flatMap { attention[$0] ?? [] }.map(Color.init(hex:))
+    }
+
+    /// Keep the notch open whatever the pointer does (a file panel is up
+    /// over it), or let it go again.
+    func holdOpen(_ held: Bool) {
+        controller?.heldOpen = held
+    }
+
+    /// Open the notch on an app's tab (its notice's "Open" was pressed).
+    func openTab(appID: String) {
+        controller?.open(tab: "app:\(appID)")
+    }
+
 
     /// Tear down and (re)build from the current settings — covers enable/disable
     /// and the faux-notch toggle in one path.
     func apply() {
         presenter?.hide(); presenter = nil
         controller = nil
+        builtFor = Self.screenSignature()
         guard enabled else { return }
 
         // Tabs: Home (player + webcam slot), Shelf, Calendar — plus a tab per
@@ -92,6 +144,7 @@ final class NotchCoordinator {
         ]
         modules.append(contentsOf: AppsManager.shared.notchTabApps.map { RemoteNotchModule(app: $0) })
         let controller = NotchController(modules: modules)
+        controller.setAttention(attentionColors)
         let presenter = NotchPresenter(controller: controller, allowFauxNotch: fauxOnExternal)
         self.controller = controller
         self.presenter = presenter

@@ -17,6 +17,9 @@ struct AppManifest: Codable, Equatable, Sendable {
     var minOxine: String?
     /// Release asset name per architecture ("arm64" required for external apps).
     var run: [String: String]?
+    /// Other release assets the app needs beside its binary in `bin/` (a
+    /// helper tool it runs), per architecture. Plain file names only.
+    var files: [String: [String]]?
     var surfaces: Surfaces
     var capabilities: [String]?
     var osPermissions: [String]?
@@ -36,7 +39,17 @@ struct AppManifest: Codable, Equatable, Sendable {
         struct PanelTabDecl: Codable, Equatable, Sendable { var icon: String? = nil; var title: String? = nil }
         struct SettingsDecl: Codable, Equatable, Sendable { var subtitle: String? = nil }
         struct QuickToggleDecl: Codable, Equatable, Sendable { var icon: String? = nil; var tooltip: String? = nil; var menu: Bool? = nil }
-        struct NotchTabDecl: Codable, Equatable, Sendable { var icon: String? = nil; var title: String? = nil }
+        /// `placement` puts the tab button in the "left" (default) or "right"
+        /// ear. `height` asks for taller content (a chat), kept between the
+        /// standard height and the notch's tallest. `padding` insets the
+        /// content, 0–16 (default 10), for dense surfaces that want the edges.
+        struct NotchTabDecl: Codable, Equatable, Sendable {
+            var icon: String? = nil
+            var title: String? = nil
+            var placement: String? = nil
+            var height: Double? = nil
+            var padding: Double? = nil
+        }
         struct BarMetricDecl: Codable, Equatable, Sendable { var label: String? = nil }
     }
 
@@ -61,10 +74,19 @@ struct AppManifest: Codable, Equatable, Sendable {
         if id.isEmpty || name.isEmpty { return "manifest is missing id or name" }
         if api != AppsProtocolVersion { return "app speaks api \(api); this Oxine speaks \(AppsProtocolVersion)" }
         if external && run?["arm64"] == nil { return "manifest has no arm64 binary" }
+        for name in (files ?? [:]).values.joined() where !Self.isPlainFileName(name) {
+            return "manifest lists a file with a bad name: \(name)"
+        }
         if let minOxine, !Self.versionSatisfied(min: minOxine) {
             return "needs Oxine \(minOxine) or newer"
         }
         return nil
+    }
+
+    /// A name that stays in `bin/`: no folders, not hidden, not a file Oxine writes.
+    static func isPlainFileName(_ name: String) -> Bool {
+        !name.isEmpty && !name.contains("/") && !name.contains("\\") && !name.hasPrefix(".")
+            && name != "manifest.json" && name != "meta.json"
     }
 
     static func versionSatisfied(min: String) -> Bool {

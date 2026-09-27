@@ -1,6 +1,8 @@
 import AppKit
 import Foundation
 import IOKit.pwr_mgt
+import SwiftUI
+import NotchKit
 
 /// Keeps the Mac awake on demand (Caffeine in the footer). Modeled on
 /// domzilla/Caffeine: holds a short, self-expiring IOKit power assertion that is
@@ -155,7 +157,23 @@ final class CaffeineManager: ObservableObject {
     private func tick() {
         guard let endDate else { return }
         let left = endDate.timeIntervalSinceNow
-        if left <= 0 { stop() } else { remaining = left }
+        if left <= 0 {
+            stop()
+            announceEnded()
+        } else {
+            remaining = left
+        }
+    }
+
+    /// A timed session ran out: say so in the notch, with a way to keep going.
+    private func announceEnded() {
+        NotchNotices.shared.post(NotchNotice(
+            icon: "cup.and.saucer.fill", tint: Color(red: 0.95, green: 0.7, blue: 0.3), title: "Caffeine off",
+            subtitle: "Mac can sleep", actions: [.init(id: "more", title: "30 more min", role: .primary)],
+            duration: 8, group: "caffeine.ended", source: "oxine.caffeine", sourceName: "Caffeine")) { action in
+            guard action == "more" else { return }
+            CaffeineManager.shared.start(duration: 30 * 60)
+        }
     }
 
     // MARK: - Workspace

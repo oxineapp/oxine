@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import NotchKit
 import SousKit
+import SwiftUI
 import TemperKit
 import UserNotifications
 
@@ -43,9 +44,19 @@ final class AppCapabilityBroker {
             storageWrite(appID: appID, kv)
             return (.bool(true), nil)
         case "notify.post":
-            let title = args?["title"]?.stringValue ?? ""
-            let body = args?["body"]?.stringValue ?? ""
-            postNotification(appID: appID, title: title, body: body)
+            if notchEnabled {
+                postNotchNotice(appID: appID, args: args)
+            } else {
+                postNotification(appID: appID, title: args?["title"]?.stringValue ?? "",
+                                 body: args?["body"]?.stringValue ?? "")
+            }
+            return (.bool(true), nil)
+        case "notify.end":
+            // Answered elsewhere (read on the phone): take its notice down.
+            guard let key = args?["key"]?.stringValue else { return (nil, "missing key") }
+            if let id = notices.removeValue(forKey: NoticeKey(app: appID, key: key)) {
+                NotchNotices.shared.dismiss(id)
+            }
             return (.bool(true), nil)
         case "openURL.open":
             guard let raw = args?["url"]?.stringValue, let url = URL(string: raw) else {
@@ -142,6 +153,103 @@ final class AppCapabilityBroker {
     }
 
     // MARK: - Notifications
+
+    private var notchEnabled: Bool {
+        UserDefaults(suiteName: "com.oxine.settings")?.object(forKey: "notchEnabled") as? Bool ?? true
+    }
+
+    private struct NoticeKey: Hashable { let app: String; let key: String }
+    /// Each keyed notice showing, so the app can replace or end it by its key.
+    private var notices: [NoticeKey: UUID] = [:]
+
+    /// An app's notification as a notch notice. A plain one is its title and
+    /// body in the app's icon and color; the rest of the notice vocabulary is
+    /// there for apps that want it: a message from a person (their picture or
+    /// color, reactions, a reply field), a big value, a ring, buttons. What
+    /// the person does with it comes back as an event on the "notice"
+    /// surface, `ref` = the app's `key`. Posting the same key again replaces
+    /// the notice in place. Each app can be moved or turned off in Settings →
+    /// Notch → Notifications.
+    private func postNotchNotice(appID: String, args: JSONValue?) {
+        let app = AppsManager.shared.app(appID)
+        let name = app?.name ?? appID
+        let title = args?["title"]?.stringValue ?? ""
+        let body = args?["body"]?.stringValue ?? ""
+        let key = args?["key"]?.stringValue
+        let person = args?["person"].flatMap { p in
+            p["name"]?.stringValue.map {
+                NotchNotice.Person(name: $0, image: Self.image(p["image"]), color: Self.color(p["color"]))
+            }
+        }
+        let actions: [NotchNotice.Action] = (args?["actions"]?.arrayValue ?? []).prefix(3).compactMap { a in
+            guard let id = a["id"]?.stringValue, let title = a["title"]?.stringValue else { return nil }
+            return .init(id: id, title: title, role: a["role"]?.stringValue.flatMap(NotchNotice.Action.Role.init) ?? .normal,
+                         hold: a["hold"]?.boolValue ?? false, icon: a["icon"]?.stringValue)
+        }
+        let notice = NotchNotice(
+            icon: args?["icon"]?.stringValue ?? app?.icon ?? "app.badge.fill",
+            tint: Self.color(args?["tint"]) ?? AppArt.tint(for: appID),
+            title: title.isEmpty ? (person?.name ?? name) : title,
+            subtitle: args?["subtitle"]?.stringValue ?? (title.isEmpty && person == nil ? nil : name),
+            detail: body.isEmpty ? nil : body,
+            image: Self.image(args?["image"]),
+            progress: args?["progress"]?.numberValue.map { min(max($0, 0), 1) },
+            actions: actions,
+            placement: args?["placement"]?.stringValue.flatMap(NoticePlacement.init) ?? .automatic,
+            emphasis: args?["urgent"]?.boolValue == true ? .urgent : .normal,
+            duration: args?["duration"]?.numberValue.map { min(max($0, 2), 60) },
+            sticky: args?["sticky"]?.boolValue ?? false,
+            group: key.map { "\(appID):\($0)" },
+            sound: args?["sound"]?.stringValue,
+            source: appID, sourceName: name,
+            look: args?["look"]?.stringValue.flatMap(NotchNotice.Look.init) ?? (person != nil ? .message : .standard),
+            shape: args?["shape"]?.stringValue.flatMap(NotchNotice.Shape.init) ?? .automatic,
+            entrance: args?["entrance"]?.stringValue.flatMap(NotchNotice.Entrance.init) ?? .automatic,
+            hero: args?["hero"]?.stringValue, emoji: args?["emoji"]?.stringValue,
+            person: person,
+            reactions: Array((args?["reactions"]?.arrayValue ?? []).compactMap(\.stringValue).prefix(5)),
+            reply: args?["reply"]?.stringValue)
+        let id = notice.id
+        if let key { notices[NoticeKey(app: appID, key: key)] = id }
+        NotchNotices.shared.post(notice) { [weak self] action in
+            if let key, self?.notices[NoticeKey(app: appID, key: key)] == id {
+                self?.notices[NoticeKey(app: appID, key: key)] = nil
+            }
+            Self.answer(appID: appID, key: key, action: action)
+        }
+    }
+
+    /// Tell the app what the person did with its notice: "reply" or "react"
+    /// (with the text or emoji), "action" (the button's id), "open", or
+    /// "dismiss". "open" also opens the app's notch tab, ready to type.
+    private static func answer(appID: String, key: String?, action: String) {
+        guard let runtime = AppsManager.shared.app(appID)?.runtime else { return }
+        let kind: String, value: JSONValue?
+        if action.hasPrefix("reply:") {
+            (kind, value) = ("reply", .string(String(action.dropFirst(6))))
+        } else if action.hasPrefix("react:") {
+            (kind, value) = ("react", .string(String(action.dropFirst(6))))
+        } else if action == "dismiss" || action == "open" {
+            (kind, value) = (action, nil)
+        } else {
+            (kind, value) = ("action", .string(action))
+        }
+        if action == "open" { NotchCoordinator.shared.openTab(appID: appID) }
+        runtime.sendEvent(surface: "notice", ref: key, kind: kind, value: value)
+    }
+
+    /// A "#RRGGBB" prop, or nil.
+    private static func color(_ value: JSONValue?) -> Color? {
+        guard let hex = value?.stringValue, AppRuntime.isHexColor(hex) else { return nil }
+        return Color(hex: hex)
+    }
+
+    /// A base64 PNG/JPEG prop (a person's picture, a photo), at most 1 MB.
+    private static func image(_ value: JSONValue?) -> NSImage? {
+        guard let b64 = value?.stringValue, b64.count < 1_400_000,
+              let data = Data(base64Encoded: b64) else { return nil }
+        return NSImage(data: data)
+    }
 
     private func postNotification(appID: String, title: String, body: String) {
         let center = UNUserNotificationCenter.current()

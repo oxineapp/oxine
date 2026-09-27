@@ -19,6 +19,9 @@ public protocol NotchModule: AnyObject {
     var title: String { get }
     /// SF Symbol for the tab bar.
     var icon: String { get }
+    /// Which ear its tab button sits in. The left ear holds four; the rest
+    /// go right, the ones asking for the right first.
+    var tabSide: NotchTabSide { get }
 
     /// When several modules want the idle peek at once, the highest priority wins.
     var idlePriority: Int { get }
@@ -35,17 +38,36 @@ public protocol NotchModule: AnyObject {
     func rightPeek() -> AnyView
     /// The expanded content shown when the notch is open and this tab is active.
     func expandedView() -> AnyView
+    /// How tall its content wants to be; nil (most tabs) is the standard
+    /// height. A conversation asks for more. The notch keeps it between the
+    /// standard height and `NotchExpandedRoot.tallestContent`.
+    var expandedHeight: CGFloat? { get }
+    /// Sized to its content, from the standard height up to `expandedHeight`,
+    /// so a short list sits flush instead of leaving the rest of the notch
+    /// empty. Content that wants all of it (a chat) asks for a big ideal height.
+    var fitsContent: Bool { get }
 
     /// Start/stop live work alongside the notch's lifecycle.
     func activate()
     func deactivate()
+    /// Put the keyboard in its main field (a chat's composer): the person
+    /// clicked the notch open, or clicked its tab, to type.
+    func focus()
+}
+
+public enum NotchTabSide: String, Sendable {
+    case left, right
 }
 
 public extension NotchModule {
+    var tabSide: NotchTabSide { .left }
+    var expandedHeight: CGFloat? { nil }
+    var fitsContent: Bool { false }
     var idlePriority: Int { 0 }
     var wantsIdle: Bool { false }
     func leftPeek() -> AnyView { AnyView(EmptyView()) }
     func rightPeek() -> AnyView { AnyView(EmptyView()) }
     func activate() {}
     func deactivate() {}
+    func focus() {}
 }

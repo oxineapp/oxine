@@ -141,6 +141,7 @@ final class AppsManager: ObservableObject {
     /// root, start everything enabled. Call once at launch.
     func start() {
         migrateTabOnlySwitches()
+        retireRemovedApps()
         seedBundled()
         var list: [OxApp] = installedBundled()
         list.append(contentsOf: scanInstalled())
@@ -307,6 +308,32 @@ final class AppsManager: ObservableObject {
         suite?.set(disabled, forKey: "appsDisabled")
     }
 
+    /// Apps whose catalog entry is gone, so they no longer load; this clears
+    /// what an install left behind. Sear shipped in 2.4.0 and was pulled (its
+    /// full-screen overlay slowed the whole Mac). Notification Playground was
+    /// briefly a store app in development before becoming its own dev tool.
+    private func retireRemovedApps() {
+        retire("oxine.sear", marker: "sear.mode", settings: ["mode", "boost", "dim", "offOnBattery"].map { "sear.\($0)" })
+        retire("oxine.playground")
+    }
+
+    private func retire(_ id: String, marker: String? = nil, settings: [String] = []) {
+        guard installedBundledIDs.contains(id) || marker.map({ suite?.object(forKey: $0) != nil }) == true else { return }
+        installedBundledIDs.remove(id)
+        footerSlots.removeAll { $0 == id }
+        if var disabled = suite?.stringArray(forKey: "appsDisabled"), disabled.contains(id) {
+            disabled.removeAll { $0 == id }
+            suite?.set(disabled, forKey: "appsDisabled")
+        }
+        if var grants = suite?.dictionary(forKey: "appsGrants"), grants[id] != nil {
+            grants[id] = nil
+            suite?.set(grants, forKey: "appsGrants")
+        }
+        TabBarConfig.shared.remove(.app(id))
+        for key in settings { suite?.removeObject(forKey: key) }
+        try? FileManager.default.removeItem(at: Self.appDir(for: id))
+    }
+
     /// Install the `seeded` apps once per id: on a fresh install, and on the
     /// update where Sous, Temper, Caffeine and Focus stopped being fixed parts
     /// of Oxine. The record of what was seeded is what keeps an uninstalled one
@@ -408,7 +435,7 @@ final class AppsManager: ObservableObject {
     // MARK: - Install / update / uninstall
 
     enum InstallError: LocalizedError {
-        case badRepo, network(String), noManifest, invalid(String), noBinary, hashMismatch
+        case badRepo, network(String), noManifest, invalid(String), noBinary, missingFile(String), hashMismatch
         var errorDescription: String? {
             switch self {
             case .badRepo: return "Use the form creator/repo."
@@ -416,6 +443,7 @@ final class AppsManager: ObservableObject {
             case .noManifest: return "The latest release has no manifest.json."
             case .invalid(let s): return s
             case .noBinary: return "The release has no binary for this Mac."
+            case .missingFile(let name): return "The release is missing \(name), which the app needs."
             case .hashMismatch: return "Checksum mismatch — the download doesn't match SHA256SUMS. Not installed."
             }
         }
@@ -428,6 +456,8 @@ final class AppsManager: ObservableObject {
         var tag: String
         var manifest: AppManifest
         var binaryAsset: (name: String, url: URL)
+        /// The manifest's other files for this Mac, beside the binary in bin/.
+        var fileAssets: [(name: String, url: URL)] = []
         var sums: URL?          // SHA256SUMS asset, if the release ships one
     }
 
@@ -452,7 +482,7 @@ final class AppsManager: ObservableObject {
         // Manifest: release asset first, else the repo file at the tag.
         let manifestURL = asset("manifest.json")
             ?? URL(string: "https://raw.githubusercontent.com/\(repo)/\(tag)/manifest.json")!
-        let (mData, _) = try await URLSession.shared.data(from: manifestURL)
+        let (mData, _) = try await Self.net.data(from: manifestURL)
         guard let manifest = try? JSONDecoder().decode(AppManifest.self, from: mData) else {
             throw InstallError.noManifest
         }
@@ -471,30 +501,67 @@ final class AppsManager: ObservableObject {
         guard let binaryName = manifest.run?[arch], let binaryURL = asset(binaryName) else {
             throw InstallError.noBinary
         }
+        let files = try (manifest.files?[arch] ?? []).map { name in
+            guard let url = asset(name) else { throw InstallError.missingFile(name) }
+            return (name: name, url: url)
+        }
+        let sums = asset("SHA256SUMS")
+        // Anything besides the binary is only taken with checksums to hold it to.
+        if !files.isEmpty && sums == nil {
+            throw InstallError.invalid("the release has other files but no SHA256SUMS")
+        }
         return ResolvedRelease(repo: repo, tag: tag, manifest: manifest,
-                               binaryAsset: (binaryName, binaryURL), sums: asset("SHA256SUMS"))
+                               binaryAsset: (binaryName, binaryURL), fileAssets: files, sums: sums)
+    }
+
+    /// A release download, refusing an error page in place of the file.
+    private func download(_ url: URL) async throws -> Data {
+        let (data, response) = try await Self.net.data(from: url)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw InstallError.network("Download failed (HTTP \(http.statusCode)): \(url.lastPathComponent)")
+        }
+        return data
+    }
+
+    /// Whether SHA256SUMS (`<hex>  <name>` lines, as sha256sum writes them)
+    /// lists `data` under exactly `name`.
+    private static func listed(_ data: Data, as name: String, in sums: String) -> Bool {
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        return sums.split(whereSeparator: \.isNewline).contains { line in
+            let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace)
+            guard parts.count == 2 else { return false }
+            let file = parts[1].trimmingCharacters(in: .whitespaces)
+            return parts[0].lowercased() == digest && (file == name || file == "*" + name)
+        }
     }
 
     /// Download, verify, and install a resolved release. Live — the app starts
     /// immediately with the given grants; no relaunch.
     func install(_ r: ResolvedRelease, grants: Set<String>) async throws {
-        let (binData, _) = try await URLSession.shared.data(from: r.binaryAsset.url)
+        let binData = try await download(r.binaryAsset.url)
+        var fileData: [(name: String, data: Data)] = []
+        for file in r.fileAssets { fileData.append((file.name, try await download(file.url))) }
 
-        // Hash pinning: if the release ships SHA256SUMS, the binary must match.
+        // Hash pinning: if the release ships SHA256SUMS, the binary (and every
+        // other file, which resolve only allows with SHA256SUMS) must match.
         var verified = false
         if let sumsURL = r.sums {
-            let (sumsData, _) = try await URLSession.shared.data(from: sumsURL)
-            let digest = SHA256.hash(data: binData).map { String(format: "%02x", $0) }.joined()
-            let listed = String(decoding: sumsData, as: UTF8.self)
-                .split(separator: "\n")
-                .contains { $0.lowercased().hasPrefix(digest) && $0.hasSuffix(r.binaryAsset.name) }
-            guard listed else { throw InstallError.hashMismatch }
+            let sums = String(decoding: try await download(sumsURL), as: UTF8.self)
+            guard Self.listed(binData, as: r.binaryAsset.name, in: sums),
+                  fileData.allSatisfy({ Self.listed($0.data, as: $0.name, in: sums) })
+            else { throw InstallError.hashMismatch }
             verified = true
         }
 
         let dir = Self.appDir(for: r.manifest.id)
         let fm = FileManager.default
         try fm.createDirectory(at: dir.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        // Files first, so the binary never starts without them.
+        for file in fileData {
+            let url = dir.appendingPathComponent("bin/\(file.name)")
+            try file.data.write(to: url, options: .atomic)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
         let binURL = dir.appendingPathComponent("bin/\(r.binaryAsset.name)")
         try binData.write(to: binURL, options: .atomic)
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binURL.path)
@@ -560,6 +627,16 @@ final class AppsManager: ObservableObject {
 
     // MARK: - Store feeds
 
+    /// The store's own connection: listings, releases and reviews always come
+    /// from the network, never from a cached copy (a registry list cached as
+    /// "404" before it existed would otherwise hide every app on it).
+    static let net: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+
     static let registryURL = URL(string: "https://raw.githubusercontent.com/oxineapp/registry/main/registry.json")!
     /// The community allowlist: one `creator/repo` per line, `#` starts a
     /// comment. Only repos on it are listed in the store's community shelf;
@@ -568,7 +645,8 @@ final class AppsManager: ObservableObject {
 
     /// Lowercased `creator/repo` set from `approved.txt`; empty when offline.
     func fetchApproved() async -> Set<String> {
-        guard let (data, _) = try? await URLSession.shared.data(from: Self.approvedURL),
+        guard let (data, response) = try? await Self.net.data(from: Self.approvedURL),
+              (response as? HTTPURLResponse)?.statusCode == 200,
               let text = String(data: data, encoding: .utf8) else { return [] }
         return Set(text.split(whereSeparator: \.isNewline).compactMap { line -> String? in
             let s = line.trimmingCharacters(in: .whitespaces).lowercased()
@@ -618,7 +696,7 @@ final class AppsManager: ObservableObject {
     func fetchReviews(for id: String) async -> [Review] {
         var req = URLRequest(url: reviewsURL(id))
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await Self.net.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let feed = try? JSONDecoder().decode(ReviewFeed.self, from: data) else { return [] }
         return feed.reviews.filter { (1...5).contains($0.stars) }
@@ -655,7 +733,7 @@ final class AppsManager: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(CrashReporter.ingestToken, forHTTPHeaderField: "X-Watchtower-Token")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+        guard let (_, resp) = try? await Self.net.data(for: req),
               let code = (resp as? HTTPURLResponse)?.statusCode else { throw ReviewError.offline }
         guard code == 200 else { throw ReviewError.rejected(code) }
     }
@@ -666,17 +744,39 @@ final class AppsManager: ObservableObject {
         return json["stargazers_count"]?.numberValue.map { Int($0) }
     }
 
-    /// Community apps for the store: the `oxine-app` topic search, kept to
-    /// the repos on the approved list, in the list's order.
+    /// Community apps for the store: the `oxine-app` topic search (most
+    /// stars first), kept to the repos on the approved list, each shown by
+    /// its own manifest's name, tagline and icon where it has one.
     func fetchCommunity() async -> [RegistryEntry] {
         async let approved = fetchApproved()
         async let found = searchApps("")
         let (allow, entries) = await (approved, found)
-        return entries.filter { allow.contains($0.repo.lowercased()) }
+        var out: [RegistryEntry] = []
+        for entry in entries where allow.contains(entry.repo.lowercased()) {
+            out.append(await Self.dressedFromManifest(entry))
+        }
+        return out
+    }
+
+    /// A listing under the app's own name ("NotchsApp", not the repo's
+    /// "notchsapp"), tagline and icon, from the manifest in its repo.
+    private static func dressedFromManifest(_ entry: RegistryEntry) async -> RegistryEntry {
+        struct Card: Decodable { var name: String; var tagline: String?; var icon: String? }
+        guard let url = URL(string: "https://raw.githubusercontent.com/\(entry.repo)/HEAD/manifest.json"),
+              let (data, response) = try? await Self.net.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let card = try? JSONDecoder().decode(Card.self, from: data), !card.name.isEmpty
+        else { return entry }
+        var dressed = entry
+        dressed.name = card.name
+        dressed.tagline = card.tagline ?? entry.tagline
+        dressed.icon = card.icon ?? entry.icon
+        return dressed
     }
 
     func fetchFeatured() async {
-        guard let (data, _) = try? await URLSession.shared.data(from: Self.registryURL),
+        guard let (data, response) = try? await Self.net.data(from: Self.registryURL),
+              (response as? HTTPURLResponse)?.statusCode == 200,
               let entries = try? JSONDecoder().decode([RegistryEntry].self, from: data) else {
             featured = []
             return
@@ -705,7 +805,7 @@ final class AppsManager: ObservableObject {
         var req = URLRequest(url: u)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await Self.net.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 404 {
                 throw InstallError.network("Not found — check the creator/repo name.")
             }

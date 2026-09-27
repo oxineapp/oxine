@@ -1,8 +1,14 @@
 import SwiftUI
 import PanelKit
+import NotchKit
 import SousKit
 import TemperKit
 
+/// The first-run tour. It sets things up rather than describing them: the
+/// color and size you pick change the panel as you pick, the notch step puts
+/// real notices on the notch, and the last step hands you the real tab bar.
+/// Steps: Hello, Look, [Notch], Notes, Battery and fans, Apps, Tabs. The
+/// notch step is only on Macs with a notch.
 struct SetupView: View {
     @State var currentStep = 0
     @State var isLoading = false
@@ -10,13 +16,15 @@ struct SetupView: View {
     @State private var goingForward = true
     var onComplete: () -> Void
 
-    /// Welcome, Editor, justtype, Sous, Temper, [Notch], Apps, Tabs. The Notch
-    /// step is inserted only on Macs that have a hardware notch (for now).
-    static let baseStepCount = 7
+    enum Step { case hello, look, notch, notes, power, apps, tabs }
+
     /// Only offer the notch on Macs that physically have one.
     private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
-    private var stepCount: Int { hasNotch ? SetupView.baseStepCount + 1 : SetupView.baseStepCount }
-    private var lastStep: Int { stepCount - 1 }
+    private var steps: [Step] {
+        hasNotch ? [.hello, .look, .notch, .notes, .power, .apps, .tabs] : [.hello, .look, .notes, .power, .apps, .tabs]
+    }
+    private var step: Step { steps[min(currentStep, steps.count - 1)] }
+    private var lastStep: Int { steps.count - 1 }
 
     /// Steps slide along the nav direction: Next enters from the right, Back from the left.
     private var stepTransition: AnyTransition {
@@ -29,7 +37,7 @@ struct SetupView: View {
 
     /// True on the final step, where the tour card shrinks to the bottom and the
     /// real editable tab bar leaks through on the glass panel above it.
-    private var leaking: Bool { currentStep == lastStep }
+    private var leaking: Bool { step == .tabs }
 
     var body: some View {
         Group {
@@ -37,7 +45,7 @@ struct SetupView: View {
         }
         // Solid for the normal steps; clear on the last step so the panel's glass
         // (and the editable bar laid on it) shows through above the shrunken card.
-        .background(leaking ? Color.clear : Color(red: 0.06, green: 0.06, blue: 0.08))
+        .background { if leaking { Color.clear } else { TourBackdrop() } }
         .animation(.spring(response: 0.42, dampingFraction: 0.84), value: leaking)
     }
 
@@ -45,41 +53,37 @@ struct SetupView: View {
 
     private var standardLayout: some View {
         VStack(spacing: 0) {
-            HStack {
-                progressDots
-                Spacer()
+            HStack(spacing: 12) {
+                progressBar
                 skipButton
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
 
-            VStack {
-                if currentStep == 0 {
-                    Step1Welcome().transition(stepTransition)
-                } else if currentStep == 1 {
-                    Step2Obsidian(isLoading: $isLoading).transition(stepTransition)
-                } else if currentStep == 2 {
-                    Step3JustType().transition(stepTransition)
-                } else if currentStep == 3 {
-                    Step4Sous().transition(stepTransition)
-                } else if currentStep == 4 {
-                    Step5Temper().transition(stepTransition)
-                } else if currentStep == 5, hasNotch {
-                    // Notch Macs only: enable or disable the notch companion.
-                    Step6Notch().transition(stepTransition)
-                } else {
-                    // The installable extras (ScreenLyrics, FnGestures); the
-                    // leak/Tabs step follows as the last one.
-                    Step7Apps(hasNotch: hasNotch).transition(stepTransition)
-                }
+            ZStack {
+                stepView
+                    .id(step)
+                    .transition(stepTransition)
             }
-            .frame(maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             navButtons
-                .padding(20)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+                .padding(.top, 8)
+        }
+    }
+
+    @ViewBuilder private var stepView: some View {
+        switch step {
+        case .hello: TourHello(hasNotch: hasNotch)
+        case .look: TourLook()
+        case .notch: TourNotch()
+        case .notes: TourNotes(isLoading: $isLoading)
+        case .power: TourPower()
+        case .apps: TourApps(hasNotch: hasNotch)
+        case .tabs: EmptyView()
         }
     }
 
@@ -99,10 +103,16 @@ struct SetupView: View {
             // The tour card, shrunk to the bottom and fading in at its top edge so
             // the panel above shows through — the "decrease in height + leak" look.
             VStack(spacing: 12) {
-                Text("Make it yours")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                progressDots
+                VStack(spacing: 4) {
+                    Text("Your tabs")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Drag them into the bar above, in the order you like.")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.55))
+                        .multilineTextAlignment(.center)
+                }
+                progressBar
                 navButtons
             }
             .padding(.horizontal, 22)
@@ -110,7 +120,7 @@ struct SetupView: View {
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity)
             .background(
-                Color(red: 0.06, green: 0.06, blue: 0.08).mask(
+                TourBackdrop().mask(
                     LinearGradient(
                         gradient: Gradient(stops: [
                             .init(color: .clear, location: 0.0),
@@ -125,16 +135,16 @@ struct SetupView: View {
 
     // MARK: shared pieces
 
-    private var progressDots: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<stepCount, id: \.self) { step in
+    private var progressBar: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<steps.count, id: \.self) { index in
                 Capsule()
-                    .fill(step <= currentStep ? Color.panelAccent : Color.white.opacity(0.12))
+                    .fill(index <= currentStep ? Color.panelAccent : Color.white.opacity(0.12))
                     .frame(height: 3)
-                    .shadow(color: Color.panelAccent.opacity(step <= currentStep ? 0.4 : 0.0), radius: 2)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
+                    .shadow(color: Color.panelAccent.opacity(index == currentStep ? 0.5 : 0), radius: 3)
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
     }
 
     private var skipButton: some View {
@@ -142,212 +152,587 @@ struct SetupView: View {
             SetupManager.shared.markSetupComplete()
             onComplete()
         }) {
-            Text("Skip").font(.caption).foregroundColor(.white.opacity(0.5))
+            Text("Skip")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.45))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     private var navButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if currentStep > 0 {
                 Button(action: {
                     goingForward = false
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { currentStep -= 1 }
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { currentStep -= 1 }
                 }) {
                     Text("Back")
                         .font(.system(size: 13, weight: .semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .foregroundColor(.white.opacity(0.8))
+                        .frame(height: 38)
+                        .foregroundColor(.white.opacity(0.75))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .background(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.08), lineWidth: 0.5))
-                .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .leading)), removal: .opacity))
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white.opacity(0.05)))
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(.white.opacity(0.07), lineWidth: 0.5))
+                .transition(.opacity.combined(with: .move(edge: .leading)))
             }
 
-            Button(action: {
-                if currentStep < lastStep {
-                    goingForward = true
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { currentStep += 1 }
-                } else {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                        SetupManager.shared.markSetupComplete()
-                        onComplete()
-                    }
-                }
-            }) {
+            Button(action: advance) {
                 HStack(spacing: 6) {
                     if isLoading {
-                        ProgressView().scaleEffect(0.7).transition(.scale.combined(with: .opacity))
+                        ProgressView().controlSize(.small).transition(.scale.combined(with: .opacity))
                     }
-                    Text(currentStep < lastStep ? "Next" : "Finish")
+                    Text(nextTitle)
                         .font(.system(size: 13, weight: .bold))
-                        .transition(.opacity)
+                        .contentTransition(.opacity)
                 }
+                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .frame(height: 38)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.panelAccent.opacity(0.15)))
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.panelAccent.opacity(0.28)))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Color.panelAccent.opacity(0.35), lineWidth: 0.5))
             .disabled(isLoading)
-            .scaleEffect(isLoading ? 0.98 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isLoading)
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: currentStep)
+    }
+
+    private var nextTitle: String {
+        switch step {
+        case .hello: "Set it up"
+        case .tabs: "Done"
+        default: "Next"
+        }
+    }
+
+    private func advance() {
+        if currentStep < lastStep {
+            goingForward = true
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { currentStep += 1 }
+        } else {
+            SetupManager.shared.markSetupComplete()
+            TourNotch.post(NotchNotice(icon: "checkmark.circle.fill", tint: .panelAccent, title: "You're all set",
+                                       subtitle: "Oxine is in the menu bar", iconMotion: .bounce, duration: 5,
+                                       group: "tour.hello"))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { onComplete() }
         }
     }
 }
 
-struct Step1Welcome: View {
+// MARK: - Pieces
+
+/// The tour's background: near-black with a faint glow of the accent at the
+/// top, so picking a color on the Look step washes the whole tour.
+private struct TourBackdrop: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 38))
-                .foregroundColor(Color.panelAccent)
-            VStack(spacing: 6) {
-                Text("Welcome to Oxine")
-                    .font(.system(size: 20, weight: .bold))
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                Text("Clipboard, notes, 2FA codes, and battery care, right in your menu bar")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
+        Color(red: 0.06, green: 0.06, blue: 0.08)
+            .overlay(alignment: .top) {
+                RadialGradient(colors: [theme.accent.opacity(0.16), .clear], center: .top, startRadius: 0, endRadius: 320)
+                    .frame(height: 320)
+                    .allowsHitTesting(false)
             }
-            VStack(alignment: .leading, spacing: 9) {
-                FeatureRow(icon: "clipboard", title: "Clipboard History", desc: "Save up to 200 items")
-                FeatureRow(icon: "note.text", title: "Notes", desc: "Quick + Markdown, in any editor")
-                FeatureRow(icon: "lock.shield", title: "2FA Codes", desc: "Your authenticator, built in")
-                FeatureRow(icon: "terminal", title: "Scripts", desc: "One-tap actions and shortcuts")
-                FeatureRow(icon: "heart.badge.bolt", title: "Battery Care", desc: "Cap charging to extend its life")
-                FeatureRow(icon: "fanblades.fill", title: "Temper", desc: "Temps, throttling, and fan control")
-            }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.03)))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5)
-            )
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
+            .animation(.easeInOut(duration: 0.35), value: theme.accent)
     }
 }
 
-struct Step2Obsidian: View {
-    @Binding var isLoading: Bool
-    @State var isSetup = false
-    @State var errorMessage: String?
-    /// Re-read NotesEditor when the choice changes (Obsidian section appears/disappears).
-    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
-    /// Bumped on .notesEditorChanged to force this header (icon/name/"what
-    /// happens" text, all read from NotesEditor) to re-render after a pick.
-    @State private var editorTick = 0
-    private var accent: Color { .panelAccent }
+/// A step's title block: a glowing icon, the title, one line of what it's for.
+private struct TourHeader: View {
+    var icon: String
+    var image: NSImage? = nil
+    var title: String
+    var subtitle: String
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 12) {
-            Group {
-                if let icon = NotesEditor.appIcon() {
-                    Image(nsImage: icon).resizable().frame(width: 40, height: 40)
+        VStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .fill(theme.accent.opacity(0.14))
+                    .overlay(Circle().strokeBorder(theme.accent.opacity(0.25), lineWidth: 0.5))
+                    .shadow(color: theme.accent.opacity(0.35), radius: 12)
+                if let image {
+                    Image(nsImage: image).resizable().frame(width: 28, height: 28)
                 } else {
-                    Image(systemName: "doc.text").font(.system(size: 36)).foregroundColor(accent)
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(theme.accent)
                 }
             }
-            VStack(spacing: 6) {
-                Text("Your Editor")
-                    .font(.system(size: 19, weight: .bold))
+            .frame(width: 48, height: 48)
+            .padding(.bottom, 2)
+            Text(title)
+                .font(.system(size: 19, weight: .bold))
+                .foregroundColor(.white)
+            Text(subtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.58))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// A quiet rounded group.
+private struct TourCard<Content: View>: View {
+    var padding: CGFloat = 12
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5))
+    }
+}
+
+/// A small section label inside a step.
+private struct TourLabel: View {
+    var text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.white.opacity(0.45))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 2)
+    }
+}
+
+/// Every step scrolls if the panel is too short for it, and otherwise sits
+/// at the top with the same margins.
+private struct TourPage<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 14) { content }
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+}
+
+/// A done state: green check and a line.
+private struct TourDone: View {
+    var text: String
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "checkmark.circle.fill")
+            Text(text)
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
+    }
+}
+
+/// A small capsule button in the accent.
+private struct TourButton: View {
+    var title: String
+    var icon: String? = nil
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon { Image(systemName: icon).font(.system(size: 10, weight: .bold)) }
+                Text(title)
+            }
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundColor(.panelAccent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.panelAccent.opacity(0.13)))
+            .overlay(Capsule().strokeBorder(Color.panelAccent.opacity(0.28), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+    }
+}
+
+// MARK: - Hello
+
+/// What Oxine is, as the things it holds popping in one after another.
+private struct TourHello: View {
+    var hasNotch: Bool
+    @State private var shown = 0
+    @State private var glow = false
+
+    private var things: [(String, String)] {
+        var all = [("doc.on.clipboard", "Clipboard"), ("note.text", "Notes"), ("lock.shield", "2FA codes"),
+                   ("terminal", "Scripts"), ("heart.badge.bolt", "Battery care"), ("fanblades.fill", "Fans")]
+        if hasNotch { all.append(("macbook.gen2", "The notch")); all.append(("square.grid.2x2", "Apps")) }
+        return all
+    }
+
+    var body: some View {
+        TourPage {
+            VStack(spacing: 10) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 72, height: 72)
+                    .shadow(color: Color.panelAccent.opacity(glow ? 0.55 : 0.2), radius: glow ? 22 : 10)
+                    .scaleEffect(glow ? 1.03 : 1)
+                Text("Welcome to Oxine")
+                    .font(.system(size: 21, weight: .bold))
                     .foregroundColor(.white)
-                Text("Notes are plain Markdown — open them in any app you like.")
-                    .font(.system(size: 12, weight: .medium))
+                Text("The things you reach for all day, one click away in the menu bar.")
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            EditorChip()
-
-            HStack(spacing: 5) {
-                Image(systemName: "sparkles").font(.system(size: 9))
-                Text("Obsidian has extended support — vault, tags & deep links.")
+            .padding(.top, 8)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(Array(things.enumerated()), id: \.offset) { index, thing in
+                    HStack(spacing: 9) {
+                        Image(systemName: thing.0)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.panelAccent)
+                            .frame(width: 18)
+                        Text(thing.1)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.85))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 11)
+                    .frame(height: 36)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white.opacity(0.045)))
+                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5))
+                    .opacity(index < shown ? 1 : 0)
+                    .scaleEffect(index < shown ? 1 : 0.85)
+                    .offset(y: index < shown ? 0 : 8)
+                }
             }
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(accent.opacity(0.85))
-            .multilineTextAlignment(.center)
-
-            if let error = errorMessage {
-                Text(error)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.orange.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .padding(8)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.orange.opacity(0.08))
-                    .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.15), lineWidth: 0.5))
+            .padding(.top, 4)
+        }
+        .task {
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { glow = true }
+            for i in 1...things.count {
+                try? await Task.sleep(for: .milliseconds(i == 1 ? 250 : 90))
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { shown = i }
             }
+        }
+    }
+}
 
-            // Obsidian gets the extra vault treatment; other editors need nothing.
-            if NotesEditor.isObsidian {
-                if isSetup {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                        Text("Obsidian vault ready!")
+// MARK: - Look
+
+/// Color and size, applied as you pick: the accent recolors the tour, and
+/// the size resizes the panel it's in.
+private struct TourLook: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    @AppStorage("panelSizePreset", store: PanelKit.settingsDefaults) private var sizePreset = PanelSize.standard.rawValue
+
+    var body: some View {
+        TourPage {
+            TourHeader(icon: "paintpalette.fill", title: "Make it look right",
+                       subtitle: "Pick a color and a size. Oxine changes as you pick.")
+            VStack(spacing: 8) {
+                TourLabel(text: "Color")
+                TourCard {
+                    HStack(spacing: 0) {
+                        swatch(nil)
+                        ForEach(AccentPalette.swatches, id: \.self) { hex in swatch(hex) }
+                    }
+                }
+            }
+            VStack(spacing: 8) {
+                TourLabel(text: "Size")
+                HStack(spacing: 8) {
+                    ForEach([PanelSize.compact, .standard, .tall]) { size in sizeCard(size) }
+                }
+            }
+            Text("Both are in Settings later, with a custom size too.")
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.35))
+        }
+    }
+
+    /// A color dot; nil is "follow macOS".
+    private func swatch(_ hex: String?) -> some View {
+        let selected = hex.map { !theme.isSystem && theme.mode == $0 } ?? theme.isSystem
+        let color = hex.map { Color(hex: $0) } ?? Color(nsColor: .controlAccentColor)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.3)) { theme.setMode(hex ?? ThemeManager.systemSentinel) }
+        } label: {
+            ZStack {
+                Circle().fill(color)
+                if hex == nil {
+                    Image(systemName: "apple.logo").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                }
+            }
+            .frame(width: 24, height: 24)
+            .padding(3)
+            .overlay(Circle().strokeBorder(.white.opacity(selected ? 0.9 : 0), lineWidth: 2))
+            .scaleEffect(selected ? 1.08 : 1)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(hex == nil ? "Match macOS" : "")
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selected)
+    }
+
+    /// A size as a little panel drawn to scale.
+    private func sizeCard(_ size: PanelSize) -> some View {
+        let selected = sizePreset == size.rawValue
+        let dims = size.presetSize ?? .zero
+        let scale: CGFloat = 0.085
+        return Button {
+            sizePreset = size.rawValue
+            NotificationCenter.default.post(name: .panelSizeChanged, object: nil)
+        } label: {
+            VStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(selected ? Color.panelAccent.opacity(0.25) : Color.white.opacity(0.06))
+                    .overlay(alignment: .top) {
+                        Capsule().fill(Color.white.opacity(selected ? 0.5 : 0.2))
+                            .frame(width: dims.width * scale * 0.55, height: 2.5).padding(.top, 5)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(selected ? Color.panelAccent : Color.white.opacity(0.2), lineWidth: 1))
+                    .frame(width: dims.width * scale, height: dims.height * scale)
+                    .frame(height: 58, alignment: .bottom)
+                VStack(spacing: 1) {
+                    Text(size.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(selected ? 0.95 : 0.7))
+                    Text("\(Int(dims.width))×\(Int(dims.height))")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(selected ? Color.panelAccent.opacity(0.1) : Color.white.opacity(0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selected ? Color.panelAccent.opacity(0.45) : Color.white.opacity(0.07), lineWidth: selected ? 1 : 0.5))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
+    }
+}
+
+// MARK: - Notch
+
+/// The notch, shown rather than described: a drawing of it, the switch, and
+/// buttons that put real notices on the real notch. Arriving here waves from
+/// up there.
+struct TourNotch: View {
+    @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) private var notchEnabled = true
+    @State private var waved = false
+
+    /// Posts to the notch only while it's on (off, a notice would float instead).
+    static func post(_ notice: NotchNotice, onAction: ((String) -> Void)? = nil) {
+        let on = UserDefaults(suiteName: "com.oxine.settings")?.object(forKey: "notchEnabled") as? Bool ?? true
+        guard on else { return }
+        var notice = notice
+        notice.source = "oxine.tour"
+        notice.sourceName = "Tour"
+        NotchNotices.shared.post(notice, onAction: onAction)
+    }
+
+    var body: some View {
+        TourPage {
+            TourHeader(icon: "macbook.gen2", title: "Meet the notch",
+                       subtitle: "What's playing, your coding agents and notices, around the camera. Point at it to open it.")
+            MiniNotch(on: notchEnabled)
+                .padding(.vertical, 2)
+            TourCard {
+                Toggle(isOn: $notchEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Use the notch")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
+                        Text(notchEnabled ? "Look up: it's saying hi." : "You can turn it on in Settings any time.")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundColor(.white.opacity(0.5))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Color.green.opacity(0.08))
-                    .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
-                } else {
-                    Button(action: setupObsidian) {
-                        HStack {
-                            if isLoading { ProgressView().scaleEffect(0.7) }
-                            else { Image(systemName: "checkmark.circle") }
-                            Text("Auto-Setup Obsidian Vault").fontWeight(.semibold)
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .foregroundColor(accent)
-                        .background(accent.opacity(0.12))
-                        .cornerRadius(10)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent.opacity(0.25), lineWidth: 0.5))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isLoading)
+                }
+                .toggleStyle(.switch)
+                .tint(.panelAccent)
+            }
+            .onChange(of: notchEnabled) { _, on in
+                NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
+                if on {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { wave() }
                 }
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("What happens:")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
-                    .textCase(.uppercase).tracking(0.5)
-                Text(NotesEditor.isObsidian
-                     ? "Notes live in \(NotesLocation.displayPath), opened as an Obsidian vault with tags and metadata."
-                     : "Notes live in \(NotesLocation.displayPath) as clean .md files, opened in \(NotesEditor.displayName).")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.65))
-                    .lineSpacing(4)
+            if notchEnabled {
+                VStack(spacing: 8) {
+                    TourLabel(text: "Try a notice")
+                    HStack(spacing: 8) {
+                        TourButton(title: "Short one", icon: "bell.fill") {
+                            Self.post(NotchNotice(icon: "bell.fill", tint: .panelAccent, title: "Doorbell",
+                                                  iconMotion: .bounce,
+                                                  actions: [.init(id: "ok", title: "Nice", role: .primary)],
+                                                  duration: 8, group: "tour.try"))
+                        }
+                        TourButton(title: "One with more", icon: "text.alignleft") {
+                            Self.post(NotchNotice(icon: "sparkles", tint: .panelAccent, title: "Notices can say more",
+                                                  detail: "Point at me to read the rest. One with buttons that you miss waits behind the bell in the open notch.",
+                                                  actions: [.init(id: "ok", title: "Got it", role: .primary)],
+                                                  duration: 10, group: "tour.more"))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(11)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.03))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5)
-            )
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: notchEnabled)
+        .onAppear {
+            guard !waved else { return }
+            waved = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { wave() }
+        }
+    }
+
+    private func wave() {
+        Self.post(NotchNotice(icon: "hand.wave.fill", tint: .panelAccent, title: "Hi, up here",
+                              iconMotion: .wiggle, duration: 5, group: "tour.hello", haptic: true))
+    }
+}
+
+/// A drawing of the top of the screen: the notch with album art in one ear
+/// and the music bars in the other, dimmed when the notch is off.
+private struct MiniNotch: View {
+    var on: Bool
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LinearGradient(colors: [Color.panelAccent.opacity(0.35), Color(red: 0.1, green: 0.1, blue: 0.16)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))
+            // The menu bar.
+            Rectangle().fill(Color.black.opacity(0.25)).frame(height: 18)
+            HStack(spacing: 0) {
+                if on {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(LinearGradient(colors: [Color(red: 0.95, green: 0.55, blue: 0.35), Color(red: 0.55, green: 0.25, blue: 0.6)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 13, height: 13)
+                        .padding(.leading, 9)
+                        .transition(.opacity.combined(with: .scale))
+                }
+                Spacer(minLength: 64)
+                if on {
+                    Bars().padding(.trailing, 9).transition(.opacity.combined(with: .scale))
+                }
+            }
+            .frame(width: on ? 150 : 80, height: 22)
+            .background(UnevenRoundedRectangle(bottomLeadingRadius: 9, bottomTrailingRadius: 9, style: .continuous).fill(.black))
+        }
+        .frame(height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .opacity(on ? 1 : 0.6)
+        .animation(.spring(response: 0.45, dampingFraction: 0.78), value: on)
+    }
+
+    private struct Bars: View {
+        var body: some View {
+            TimelineView(.animation(minimumInterval: 1.0 / 20)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 2) {
+                    ForEach(0..<4, id: \.self) { i in
+                        Capsule()
+                            .fill(Color.panelAccent)
+                            .frame(width: 2.5, height: 4 + 8 * abs(sin(t * (2.2 + Double(i) * 0.7) + Double(i))))
+                    }
+                }
+                .frame(height: 13)
+            }
+        }
+    }
+}
+
+// MARK: - Notes
+
+/// Where notes live and what opens them, plus justtype sync.
+private struct TourNotes: View {
+    @Binding var isLoading: Bool
+    @State private var vaultReady = false
+    @State private var errorMessage: String?
+    @StateObject private var sync = JustTypeSyncManager()
+    /// Re-read NotesEditor when the choice changes (the Obsidian row comes and goes).
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
+    @State private var editorTick = 0
+
+    var body: some View {
+        TourPage {
+            TourHeader(icon: "note.text", image: NotesEditor.appIcon(), title: "Your notes",
+                       subtitle: "Plain Markdown files in \(NotesLocation.displayPath), opened in the app you like.")
+            VStack(spacing: 8) {
+                TourLabel(text: "Opens in")
+                EditorChip()
+                if NotesEditor.isObsidian { obsidianRow }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.orange.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
+            }
+            VStack(spacing: 8) {
+                TourLabel(text: "Sync")
+                TourCard {
+                    HStack(spacing: 11) {
+                        Image(systemName: "cloud.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.panelAccent)
+                            .frame(width: 22)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("justtype")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text(sync.isConfigured ? sync.status : "Your notes as private slates, on the web and your phone. Allow private slate access when it asks.")
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundColor(.white.opacity(0.5))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 4)
+                        if sync.isConfigured {
+                            TourDone(text: "Connected")
+                        } else {
+                            TourButton(title: sync.isSigningIn ? "Connecting…" : "Connect") { sync.signIn() }
+                                .disabled(sync.isSigningIn)
+                        }
+                    }
+                }
+            }
+        }
         .id(editorTick)
-        .onReceive(NotificationCenter.default.publisher(for: .notesEditorChanged)) { _ in
-            editorTick &+= 1
+        .onReceive(NotificationCenter.default.publisher(for: .notesEditorChanged)) { _ in editorTick &+= 1 }
+    }
+
+    private var obsidianRow: some View {
+        TourCard(padding: 10) {
+            HStack {
+                Text("Obsidian gets a vault with tags and links.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer(minLength: 6)
+                if vaultReady {
+                    TourDone(text: "Vault ready")
+                } else {
+                    TourButton(title: isLoading ? "Setting up…" : "Set up vault", action: setupObsidian)
+                        .disabled(isLoading)
+                }
+            }
         }
     }
 
@@ -357,504 +742,197 @@ struct Step2Obsidian: View {
         ObsidianVaultManager.shared.createVaultInObsidian { success, message in
             DispatchQueue.main.async {
                 isLoading = false
-                if success {
-                    isSetup = true
-                } else {
-                    errorMessage = message
-                }
+                if success { vaultReady = true } else { errorMessage = message }
             }
         }
     }
 }
 
-struct Step3JustType: View {
-    @StateObject var sync = JustTypeSyncManager()
+// MARK: - Battery and fans
 
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "cloud.fill")
-                .font(.system(size: 36))
-                .foregroundColor(Color.panelAccent)
-            VStack(spacing: 6) {
-                Text("justtype Sync")
-                    .font(.system(size: 19, weight: .bold))
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                Text("Sync local Markdown notes with private justtype slates.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                Text("RECOMMENDED")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(Color.panelAccent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.panelAccent.opacity(0.15)))
-                    .padding(.top, 2)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Recommended grant")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                Text("Allow full private slate access when justtype asks. The read-private grant is also what lets this app edit delegated private slates.")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(10)
-            .background(Color.white.opacity(0.035))
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-
-            VStack(spacing: 7) {
-                Button(action: { sync.signIn() }) {
-                    Text(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Connected" : "Connect justtype"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .foregroundColor(Color.panelAccent)
-                        .background(Color.panelAccent.opacity(0.1))
-                        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(sync.isSigningIn || sync.isConfigured)
-
-                Text(sync.status)
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.35))
-                    .lineLimit(2)
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-    }
-}
-
-/// Battery health setup — installs the privileged Sous helper (one admin
-/// prompt) so charging can be capped. Mirrors the setup flow in `SousView`, and
-/// degrades gracefully on Intel / battery-less Macs where Sous can't run.
-struct Step4Sous: View {
+/// Sous and Temper side by side, each with its helper's state and the one
+/// button it needs.
+private struct TourPower: View {
     @ObservedObject private var sous = SousManager.shared
-    private var accent: Color { .panelAccent }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "heart.badge.bolt")
-                .font(.system(size: 36))
-                .foregroundColor(accent)
-            VStack(spacing: 6) {
-                Text("Sous · Battery Health")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(.white)
-                Text("Cap how far your battery charges to slow long-term wear and keep it healthy.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                Text("OPTIONAL")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
-                    .padding(.top, 2)
-            }
-
-            switch sous.helper.installState {
-            case .unsupported:
-                infoCard(text: BatteryReader.isAppleSilicon
-                         ? "No battery detected — Sous needs a MacBook battery to manage. You can skip this."
-                         : "Sous controls charging through Apple Silicon hardware and isn’t available on Intel Macs. You can skip this.")
-
-            case .installed:
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                    Text("Battery helper ready!")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(Color.green.opacity(0.08))
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
-                infoCard(text: "Open the Sous tab any time to set your charge limit, sailing range and heat protection.")
-
-            case .installing:
-                VStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Enter your Mac password in the prompt to install the helper. This happens once.")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(11)
-                .background(Color.white.opacity(0.035))
-                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-
-            case .notInstalled, .failed:
-                infoCard(text: "Sous installs a small background helper that controls charging — macOS will ask for your password once to allow it.")
-                if case .failed(let msg) = sous.helper.installState {
-                    Text(msg)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundColor(.orange.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                }
-                Button(action: { Task { await sous.helper.install(); sous.refreshNow() } }) {
-                    Text("Install battery helper")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .foregroundColor(accent)
-                        .background(accent.opacity(0.12))
-                        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-        .onAppear { sous.refreshNow() }
-    }
-
-    private func infoCard(text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(.white.opacity(0.65))
-            .lineSpacing(4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(11)
-            .background(Color.white.opacity(0.035))
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-/// Thermal + fans. Monitoring works on every Mac with no helper, so this step
-/// always shows the live state; installing the privileged Temper helper (one
-/// admin prompt) is what unlocks fan control, and only where the hardware has
-/// controllable fans. Mirrors the install flow in `TemperView`.
-struct Step5Temper: View {
     @ObservedObject private var temper = TemperManager.shared
-    private var accent: Color { .panelAccent }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "fanblades.fill")
-                .font(.system(size: 36))
-                .foregroundColor(accent)
-            VStack(spacing: 6) {
-                Text("Temper · Thermal & Fans")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(.white)
-                Text("Watch temperatures, CPU load, and thermal pressure on any Mac. Install the fan helper to take control where the hardware allows.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                Text("OPTIONAL")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
-                    .padding(.top, 2)
+        TourPage {
+            TourHeader(icon: "bolt.heart.fill", title: "Battery and fans",
+                       subtitle: "Sous stops charging at a limit to keep the battery healthy. Temper watches heat and runs the fans.")
+            VStack(spacing: 8) {
+                row(icon: "heart.badge.bolt", tint: AppArt.tint(for: "oxine.sous"), name: "Sous",
+                    line: sousLine) { sousAction }
+                row(icon: "fanblades.fill", tint: AppArt.tint(for: "oxine.temper"), name: "Temper",
+                    line: temperLine) { temperAction }
             }
-
-            if !temper.fansPresent {
-                // Fanless Mac (an Air, say): nothing to control, so it runs purely
-                // as a thermal + performance dashboard - no helper, no prompt.
-                infoCard(text: "This Mac has no user-controllable fans, so Temper runs as a thermal and performance dashboard. No helper needed - just open the Temper tab.")
-            } else {
-                switch temper.helper.installState {
-                case .installed:
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color(red: 0.3, green: 0.85, blue: 0.5))
-                        Text("Fan helper ready!")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Color.green.opacity(0.08))
-                    .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.green.opacity(0.2), lineWidth: 0.5))
-                    infoCard(text: "Open the Temper tab any time to set fans to Manual, an adaptive Smart mode, or a custom curve.")
-
-                case .installing:
-                    VStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Enter your Mac password in the prompt to install the helper. This happens once.")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(11)
-                    .background(Color.white.opacity(0.035))
-                    .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-
-                case .notInstalled, .failed:
-                    infoCard(text: "Fan control installs a small background helper - macOS will ask for your password once to allow it. You can skip this and still see every reading.")
-                    if case .failed(let msg) = temper.helper.installState {
-                        Text(msg)
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(.orange.opacity(0.9))
-                            .multilineTextAlignment(.center)
-                    }
-                    Button(action: { Task { await temper.helper.install(); temper.refreshNow() } }) {
-                        Text("Install fan helper")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .foregroundColor(accent)
-                            .background(accent.opacity(0.12))
-                            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            Text("Each control needs a small helper. macOS asks for your password once for each.")
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.35))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-        .onAppear { temper.setViewActive(true); temper.refreshNow() }
+        .onAppear {
+            sous.refreshNow()
+            temper.setViewActive(true)
+            temper.refreshNow()
+        }
         .onDisappear { temper.setViewActive(false) }
     }
 
-    private func infoCard(text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(.white.opacity(0.65))
-            .lineSpacing(4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(11)
-            .background(Color.white.opacity(0.035))
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-/// Final tour step: compose the tab bar. A live preview sits above the same
-/// add / remove / reorder editor used in Settings, so the last thing you do in
-/// setup is make the bar yours. Re-runnable from Settings → Tabs.
-struct Step5Tabs: View {
-    private var accent: Color { .panelAccent }
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "rectangle.3.group")
-                .font(.system(size: 34))
-                .foregroundColor(accent)
-            VStack(spacing: 6) {
-                Text("Make it yours")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(.white)
-                Text("Pick the tabs you want on the bar and set their order. You can change this any time in Settings.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-            }
-            // No ScrollView — the drag gesture shouldn't fight a scroll view, and
-            // the composer fits the step.
-            TabEditor().padding(.top, 4)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-    }
-}
-
-/// Notch companion step (notch Macs only): a single enable/disable choice for
-/// the media + mirror + shelf surface at the top of the screen.
-struct Step6Notch: View {
-    @AppStorage("notchEnabled", store: UserDefaults(suiteName: "com.oxine.settings")) private var notchEnabled = true
-    private var accent: Color { .panelAccent }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "macbook.gen2")
-                .font(.system(size: 34))
-                .foregroundColor(accent)
-            VStack(spacing: 6) {
-                Text("The Notch")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundColor(.white)
-                Text("A companion at your Mac's notch: now playing, a webcam mirror, and a drop shelf, all on hover.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                Text("OPTIONAL")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
-                    .padding(.top, 2)
-            }
-
-            Toggle(isOn: $notchEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(notchEnabled ? "Notch enabled" : "Notch disabled")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("You can change this any time in Settings › Notch.")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundColor(.white.opacity(0.55))
+    private func row<Action: View>(icon: String, tint: Color, name: String, line: String,
+                                   @ViewBuilder action: () -> Action) -> some View {
+        TourCard {
+            HStack(spacing: 11) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LinearGradient(colors: [tint, tint.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
                 }
+                .frame(width: 34, height: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                    Text(line)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                action()
             }
-            .toggleStyle(SwitchToggleStyle(tint: accent))
-            .padding(12)
-            .background(Color.white.opacity(0.035))
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-            .onChange(of: notchEnabled) { _, _ in
-                NotificationCenter.default.post(name: .notchSettingsChanged, object: nil)
-            }
-
-            FeatureRow(icon: "music.note", title: "Now Playing", desc: "Artwork, scrubber, transport")
-            FeatureRow(icon: "camera", title: "Mirror", desc: "A quick webcam self-view")
-            FeatureRow(icon: "tray.and.arrow.down", title: "Shelf", desc: "Drag files in, AirDrop out")
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
+    }
+
+    private var sousLine: String {
+        switch sous.helper.installState {
+        case .unsupported:
+            return BatteryReader.isAppleSilicon ? "No battery here, so nothing to do." : "Needs an Apple silicon Mac."
+        case .installed: return "Set your limit in the Sous tab."
+        case .installing: return "Enter your password in the prompt."
+        case .failed(let message): return message
+        case .notInstalled: return "Caps charging, holds it there, pauses when hot."
+        }
+    }
+
+    @ViewBuilder private var sousAction: some View {
+        switch sous.helper.installState {
+        case .unsupported: EmptyView()
+        case .installed: TourDone(text: "Ready")
+        case .installing: ProgressView().controlSize(.small)
+        case .notInstalled, .failed:
+            TourButton(title: "Install") { Task { await sous.helper.install(); sous.refreshNow() } }
+        }
+    }
+
+    private var temperLine: String {
+        guard temper.fansPresent else { return "No fans to run here. Temps and load are in its tab." }
+        switch temper.helper.installState {
+        case .installed: return "Pick Smart, a curve or manual in the Temper tab."
+        case .installing: return "Enter your password in the prompt."
+        case .failed(let message): return message
+        default: return "Readings work already; fan control needs the helper."
+        }
+    }
+
+    @ViewBuilder private var temperAction: some View {
+        if !temper.fansPresent {
+            TourDone(text: "Ready")
+        } else {
+            switch temper.helper.installState {
+            case .installed: TourDone(text: "Ready")
+            case .installing: ProgressView().controlSize(.small)
+            default: TourButton(title: "Install") { Task { await temper.helper.install(); temper.refreshNow() } }
+            }
+        }
     }
 }
 
-/// Apps step: a slice of the store. The heroes up top are the installable
-/// first-party apps as artwork cards with Get right on them, paged sideways
-/// when there are two; under them, the four apps already built in, so the
-/// step says both "here is what you can add" and "here is what you have".
-/// Sized to fit the smallest panel without scrolling; a scroll view backs
-/// it up on a very short window.
-struct Step7Apps: View {
+// MARK: - Apps
+
+/// The apps you can add, as a short list with Get right on each, and the
+/// ones already in as one line.
+private struct TourApps: View {
     var hasNotch: Bool
     @ObservedObject private var manager = AppsManager.shared
-    private var accent: Color { .panelAccent }
-    private static let green = Color(red: 0.3, green: 0.85, blue: 0.5)
 
-    private var featured: [BundledApps.Entry] {
-        (hasNotch ? ["oxine.screenlyrics", "oxine.fngestures"] : ["oxine.fngestures"])
+    private var extras: [BundledApps.Entry] {
+        (hasNotch ? ["oxine.screenlyrics", "oxine.earson", "oxine.decant", "oxine.fngestures"]
+                  : ["oxine.earson", "oxine.decant", "oxine.fngestures"])
             .compactMap(BundledApps.entry)
     }
     private var builtins: [OxApp] {
         ["oxine.sous", "oxine.temper", "oxine.caffeine", "oxine.focus"].compactMap(manager.app)
     }
 
-    private var heroes: [StoreHeroItem] {
-        featured.map { entry in
-            let m = entry.manifest
-            let installed = manager.app(m.id) != nil
-            return StoreHeroItem(
-                id: m.id,
-                kicker: installed ? "Made by Oxine" : "New from Oxine",
-                name: m.name, author: m.author, tagline: m.tagline ?? "",
-                icon: m.icon ?? "shippingbox", tint: AppArt.tint(for: m.id),
-                action: action(entry, installed: installed))
+    var body: some View {
+        TourPage {
+            TourHeader(icon: "square.grid.2x2.fill", title: "Apps",
+                       subtitle: "Extras with their own page. Get one now, or later in Settings → Apps.")
+            VStack(spacing: 0) {
+                ForEach(Array(extras.enumerated()), id: \.element.manifest.id) { index, entry in
+                    if index > 0 { Divider().overlay(Color.white.opacity(0.04)).padding(.leading, 56) }
+                    appRow(entry)
+                }
+            }
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5))
+            if !builtins.isEmpty {
+                VStack(spacing: 8) {
+                    TourLabel(text: "Already in")
+                    HStack(spacing: 6) {
+                        ForEach(builtins) { app in
+                            HStack(spacing: 5) {
+                                Image(systemName: app.icon).font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(AppArt.tint(for: app.id).opacity(1))
+                                Text(app.name).font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.75))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Color.white.opacity(0.05)))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
         }
     }
 
-    private func action(_ entry: BundledApps.Entry, installed: Bool) -> StoreAction {
+    private func appRow(_ entry: BundledApps.Entry) -> some View {
+        let m = entry.manifest
+        let tint = AppArt.tint(for: m.id)
+        return HStack(spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(LinearGradient(colors: [tint, tint.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: m.icon ?? "shippingbox").font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+            }
+            .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(m.name).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                Text(m.tagline ?? "")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            StoreActionButton(action: action(entry))
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+    }
+
+    private func action(_ entry: BundledApps.Entry) -> StoreAction {
+        let installed = manager.app(entry.manifest.id) != nil
         if entry.manifest.id == "oxine.fngestures", installed, !FnGestureEngine.accessibilityGranted {
             return .grant { FnGestureEngine.requestAccessibility() }
         }
         if installed { return .installed }
         return .get {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { manager.installBundled(entry) }
-        }
-    }
-
-    var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 14) {
-                header
-                StoreHeroCarousel(items: heroes, height: 150)
-                    .padding(.top, 2)
-                builtinStrip
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 2)
-        }
-    }
-
-    private var header: some View {
-        VStack(spacing: 5) {
-            Image(systemName: "shippingbox")
-                .font(.system(size: 24))
-                .foregroundColor(accent)
-                .padding(.bottom, 2)
-            Text("Apps")
-                .font(.system(size: 19, weight: .bold))
-                .foregroundColor(.white)
-            Text("Add-ons with their own page and only the access they declare. The whole store lives in Settings → Apps.")
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// The built-ins as a strip of small tiles: already installed, nothing to do.
-    private var builtinStrip: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("Already in")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                Text("Built in and on by default")
-                    .font(.system(size: 10.5))
-                    .foregroundColor(.white.opacity(0.4))
-                Spacer()
-            }
-            .padding(.horizontal, 2)
-            HStack(spacing: 8) {
-                ForEach(builtins) { app in builtinTile(app) }
-            }
-        }
-    }
-
-    private func builtinTile(_ app: OxApp) -> some View {
-        VStack(spacing: 6) {
-            AppIconTile(symbol: app.icon, size: 32)
-            Text(app.name)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
-                .lineLimit(1)
-            HStack(spacing: 3) {
-                Image(systemName: "checkmark").font(.system(size: 7.5, weight: .bold))
-                Text("Installed")
-            }
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(Self.green.opacity(0.9))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
-    }
-}
-
-struct FeatureRow: View {
-    let icon: String
-    let title: String
-    let desc: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15))
-                .foregroundColor(Color.panelAccent)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-                Text(desc).font(.system(size: 10, weight: .medium)).foregroundColor(.white.opacity(0.5))
-            }
-            Spacer()
         }
     }
 }

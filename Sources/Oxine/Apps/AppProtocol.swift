@@ -29,6 +29,9 @@ enum AppMessage: Sendable {
     case metric(value: Double, text: String?)
     /// Request a transient notch peek. Rate-limited by the host.
     case peek(text: String, icon: String?)
+    /// Who's waiting ("#RRGGBB" each, an unread chat's contact color): the
+    /// closed notch's outline breathes in them. An empty list clears it.
+    case attention(colors: [String])
     /// Capability call; host answers with `.ret` carrying the same id.
     case call(id: Int, fn: String, args: JSONValue?)
     /// Subscribe to a capability stream at ~hz (host clamps).
@@ -65,6 +68,8 @@ enum AppMessage: Sendable {
         case "peek":
             guard let text = v["text"]?.stringValue else { return nil }
             return .peek(text: text, icon: v["icon"]?.stringValue)
+        case "attention":
+            return .attention(colors: v["colors"]?.arrayValue?.compactMap(\.stringValue) ?? [])
         case "call":
             guard let id = v["id"]?.numberValue, let fn = v["fn"]?.stringValue else { return nil }
             return .call(id: Int(id), fn: fn, args: v["args"])
@@ -94,7 +99,9 @@ enum HostMessage: Sendable {
     /// Answer to a `.call`.
     case ret(id: Int, ok: Bool, data: JSONValue?, error: String?)
     /// Surface visibility: phase "activate"/"deactivate" — apps should idle
-    /// their updates when nothing of theirs is on screen.
+    /// their updates when nothing of theirs is on screen. Phase "focus": the
+    /// person clicked the notch to type; the host has already put the
+    /// keyboard in the surface's composer (or first `focused` field).
     case lifecycle(phase: String, surface: String?)
     case bye
 

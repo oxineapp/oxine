@@ -18,6 +18,7 @@ enum AppArt {
         case "oxine.temper":       return Color(red: 0.82, green: 0.38, blue: 0.18)
         case "oxine.caffeine":     return Color(red: 0.78, green: 0.56, blue: 0.12)
         case "oxine.focus":        return Color(red: 0.28, green: 0.34, blue: 0.80)
+        case "oxine.earson":       return Color(red: 0.86, green: 0.46, blue: 0.20)
         default:
             let hash = id.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
             return Color(hue: Double(abs(hash) % 360) / 360, saturation: 0.55, brightness: 0.62)

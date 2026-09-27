@@ -19,7 +19,7 @@ public final class WeatherModule: NotchModule {
     public init() {}
 
     public func expandedView() -> AnyView {
-        AnyView(GlassCard(padding: 11) { WeatherContent(manager: manager, compact: false) })
+        AnyView(GlassCard(padding: 9) { WeatherContent(manager: manager, compact: false) })
     }
 }
 
@@ -335,32 +335,34 @@ struct WeatherContent: View {
     }
 
     // The full tab: current + H/L up top, a divider, then hourly on the left and a
-    // metrics grid (feels / humidity / aqi / wind / uv) on the right.
+    // metrics grid (feels / humidity / aqi / wind / uv) on the right. Sized to be
+    // exactly as tall as the Home player card (114pt with the card's padding), so
+    // the open notch keeps one height across tabs; see `NotchExpandedRoot`.
     private func full(_ snap: WeatherSnapshot, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: WMO.symbol(snap.code, day: snap.isDay))
-                    .font(.system(size: 30))
+                    .font(.system(size: 26))
                     .symbolRenderingMode(.multicolor)
                     .frame(width: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(alignment: .top, spacing: 1) {
                         Text("\(Int(snap.tempC.rounded()))")
-                            .font(.system(size: 30, weight: .medium))
-                        Text("°C").font(.system(size: 12, weight: .semibold)).padding(.top, 3)
+                            .font(.system(size: 26, weight: .medium))
+                        Text("°C").font(.system(size: 11, weight: .semibold)).padding(.top, 3)
                     }
                     .foregroundStyle(.white)
                     Text("\(WMO.text(snap.code)) · \(manager.place.isEmpty ? "—" : manager.place)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(now, format: .dateTime.hour().minute())
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
-                    Text("H:\(Int(snap.highC.rounded()))°").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
-                    Text("L:\(Int(snap.lowC.rounded()))°").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+                    Text("H:\(Int(snap.highC.rounded()))°").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
+                    Text("L:\(Int(snap.lowC.rounded()))°").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
                 }
             }
             Divider().overlay(Color.white.opacity(0.12))
@@ -376,7 +378,7 @@ struct WeatherContent: View {
     private func hourly(_ snap: WeatherSnapshot) -> some View {
         HStack(spacing: 9) {
             ForEach(snap.hourly.prefix(6)) { h in
-                VStack(spacing: 2) {
+                VStack(spacing: 1) {
                     Text(h.at, format: .dateTime.hour())
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white.opacity(0.5))
@@ -395,7 +397,7 @@ struct WeatherContent: View {
 
     // The metrics grid on the right of the expanded tab.
     private func metrics(_ snap: WeatherSnapshot) -> some View {
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 5) {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 1) {
             GridRow {
                 metric("thermometer.medium", "Feels", "\(Int(snap.feelsC.rounded()))°")
                 metric("humidity.fill", "Humidity", "\(snap.humidity)%")
@@ -417,8 +419,8 @@ struct WeatherContent: View {
                 .foregroundStyle(.white.opacity(0.45))
                 .frame(width: 13)
             VStack(alignment: .leading, spacing: 0) {
-                Text(label).font(.system(size: 8.5, weight: .medium)).foregroundStyle(.white.opacity(0.45))
-                Text(value).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                Text(label).font(.system(size: 8, weight: .medium)).foregroundStyle(.white.opacity(0.45))
+                Text(value).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.white)
             }
         }
     }

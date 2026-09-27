@@ -79,7 +79,7 @@ public enum BatteryReader {
         return ok && value == 1
     }()
 
-    static func read() -> BatteryMetrics {
+    public static func read() -> BatteryMetrics {
         var m = BatteryMetrics()
         readPowerSources(into: &m)
         readSmartBattery(into: &m)

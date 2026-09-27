@@ -443,7 +443,9 @@ private struct AppStrip: View {
 /// tinted glass run; inside it, a brighter run shows the sound right now. The
 /// knob is interactive glass: it swells and catches light under the pointer,
 /// like the system's own sliders. The meter is driven by a `TimelineView`, so
-/// it reads once per display frame and doesn't care that a drag is in progress.
+/// it reads 30 times a second and doesn't care that a drag is in progress. It
+/// stops while the panel is closed: an ordered-out panel keeps its SwiftUI
+/// animations running, one meter per app at the display rate.
 private struct GlassFader: View {
     var fraction: Double
     var unity: Double?
@@ -453,6 +455,7 @@ private struct GlassFader: View {
 
     @State private var meter = MeterState()
     @State private var dragging = false
+    @ObservedObject private var visibility = PanelVisibility.shared
     private let channelH: CGFloat = 8
     private let knob = CGSize(width: 26, height: 18)
 
@@ -470,7 +473,7 @@ private struct GlassFader: View {
                     .overlay(Capsule().stroke(.white.opacity(0.07), lineWidth: 0.5))
                 Color.clear.frame(width: max(knobX, channelH), height: channelH)
                     .glassEffect(.regular.tint(tint.opacity(0.32)), in: Capsule())
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !visibility.isOpen)) { timeline in
                     let shown = CGFloat(meter.advance(to: level(), at: timeline.date))
                     Capsule()
                         .fill(LinearGradient(colors: [tint.opacity(0.75), tint], startPoint: .leading, endPoint: .trailing))

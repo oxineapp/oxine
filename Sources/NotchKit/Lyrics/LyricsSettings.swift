@@ -41,6 +41,9 @@ public struct LyricsSettings: Equatable, Sendable {
     public var timing = 0.3
     /// Gap between the notch and the pill.
     public var gap = 4.0
+    /// Keep the pill up while the notch is open, sliding down to sit under it
+    /// (off: it hides until the notch closes).
+    public var followNotch = false
 
     /// Point sizes per step: text, caption, corner radius, horizontal/vertical
     /// padding, and the pill's maximum width.
@@ -75,9 +78,10 @@ public struct LyricsSettings: Equatable, Sendable {
         public static let animationDuration = "notchLyricsAnimationDuration"
         public static let timing = "notchLyricsOffset"
         public static let gap = "notchLyricsCompactGap"
+        public static let followNotch = "notchLyricsFollowNotch"
         /// Every key, for a full reset (older keys from the retired box layout included).
         public static let all = [enabled, preview, showTrack, fontFamily, size, appearance,
-                                 animationDuration, timing, gap,
+                                 animationDuration, timing, gap, followNotch,
                                  "notchLyricsStyle", "notchLyricsLargeSize", "notchLyricsMiniSize", "notchLyricsFont", "notchLyricsCompactWidth", "notchLyricsWidth", "notchLyricsHeight",
                                  "notchLyricsX", "notchLyricsY", "notchLyricsShowBounds", "notchLyricsBackground",
                                  "notchLyricsBackgroundOpacity"]
@@ -114,6 +118,7 @@ public struct LyricsSettings: Equatable, Sendable {
         s.animationDuration = number(Key.animationDuration, s.animationDuration, Range.animationDuration)
         s.timing = number(Key.timing, s.timing, Range.timing)
         s.gap = number(Key.gap, s.gap, Range.gap)
+        s.followNotch = bool(Key.followNotch, s.followNotch)
         return s
     }
 

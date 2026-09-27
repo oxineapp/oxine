@@ -44,6 +44,7 @@ struct MusicVisualizer: View {
                 row(energy: 0, t: 0)            // settled: flat, no animation
             }
         }
+        .frame(width: rowWidth, height: maxH)
         // Fires on appear and on every play/pause flip; ramps the envelope and
         // keeps the loop alive long enough to render the wind-down.
         .task(id: isPlaying) {
@@ -64,16 +65,22 @@ struct MusicVisualizer: View {
         }
     }
 
+    private let barWidth: CGFloat = 2.5
+    private let barSpacing: CGFloat = 2.5
+    private var rowWidth: CGFloat { CGFloat(bars) * barWidth + CGFloat(bars - 1) * barSpacing }
+
+    /// The bars as one Canvas in a fixed frame. The heights change every frame,
+    /// and as capsules in an HStack each frame re-ran the notch window's layout.
     private func row(energy: CGFloat, t: TimeInterval, live: [Float]? = nil) -> some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            ForEach(0..<bars, id: \.self) { i in
-                Capsule()
-                    .fill(color)
-                    .frame(width: 2.5, height: live.map { liveHeight($0, i, energy: energy) }
-                           ?? barHeight(i, t: t, energy: energy))
+        Canvas { ctx, size in
+            for i in 0..<bars {
+                let h = live.map { liveHeight($0, i, energy: energy) } ?? barHeight(i, t: t, energy: energy)
+                let bar = CGRect(x: CGFloat(i) * (barWidth + barSpacing), y: (size.height - h) / 2,
+                                 width: barWidth, height: h)
+                ctx.fill(Capsule().path(in: bar), with: .color(color))
             }
         }
-        .frame(height: maxH)
+        .frame(width: rowWidth, height: maxH)
     }
 
     /// Smoothstepped position along the current ramp → the live 0…1 envelope.

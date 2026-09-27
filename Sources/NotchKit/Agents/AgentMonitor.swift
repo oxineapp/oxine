@@ -12,6 +12,18 @@ public enum AgentTool: String, Sendable, CaseIterable {
         case .opencode: return .white
         }
     }
+
+    /// Whether this tool's status shows on the notch (Settings → Notch → Agents).
+    /// opencode has no switch yet, so it always shows.
+    var showsOnNotch: Bool {
+        let key: String
+        switch self {
+        case .claude:   key = "notchAgentsClaude"
+        case .codex:    key = "notchAgentsCodex"
+        case .opencode: return true
+        }
+        return NotchKit.settingsDefaults.object(forKey: key) as? Bool ?? true
+    }
 }
 
 /// Coarse agent state, derived from the hooks that write the status file.
@@ -83,6 +95,9 @@ public final class AgentMonitor: ObservableObject {
             case .working: maxAge = 90       // a stuck/cancelled "working" clears fast
             }
             if age > maxAge { try? FileManager.default.removeItem(at: f); continue }
+            // Switched off: keep the file (the switch can come back on mid-session)
+            // but leave it out of the notch. Read every poll, so it applies within a second.
+            guard tool.showsOnNotch else { continue }
             out.append(AgentState(id: f.deletingPathExtension().lastPathComponent,
                                   tool: tool, status: status, updated: updated))
         }

@@ -23,6 +23,10 @@ final class AppRuntime: ObservableObject {
     /// Runtime health, surfaced in the store ("crashed 3× — disabled").
     @Published private(set) var runtimeError: String?
     @Published private(set) var running = false
+    /// Bumped per surface when the person clicks to type there: the surface's
+    /// composer (or first `focused` field) takes the keyboard, host-side, with
+    /// no round trip to the app.
+    @Published private(set) var focusTicks: [String: Int] = [:]
 
     private var backend: (any AppBackend)?
     private var subTimers: [String: Timer] = [:]
@@ -34,6 +38,9 @@ final class AppRuntime: ObservableObject {
     private var peekRefillAt = Date()
     /// Last user interaction with one of this app's surfaces (gates openURL).
     private var lastUserEventAt: Date?
+    /// Where the reader left each chat ("surface:conversation" → offset). The
+    /// notch's views are rebuilt every time it opens; this outlives them.
+    private var readingPositions: [String: CGFloat] = [:]
 
     init(app: OxApp) { self.app = app }
 
@@ -68,13 +75,19 @@ final class AppRuntime: ObservableObject {
         running = false
         trees = [:]
         toggleActive = false; toggleText = nil; toggleMenu = []; toggleWarning = false
+        readingPositions = [:]
+        NotchCoordinator.shared.setAttention(appID: app.id, colors: [])
     }
 
     private func handleTermination(_ code: Int32) {
         backend = nil
         running = false
+        // Its screens go with it: a view left up would look usable while
+        // nothing answers its buttons. The surfaces say it isn't running.
+        trees = [:]
         subTimers.values.forEach { $0.invalidate() }
         subTimers = [:]
+        NotchCoordinator.shared.setAttention(appID: app.id, colors: [])
         let now = Date()
         crashTimes = crashTimes.filter { now.timeIntervalSince($0) < 300 } + [now]
         if crashTimes.count >= 3 {
@@ -100,6 +113,17 @@ final class AppRuntime: ObservableObject {
         backend?.send(.lifecycle(phase: phase, surface: surface))
     }
 
+    /// The person clicked to type on a surface: its field takes the keyboard
+    /// now, and the app hears about it.
+    func focus(surface: String) {
+        focusTicks[surface, default: 0] += 1
+        sendLifecycle(phase: "focus", surface: surface)
+    }
+
+    func readingPosition(_ key: String) -> CGFloat? { readingPositions[key] }
+    /// nil: they were at the end, so it opens on the newest.
+    func keepReadingPosition(_ offset: CGFloat?, for key: String) { readingPositions[key] = offset }
+
     // MARK: - App → host
 
     private func handle(_ msg: AppMessage) {
@@ -107,7 +131,9 @@ final class AppRuntime: ObservableObject {
         case .ready:
             break
         case .view(let surface, let body):
-            trees[surface] = body
+            // Apps that poll resend the same tree; leave SwiftUI (and the
+            // reader's hover and scroll) alone unless something changed.
+            if trees[surface] != body { trees[surface] = body }
         case .toggle(let active, let icon, let text, let menu, let warning):
             toggleActive = active
             toggleIcon = icon
@@ -120,6 +146,9 @@ final class AppRuntime: ObservableObject {
         case .peek(let text, _):
             guard app.manifest.surfaces.peek == true, admitPeek() else { return }
             NotchCoordinator.shared.peek(text)
+        case .attention(let colors):
+            let valid = colors.filter(Self.isHexColor).prefix(16)
+            NotchCoordinator.shared.setAttention(appID: app.id, colors: Array(valid))
         case .call(let id, let fn, let args):
             let (data, error) = AppCapabilityBroker.shared.call(
                 fn: fn, args: args, appID: app.id, grants: app.grants,
@@ -151,6 +180,11 @@ final class AppRuntime: ObservableObject {
         if let data = AppCapabilityBroker.shared.snapshot(cap: cap) {
             backend?.send(.cap(cap: cap, data: data))
         }
+    }
+
+    /// "#RRGGBB", nothing else.
+    nonisolated static func isHexColor(_ value: String) -> Bool {
+        value.count == 7 && value.first == "#" && value.dropFirst().allSatisfy(\.isHexDigit)
     }
 
     /// Token bucket: burst 2, refill 1 per 30s. Excess requests are dropped

@@ -42,7 +42,18 @@ public final class ScreenLyrics: ObservableObject {
         let duration: Int
     }
 
-    private init() {}
+    private var refronter: OverlayRefronter?
+
+    private init() {
+        // A Space switch, sleep or unlock can leave the panel behind: it's
+        // still "visible", so the tick never re-fronts it. Re-assert it then.
+        refronter = OverlayRefronter { [weak self] in self?.refront() }
+    }
+
+    private func refront() {
+        guard let panel, panel.isVisible, orderOutWork == nil else { return }
+        panel.orderFrontRegardless()
+    }
 
     // MARK: - App lifecycle
 
@@ -75,7 +86,8 @@ public final class ScreenLyrics: ObservableObject {
     }
 
     /// The notch opened/closed. The overlay hides while it's open (the expanded
-    /// panel covers the same spot) and eases back once it's collapsed.
+    /// panel covers the same spot) and eases back once it's collapsed, or, with
+    /// "Move with the notch", slides down under it and back.
     func setNotchExpanded(_ expanded: Bool) {
         notchExpanded = expanded
         tick()
@@ -147,20 +159,28 @@ public final class ScreenLyrics: ObservableObject {
             return
         }
 
-        let frame = Self.panelFrame(for: settings, screen: screen)
+        // Following the notch needs a real cutout: the faux notch opens as a
+        // floating panel of a different shape.
+        let follows = settings.followNotch && NotchGeometry.hasNotch(screen)
+        model.setDrop(follows && notchExpanded ? NotchExpandedRoot.openDepthBelowNotch : 0)
+        let frame = Self.panelFrame(for: settings, screen: screen, follows: follows)
         let panel = ensurePanel()
         if panel.frame != frame { panel.setFrame(frame, display: true) }
 
         let caption = showingSample ? "ScreenLyrics · preview"
             : [key?.artist, key?.title].compactMap { $0 }.joined(separator: " — ")
         _ = timed
+        // A notice takes the spot under the notch; the lyric steps aside for it.
+        let noticeUp = NotchNotices.shared.occupiesBelowNotch
         model.update(line: line, caption: caption, settings: settings,
-                     hidden: notchExpanded, animate: !timingChanged && !styleChanged)
+                     hidden: (notchExpanded && !follows) || noticeUp, animate: !timingChanged && !styleChanged)
         orderOutWork?.cancel(); orderOutWork = nil
         model.setHovered(pillContainsCursor(panel))
-        if !panel.isVisible {
+        if !panel.isShowingOnScreen {
+            if !panel.isVisible {
+                notchLog("lyrics overlay visible (sample: \(showingSample), timed: \(timed != nil))")
+            }
             panel.orderFrontRegardless()
-            notchLog("lyrics overlay visible (sample: \(showingSample), timed: \(timed != nil))")
         }
     }
 
@@ -184,7 +204,7 @@ public final class ScreenLyrics: ObservableObject {
         p.level = .mainMenu + 2
         p.ignoresMouseEvents = true
         p.hidesOnDeactivate = false
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         p.isReleasedWhenClosed = false
         // Liquid Glass only renders its lively state in a key-looking window; an
         // accessory app's click-through panel never is, so patch it like the notch.
@@ -237,11 +257,14 @@ public final class ScreenLyrics: ObservableObject {
 
     /// Where the panel sits: a fixed band centred under the notch, sized for
     /// the size step. The pill positions itself inside it, so the
-    /// panel never has to resize per line.
-    private static func panelFrame(for s: LyricsSettings, screen: NSScreen) -> CGRect {
+    /// panel never has to resize per line. Following the notch, the band also
+    /// reaches down past the open notch, so the pill slides without the
+    /// window moving.
+    private static func panelFrame(for s: LyricsSettings, screen: NSScreen, follows: Bool) -> CGRect {
         let notchBottom = NotchGeometry.notchFrame(for: screen).minY
         let width = min(s.metrics.maxWidth + 48, screen.frame.width - 24)
         let height = LyricsOverlayView.bandHeight(for: s) + s.gap
+            + (follows ? NotchExpandedRoot.openDepthBelowNotch : 0)
         return CGRect(x: screen.frame.midX - width / 2,
                       y: max(screen.frame.minY, notchBottom - height),
                       width: width, height: height)

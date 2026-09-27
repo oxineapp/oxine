@@ -29,15 +29,32 @@ let package = Package(
         .library(name: "TapKit", targets: ["TapKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
-        // The proven notch presentation layer (window, shape, geometry, fluid
-        // expand/compact + hover). NotchKit wraps this and contributes modules.
-        .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.1.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0")
     ],
     targets: [
+        // The proven notch presentation layer (window, shape, geometry, fluid
+        // expand/compact + hover). NotchKit wraps this and contributes modules.
+        // Vendored from MrKai77/DynamicNotchKit 1.1.0 with a window-lifecycle
+        // fix (vendor/DynamicNotchKit/PATCHES.md). A target, not a local
+        // package, so apps that depend on this package by URL still resolve.
+        .target(
+            name: "DynamicNotchKit",
+            path: "vendor/DynamicNotchKit/Sources/DynamicNotchKit"
+        ),
         // Pure lyric plumbing (LRC parsing, line lookup, overlay layout math):
         // no AppKit, so it stays unit-testable in isolation.
         .target(name: "LyricsCore"),
+        // The wire format for notch notices between Oxine and outside tools.
+        .target(name: "NoticeBridge"),
+        // Notice Playground: a separate developer app for trying notch
+        // notices against a running Oxine. Not part of Oxine or its store.
+        .executableTarget(name: "NoticePlayground", dependencies: ["NoticeBridge"]),
+        // Chat Demo: a pretend chat app that runs inside Oxine like a store
+        // app, for trying the chat surfaces, message notices and the notch's
+        // attention glow without a real messenger. `chatdemo.sh` installs it.
+        .executableTarget(name: "ChatDemo", dependencies: ["OxineAppSDK"]),
+        // The app side of the apps protocol, for apps written in Swift.
+        .target(name: "OxineAppSDK"),
         .testTarget(name: "LyricsCoreTests", dependencies: ["LyricsCore"]),
         .testTarget(name: "NotchKitTests", dependencies: ["NotchKit", "LyricsCore"]),
         // Types shared verbatim across the app↔daemon XPC boundary.
@@ -102,7 +119,8 @@ let package = Package(
             dependencies: [
                 "LyricsCore",
                 "PanelKit",
-                .product(name: "DynamicNotchKit", package: "DynamicNotchKit")
+                "DynamicNotchKit",
+                "NoticeBridge"
             ]
         ),
         // Per-app audio without a virtual device: process taps, the private

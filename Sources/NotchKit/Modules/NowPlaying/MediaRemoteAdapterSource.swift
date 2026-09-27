@@ -174,12 +174,14 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         if payload.keys.contains("parentApplicationBundleIdentifier") || payload.keys.contains("bundleIdentifier") {
             merged.bundleID = payload["parentApplicationBundleIdentifier"] as? String ?? payload["bundleIdentifier"] as? String
         }
-        merged.identifier = str("contentItemIdentifier", str("uniqueIdentifier", merged.identifier))
         merged.isPlaying = payload["playing"] as? Bool ?? merged.isPlaying
+        // Not the content identifier: Spotify posts a new one on most updates for
+        // the same song, often without an elapsed time, and treating that as a
+        // new track wiped the clock (0:00 until the next elapsed). A repeat or a
+        // real restart carries its own elapsed time, which resets the clock below.
         let changedTrack = merged.title != previous.title || (!previous.artist.isEmpty && merged.artist != previous.artist) ||
             (!previous.album.isEmpty && !merged.album.isEmpty && merged.album != previous.album) ||
-            merged.bundleID != previous.bundleID ||
-            (!previous.identifier.isEmpty && !merged.identifier.isEmpty && merged.identifier != previous.identifier)
+            merged.bundleID != previous.bundleID
         if changedTrack {
             merged.elapsed = 0; merged.elapsedAt = nil; merged.rawElapsed = nil; merged.rawTimestamp = nil
         }
@@ -223,12 +225,20 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         // Artwork follows the adapter's diff contract independently of the clock:
         // omission means unchanged, even across songs sharing a cover. Clearing it
         // on metadata/identity changes loses the image until the adapter sends a
-        // different one. Explicit null and full snapshots still remove old art.
+        // different one. Explicit null and full snapshots still remove old art,
+        // except that on a song change Spotify sends a full snapshot naming the
+        // cover's type without its bytes, then the bytes in the next diff: on the
+        // same album that's the same cover, so keep it rather than flash the icon.
         if let b64 = (payload["artworkData"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !b64.isEmpty, let data = Data(base64Encoded: b64) {
             merged.artwork = downsampledArtwork(data)
-        } else if !diff || payload["artworkData"] is NSNull {
+        } else if payload["artworkData"] is NSNull {
             merged.artwork = nil
+        } else if !diff {
+            let coverFollows = payload["artworkMimeType"] is String
+            let sameAlbum = !merged.album.isEmpty && merged.album == previous.album
+                && merged.artist == previous.artist && merged.bundleID == previous.bundleID
+            merged.artwork = coverFollows && sameAlbum ? previous.artwork : nil
         }
 
         guard !merged.title.isEmpty else {
@@ -265,7 +275,6 @@ public final class MediaRemoteAdapterSource: NowPlayingSource {
         var rawElapsed: Double?
         var rawTimestamp: Date?
         var rate: Double = 1
-        var identifier = ""
         func position(at date: Date) -> Double {
             guard let elapsedAt else { return 0 }
             return elapsed + (isPlaying ? max(0, date.timeIntervalSince(elapsedAt)) * rate : 0)

@@ -111,6 +111,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // dropdown panel. Safe to start late — it brings itself up if enabled.
         NotchAudioReactor.shared.install()
         NotchCoordinator.shared.start()
+        // Oxine's own notch notices: Sous's battery and charger, heat, meetings.
+        OxineNotices.shared.start()
         // If we crashed last run, offer to send the captured report.
         CrashReporter.presentPendingReportIfNeeded()
     }
@@ -458,6 +460,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Show the panel (if needed) and switch it to the Settings pane. Bound to
     /// ⌘, and the right-click menu — the standard macOS "preferences" gesture.
+    /// An app's own settings page to open along with Settings (its id), taken
+    /// by the settings view when it shows.
+    static var pendingAppSettings: String?
+
+    /// Show the panel on an app's settings page (a link in its notch tab).
+    func openSettings(app id: String) {
+        Self.pendingAppSettings = id
+        openSettings()
+    }
+
     func openSettings() {
         if panel?.isVisible != true { showPanel() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

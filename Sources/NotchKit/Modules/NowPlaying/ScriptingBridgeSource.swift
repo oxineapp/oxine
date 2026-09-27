@@ -32,17 +32,40 @@ public final class ScriptingBridgeSource: NowPlayingSource {
     private var polling = false
     /// Bumped on stop() so late results from a previous life are discarded.
     private var generation = 0
+    /// Decides per player whether to ask it at all. Automatic passes
+    /// `mayAutomate`, so it only reads players Oxine is already allowed to and
+    /// never raises a permission prompt nobody asked for. nil = always ask.
+    private let mayAsk: (@Sendable (String) -> Bool)?
+    /// The players the last poll could actually read (running, and asked), so
+    /// Automatic knows whose word is current.
+    public private(set) var readableApps: Set<String> = []
 
-    public convenience init(player: PlaybackPlayer = .automatic) {
-        self.init(player: player, executeScript: Self.execute, inline: false)
+    public convenience init(player: PlaybackPlayer = .automatic, onlyIfAllowed: Bool = false) {
+        let scripts = CompiledScripts()
+        self.init(player: player, executeScript: { scripts.run($0) }, inline: false,
+                  mayAsk: onlyIfAllowed ? Self.mayAutomate : nil)
     }
 
     /// `inline` runs scripts synchronously on the caller (tests); production
     /// uses the background queue.
-    init(player: PlaybackPlayer, executeScript: @escaping Executor, inline: Bool = true) {
+    init(player: PlaybackPlayer, executeScript: @escaping Executor, inline: Bool = true,
+         mayAsk: (@Sendable (String) -> Bool)? = nil) {
         self.player = player
         self.runner = ScriptRunner(executor: executeScript, inline: inline)
         self.activeApp = player.scriptingApp ?? "Spotify"
+        self.mayAsk = mayAsk
+    }
+
+    /// Poll now rather than at the next tick (Automatic calls this when the
+    /// system feed names a new song, so the two agree without a 2s lag).
+    public func refresh() { if timer != nil { poll() } }
+
+    /// Whether Oxine may already send `app` Apple events, asked without a prompt.
+    /// A player that isn't running answers no too, which suits: nothing to read.
+    nonisolated static func mayAutomate(_ app: String) -> Bool {
+        guard let id = PlaybackPlayer.allCases.first(where: { $0.scriptingApp == app })?.bundleIdentifier,
+              let target = NSAppleEventDescriptor(bundleIdentifier: id).aeDesc else { return false }
+        return AEDeterminePermissionToAutomateTarget(target, typeWildCard, typeWildCard, false) == noErr
     }
 
     public func start() {
@@ -57,7 +80,7 @@ public final class ScriptingBridgeSource: NowPlayingSource {
 
     public func stop() {
         timer?.invalidate(); timer = nil
-        last = nil; artworkURL = nil
+        last = nil; artworkURL = nil; readableApps = []
         lastClockAvailability = nil
         polling = false
         generation += 1
@@ -100,10 +123,15 @@ public final class ScriptingBridgeSource: NowPlayingSource {
         let gen = generation
         // A pinned player never falls through to a different playing app.
         let apps = player.scriptingApp.map { [$0] } ?? ["Spotify", "Music"]
-        runner.run({ exec in apps.compactMap { Self.query($0, exec) } }) { [weak self] snapshots in
+        let mayAsk = self.mayAsk
+        runner.run({ exec in
+            let asked = apps.filter { mayAsk?($0) ?? true }
+            return (asked.compactMap { Self.query($0, exec) }, Set(asked))
+        }) { [weak self] result in
             guard let self, self.generation == gen else { return }
             self.polling = false
-            self.apply(snapshots)
+            self.readableApps = result.1
+            self.apply(result.0)
         }
     }
 
@@ -183,12 +211,6 @@ public final class ScriptingBridgeSource: NowPlayingSource {
                         artworkURL: result.numberOfItems >= 7 ? text(7) : nil)
     }
 
-    private nonisolated static func execute(_ source: String) -> NSAppleEventDescriptor? {
-        var err: NSDictionary?
-        let result = NSAppleScript(source: source)?.executeAndReturnError(&err)
-        if let err { notchLog("AppleScript error: \(err)"); return nil }
-        return result
-    }
 
     // MARK: artwork
 
@@ -259,5 +281,29 @@ private final class ScriptRunner: @unchecked Sendable {
                 MainActor.assumeIsolated { completion(result) }
             }
         }
+    }
+}
+
+/// Compiles each script once and reuses it: the poll runs the same two every
+/// two seconds, and compiling was most of its cost. Only touched from one
+/// source's serial script queue, hence `@unchecked Sendable`.
+private final class CompiledScripts: @unchecked Sendable {
+    private var compiled: [String: NSAppleScript] = [:]
+
+    func run(_ source: String) -> NSAppleEventDescriptor? {
+        let script: NSAppleScript
+        if let cached = compiled[source] {
+            script = cached
+        } else {
+            guard let made = NSAppleScript(source: source) else { return nil }
+            // Transport commands carry a position; don't let them pile up.
+            if compiled.count >= 16 { compiled.removeAll() }
+            compiled[source] = made
+            script = made
+        }
+        var err: NSDictionary?
+        let result = script.executeAndReturnError(&err)
+        if let err { notchLog("AppleScript error: \(err)"); return nil }
+        return result
     }
 }

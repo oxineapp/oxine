@@ -39,6 +39,8 @@ class ClipboardManager: NSObject, ObservableObject {
 
             if let string = NSPasteboard.general.string(forType: .string) {
                 addItem(string)
+                // A link with trackers: the notch offers to clean it.
+                LinkTrackers.check(string)
                 // A genuine external copy — nudge the menu-bar orbit to spin.
                 NotificationCenter.default.post(name: .clipboardCaptured, object: nil)
             }

@@ -101,16 +101,16 @@ enum BundledApps {
                   nativePanelTab: { AnyView(DecantView(decant: DecantManager.shared)) },
                   onUninstall: { DecantManager.shared.resetSettings() }),
             Entry(manifest: AppManifest(
-                id: "oxine.sear", name: "Sear",
-                tagline: "More granular control of your Mac's screen brightness", author: "alfaoz",
-                description: "Opens the brightness an XDR display keeps back for HDR video and uses it for everything, up to about twice as bright. The other way, it dims past the lowest brightness step on any display. One footer click; pauses by itself when the Mac runs hot.",
-                icon: "sun.max",
+                id: "oxine.earson", name: "Ears On",
+                tagline: "Hear the room with headphones on", author: "alfaoz",
+                description: "While you wear headphones, listens through the Mac's microphone for the doorbell, knocking, alarms, a crying baby and other sounds you pick. It pauses your music and tells you in the notch what it heard. Apple's on-device sound recognition does the listening; nothing is recorded or sent anywhere.",
+                icon: "ear",
                 api: AppsProtocolVersion, minOxine: nil, run: nil,
-                surfaces: .init(settings: .init(subtitle: "Brighter, dimmer & safety"),
-                                quickToggle: .init(icon: "sun.max", tooltip: "Screen brightness past the limits", menu: true)),
-                capabilities: [], osPermissions: nil, network: false),
-                  make: { SearAppBackend() },
-                  onUninstall: { SearAppBackend.resetSettings() }),
+                surfaces: .init(settings: .init(subtitle: "Sounds & sensitivity"),
+                                quickToggle: .init(icon: "ear", tooltip: "Listen for sounds around you", menu: true)),
+                capabilities: [], osPermissions: ["microphone"], network: false),
+                  make: { EarsOnAppBackend() },
+                  onUninstall: { EarsOnEngine.resetSettings() }),
             Entry(manifest: AppManifest(
                 id: "oxine.screenlyrics", name: "ScreenLyrics",
                 tagline: "Live lyrics under the notch", author: "shadox & alfaoz",
@@ -227,6 +227,7 @@ final class ScreenLyricsAppBackend: InternalAppBackend {
             switch id {
             case "enabled": defaults.set(value?.boolValue ?? false, forKey: K.enabled)
             case "showTrack": defaults.set(value?.boolValue ?? true, forKey: K.showTrack)
+            case "followNotch": defaults.set(value?.boolValue ?? false, forKey: K.followNotch)
             case "font":
                 if let f = LyricsSettings.FontFamily.allCases.first(where: { $0.label == value?.stringValue }) {
                     defaults.set(f.rawValue, forKey: K.fontFamily)
@@ -269,9 +270,11 @@ final class ScreenLyricsAppBackend: InternalAppBackend {
         [
             N.section("Lyrics", [
                 N.toggle("enabled", "Show lyrics under the notch", s.enabled),
-                N.text("Synced lyrics come from LRCLIB using the song, artist, album and duration — no account. Not every recording has them. The pill hides while the notch is open and lets clicks pass through."),
+                N.text("Synced lyrics come from LRCLIB using the song, artist, album and duration — no account. Not every recording has them. The pill lets clicks pass through."),
                 N.toggle("showTrack", "Show artist and song", s.showTrack),
                 N.text("A second, smaller line under the lyric. Off keeps the pill to the words alone."),
+                N.toggle("followNotch", "Move with the notch", s.followNotch),
+                N.text("On: the pill slides down and stays under the notch while it's open. Off: it hides until the notch closes."),
             ]),
             N.section("Size", [
                 N.slider("size", "Size", Double(s.size), 0...6, step: 1,

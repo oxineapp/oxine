@@ -20,22 +20,28 @@ struct NowPlayingPlayer: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    openAppButton {
-                        VStack(alignment: .leading, spacing: 2) {
-                            MarqueeText(
-                                text: track.title.isEmpty ? "Not Playing" : track.title,
-                                font: .system(size: 14, weight: .semibold),
-                                color: .white,
-                                height: 18
-                            )
-                            MarqueeText(
-                                text: track.artist,
-                                font: .system(size: 11.5, weight: .medium),
-                                color: .white.opacity(0.7),
-                                height: 14
-                            )
+                    // The same bars as the closed notch's ear, top right, level
+                    // with the title.
+                    HStack(alignment: .top, spacing: 8) {
+                        openAppButton {
+                            VStack(alignment: .leading, spacing: 2) {
+                                MarqueeText(
+                                    text: track.title.isEmpty ? "Not Playing" : track.title,
+                                    font: .system(size: 14, weight: .semibold),
+                                    color: .white,
+                                    height: 18
+                                )
+                                MarqueeText(
+                                    text: track.artist,
+                                    font: .system(size: 11.5, weight: .medium),
+                                    color: .white.opacity(0.7),
+                                    height: 14
+                                )
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        MusicVisualizer(isPlaying: manager.isPlaying, color: .panelAccent)
+                            .padding(.top, 1)
                     }
                     Spacer(minLength: 2)
                     Scrubber(manager: manager)
@@ -56,12 +62,21 @@ struct NowPlayingPlayer: View {
                     .foregroundColor(.white.opacity(0.5))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                if lyrics.installed { LyricsToggleButton() }
-                PlaybackPlayerButton(manager: manager)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The source switch keeps the exact spot it has while playing (the
+            // trailing end of the transport row), so cycling to a player with
+            // nothing on never moves it. No lyrics toggle without a song.
+            .overlay(alignment: .bottomTrailing) {
+                PlaybackPlayerButton(manager: manager)
+                    .frame(height: Self.transportRowHeight)
+            }
         }
     }
+
+    /// The transport row's height: its tallest item, the play button (16pt
+    /// glyph + 12, see `transportButton`).
+    private static let transportRowHeight: CGFloat = 28
 
     /// A plain, cursor-hinted button that brings the playing app forward.
     private func openAppButton<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
