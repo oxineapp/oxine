@@ -78,20 +78,32 @@ final class KeyablePanel: NSPanel {
 /// the floating notices) may have been left behind: a Space or app switch,
 /// the Mac or its screens waking, the session unlocking, the displays
 /// changing. The owner brings its panel back to the front if it should be up.
+///
+/// Ordering front can't bring back a panel that dropped out of a Space: a
+/// panel kept up for days loses Spaces over sleeps and display changes, and
+/// nothing adds them back, so it never shows on those again. Only a new
+/// window joins every Space; `shouldReplace` says when to build one.
 @MainActor
 final class OverlayRefronter {
     private var observers: [NSObjectProtocol] = []
+    /// One replacement per switch, wake or display change: a fresh panel that
+    /// still isn't on the Space isn't rebuilt over and over.
+    private var mayReplace = true
 
     init(_ refront: @escaping @MainActor () -> Void) {
         let workspace = NSWorkspace.shared.notificationCenter
+        let now: @MainActor () -> Void = { [weak self] in
+            self?.mayReplace = true
+            refront()
+        }
         for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
             observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { refront() }
+                MainActor.assumeIsolated { now() }
             })
         }
         // Waking and unlocking settle over a moment: once now, once after.
         let later: @MainActor () -> Void = {
-            refront()
+            now()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MainActor.assumeIsolated { refront() } }
         }
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification,
@@ -104,5 +116,14 @@ final class OverlayRefronter {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { later() }
         })
+    }
+
+    /// The panel is up but not on the Space on screen, so it needs replacing
+    /// (once per switch). Only true a moment after it's ordered in: just
+    /// ordered in, a panel still says it's on the Space.
+    func shouldReplace(_ panel: NSWindow) -> Bool {
+        guard mayReplace, panel.isVisible, !panel.isOnActiveSpace else { return false }
+        mayReplace = false
+        return true
     }
 }

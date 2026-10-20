@@ -87,24 +87,27 @@ public enum BatteryReader {
         return m
     }
 
-    /// Overlay live wattages from SMC. `AppleSmartBattery`'s electrical fields
+    /// Overlay live readings from SMC. `AppleSmartBattery`'s electrical fields
     /// only refresh ~1×/min, so the Power Flow would look frozen using them;
-    /// `PDTR`/`PPBR`/`PSTR` update sub-second. Direction comes from IORegistry
-    /// (`isCharging`), which doesn't flip faster than that anyway.
+    /// the SMC keys refresh once a second.
     private static func readSMCPower(into m: inout BatteryMetrics) {
-        // Verified on-device: PDTR = adapter input power, PSTR = system (Mac)
-        // power. Conservation gives the battery flow: PDTR − PSTR is positive
-        // into the battery (charging) and negative when the battery assists.
+        // The battery's flow comes from its own current and voltage, never from
+        // PDTR − PSTR: PSTR is just PDTR from the previous second, so that
+        // difference is the change in load (±10 W while the battery sits held
+        // at 0 mA), which drew false charging at the limit.
         let smc = AppSMC.shared
-        let adapter = smc.adapterPowerW()    // PDTR
-        let sysPower = smc.systemPowerW()     // PSTR
-
-        if let adapter { m.adapterInputW = adapter }
-        if let sysPower { m.systemLoadW = sysPower }
-        if let adapter, let sysPower {
-            m.batteryPowerW = adapter - sysPower
-        } else if let battMag = smc.batteryPowerW() {
-            m.batteryPowerW = m.isCharging ? battMag : -battMag
+        if let adapter = smc.adapterPowerW() { m.adapterInputW = adapter }   // PDTR
+        if isAppleSilicon, let amps = smc.batteryCurrentA(), let volts = smc.batteryVoltageV(), volts > 0 {
+            m.amperageA = amps
+            m.voltageV = volts
+            m.batteryPowerW = volts * amps
+        }
+        // Whatever the charger delivers that isn't going into the battery runs
+        // the Mac (charger losses included); on battery the Mac gets the drain.
+        if !m.externalConnected {
+            m.systemLoadW = max(-m.batteryPowerW, 0)
+        } else if let adapter = m.adapterInputW {
+            m.systemLoadW = max(adapter - m.batteryPowerW, 0)
         }
     }
 

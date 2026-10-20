@@ -57,6 +57,10 @@ struct NoticeCard: View {
 
     private var short: some View {
         let accent = notice.accent
+        // A message keeps room for its words: a long name is cut short
+        // instead of pushing them out.
+        let row = (width ?? metrics.belowMaxWidth) - 2 * metrics.belowHorizontalPadding
+        let nameCap = notice.look == .message && notice.detail != nil ? row * 0.45 : .infinity
         return VStack(spacing: 5) {
             HStack(spacing: 6) {
                 NoticeIcon(notice: notice, size: metrics.belowIcon)
@@ -65,6 +69,7 @@ struct NoticeCard: View {
                     .font(.system(size: metrics.belowFont, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
+                    .frame(maxWidth: nameCap, alignment: .leading)
                     .layoutPriority(1)
                     .glides("title", notice, in: morph)
                 if notice.look == .hero, let hero = notice.hero {
@@ -1085,6 +1090,14 @@ final class FloatingNoticePanel {
 
     private func tickHover() {
         guard let panel else { return }
+        // Left out of this Space: only a new panel shows here (see OverlayRefronter).
+        if orderOutWork == nil, refronter?.shouldReplace(panel) == true {
+            notchLog("floating notices missing from this Space; new panel")
+            panel.orderOut(nil)
+            self.panel = nil
+            show()
+            return
+        }
         let mouse = NSEvent.mouseLocation
         let frames = cardScreenFrames.filter { $0.1.insetBy(dx: -4, dy: -4).contains(mouse) }
         // The open one first: its card can lie over the others' places.

@@ -46,8 +46,19 @@ final class Store: ObservableObject {
         return added
     }
 
-    func remove(_ account: Account) {
-        accounts.removeAll { $0.id == account.id }
+    /// Removes the account and returns where it was, for Undo.
+    @discardableResult
+    func remove(_ account: Account) -> Int? {
+        guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return nil }
+        accounts.remove(at: index)
+        persist()
+        return index
+    }
+
+    /// Puts a removed account back where it was.
+    func restore(_ account: Account, at index: Int) {
+        guard !accounts.contains(where: { $0.id == account.id }) else { return }
+        accounts.insert(account, at: min(index, accounts.count))
         persist()
     }
 }

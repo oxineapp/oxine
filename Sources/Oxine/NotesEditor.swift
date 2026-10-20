@@ -137,6 +137,25 @@ enum NotesEditor {
         return id
     }
 
+    /// Writers offered as one-click picks when they're installed, justtype first.
+    static let suggestedBundleIDs = [
+        "io.justtype.mac",
+        obsidianBundleID,
+        "pro.writer.mac",
+        "abnerworks.Typora",
+        "com.microsoft.VSCode",
+        "dev.zed.Zed",
+        "com.apple.TextEdit",
+    ]
+
+    static func installedSuggestions() -> [Option] {
+        suggestedBundleIDs.compactMap { id in
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
+            let raw = FileManager.default.displayName(atPath: url.path)
+            return Option(id: id, name: raw.hasSuffix(".app") ? String(raw.dropLast(4)) : raw, url: url)
+        }
+    }
+
     /// Revert to the system default Markdown editor.
     static func resetToDefault() { selectedBundleID = nil }
 }

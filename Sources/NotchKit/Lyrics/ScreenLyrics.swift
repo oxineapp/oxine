@@ -164,6 +164,12 @@ public final class ScreenLyrics: ObservableObject {
         let follows = settings.followNotch && NotchGeometry.hasNotch(screen)
         model.setDrop(follows && notchExpanded ? NotchExpandedRoot.openDepthBelowNotch : 0)
         let frame = Self.panelFrame(for: settings, screen: screen, follows: follows)
+        // Left out of this Space: only a new panel shows here (see OverlayRefronter).
+        if let stale = self.panel, refronter?.shouldReplace(stale) == true {
+            notchLog("lyrics overlay missing from this Space; new panel")
+            stale.orderOut(nil)
+            self.panel = nil
+        }
         let panel = ensurePanel()
         if panel.frame != frame { panel.setFrame(frame, display: true) }
 

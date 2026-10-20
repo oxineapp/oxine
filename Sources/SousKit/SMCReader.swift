@@ -4,10 +4,11 @@ import IOKit
 /// Read-only, unprivileged AppleSMC access for real-time power telemetry.
 ///
 /// `AppleSmartBattery` (IORegistry) only refreshes its electrical fields about
-/// once a minute, so it's useless for a live Power Flow. The SMC power keys
-/// (`PDTR` adapter-in, `PPBR` battery) update sub-second. SMC *reads* need no
-/// root (only the charge-control *writes* in the daemon do), so the app reads
-/// them directly. Float keys are 4-byte little-endian IEEE-754.
+/// once a minute, so it's useless for a live Power Flow. The SMC keys
+/// (`PDTR` adapter-in, `B0AC`/`B0AV` battery current/voltage) refresh together
+/// once a second. SMC *reads* need no root (only the charge-control *writes* in
+/// the daemon do), so the app reads them directly. Float keys are 4-byte
+/// little-endian IEEE-754; the battery integers are little-endian too.
 final class AppSMC: @unchecked Sendable {
     static let shared = AppSMC()
 
@@ -26,20 +27,30 @@ final class AppSMC: @unchecked Sendable {
 
     /// Adapter power drawn from the wall, in watts (0 when unplugged / unknown).
     func adapterPowerW() -> Double? { readFloat("PDTR") }
-    /// Battery power magnitude, in watts (direction comes from IORegistry).
-    func batteryPowerW() -> Double? { readFloat("PPBR") }
-    /// System total power, in watts, if the SMC exposes it.
-    func systemPowerW() -> Double? { readFloat("PSTR") }
+    /// Battery current in amps, signed: positive = into the battery (`B0AC`, mA).
+    /// Reads 0 while Sous holds the charge.
+    func batteryCurrentA() -> Double? {
+        readBytes("B0AC", count: 2).map { Double(Int16(bitPattern: UInt16($0[0]) | (UInt16($0[1]) << 8))) / 1000 }
+    }
+    /// Battery pack voltage in volts (`B0AV`, mV).
+    func batteryVoltageV() -> Double? {
+        readBytes("B0AV", count: 2).map { Double(UInt16($0[0]) | (UInt16($0[1]) << 8)) / 1000 }
+    }
 
     // MARK: SMC plumbing (read path only)
 
     private func readFloat(_ key: String) -> Double? {
+        guard let bytes = readBytes(key, count: 4) else { return nil }
+        let raw = UInt32(bytes[0]) | (UInt32(bytes[1]) << 8) | (UInt32(bytes[2]) << 16) | (UInt32(bytes[3]) << 24)
+        let v = Double(Float(bitPattern: raw))
+        return v.isFinite ? abs(v) : nil
+    }
+
+    private func readBytes(_ key: String, count: Int) -> [UInt8]? {
         queue.sync {
             ensureOpen()
-            guard conn != 0, let bytes = read(key), bytes.count >= 4 else { return nil }
-            let raw = UInt32(bytes[0]) | (UInt32(bytes[1]) << 8) | (UInt32(bytes[2]) << 16) | (UInt32(bytes[3]) << 24)
-            let v = Double(Float(bitPattern: raw))
-            return v.isFinite ? abs(v) : nil
+            guard conn != 0, let bytes = read(key), bytes.count >= count else { return nil }
+            return bytes
         }
     }
 

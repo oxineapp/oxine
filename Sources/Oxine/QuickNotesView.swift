@@ -1,328 +1,813 @@
 import SwiftUI
+import AppKit
 import PanelKit
 
+/// The Notes tab: a writer on top that grows as you type, then your notes as
+/// cards: pinned ones in a row of small tiles, the rest in two columns. A
+/// card opens into a full editor that fills the tab.
 struct NotesView: View {
     @ObservedObject var notesManager: QuickNotesManager
-    @StateObject var justTypeSync = JustTypeSyncManager()
-    @State var noteText = ""
-    @FocusState var isFocused: Bool
-    /// Single force-click handler shared across rows — opens the hovered note.
-    @State private var forceOpen = NoteForceOpen()
-    /// Drag-a-note-onto-justtype state, shared between rows and the justtype pane.
-    @StateObject private var dragUpload = DragUploadState()
+    /// What's in the writer, kept across panel closes and relaunches.
+    @AppStorage("notesDraft", store: UserDefaults(suiteName: "com.oxine.settings")) private var draft = ""
+    @State private var searching = false
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
+    @State private var writerFocus = 0
+    /// The note open in the editor.
+    @State private var openID: UUID?
+    @State private var pointer = HoverPointer()
+    @State private var hoveredID: UUID?
+    @StateObject private var ring = RingModel()
+    /// "Moved to Trash · Undo" is showing; bumped per delete so only the
+    /// latest one's timer hides it.
+    @State private var undoShown = 0
+    @Namespace private var hero
 
-    var sortedNotes: [QuickNote] {
-        notesManager.notes.sorted { a, b in
-            if a.isPinned != b.isPinned { return a.isPinned }
-            return a.timestamp > b.timestamp
-        }
+    nonisolated private static let space = "notesBoard"
+
+    private var visible: [QuickNote] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return notesManager.notes }
+        return notesManager.notes.filter { $0.content.localizedCaseInsensitiveContains(q) }
     }
 
-    // Notes tracked by justtype live in the justtype section, not the normal list.
-    var visibleNotes: [QuickNote] {
-        let tracked = justTypeSync.trackedLocalNoteIds
-        return sortedNotes.filter { !tracked.contains($0.id.uuidString) }
+    private var openNote: QuickNote? {
+        openID.flatMap { id in notesManager.notes.first { $0.id == id } }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                writingCard
-                savedNotesList
-                JustTypeNotesSection(sync: justTypeSync, notesManager: notesManager, dragUpload: dragUpload)
+        let notes = visible
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                if notes.isEmpty {
+                    emptyState
+                } else {
+                    board(notes)
+                }
             }
-            .padding(10)
+            if let note = openNote {
+                NoteEditorView(
+                    note: note,
+                    notesManager: notesManager,
+                    onClose: closeEditor,
+                    onDelete: {
+                        closeEditor()
+                        delete(note)
+                    })
+                .matchedGeometryEffect(id: note.id, in: hero)
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+                .zIndex(1)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if undoShown > 0 { undoPill }
         }
         .onAppear {
-            justTypeSync.bind(notesManager: notesManager)
-            forceOpen.notesManager = notesManager
-            forceOpen.start()
-        }
-        .onDisappear { forceOpen.stop() }
-        .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
-            isFocused = true
-        }
-    }
-
-    var writingCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TextField("", text: $noteText, prompt: Text("Write a note\u{2026}").foregroundColor(.white.opacity(0.3)))
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.9))
-                .focused($isFocused)
-                .onAppear { DispatchQueue.main.async { isFocused = true } }
-                .frame(minHeight: 30)
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                        )
-                )
-                .onSubmit {
-                    guard !noteText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    notesManager.addNote(noteText)
-                    noteText = ""
-                    isFocused = true
-                }
-
-            HStack(spacing: 6) {
-                Button(action: {
-                    guard !noteText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    notesManager.addNote(noteText)
-                    noteText = ""
-                    isFocused = true
-                }) {
-                    Text("Save")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(noteText.isEmpty ? 0.25 : 0.7))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.white.opacity(noteText.isEmpty ? 0 : 0.06))
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(noteText.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                Spacer()
+            writerFocus += 1
+            startRing()
+            // Esc closes the ring or the open note before it closes the panel.
+            AppDelegate.escapeHandler = {
+                if ring.state != nil { ring.close(); return true }
+                if openID != nil { closeEditor(); return true }
+                return false
             }
-            .frame(height: 20)
         }
-        .padding(8)
+        .onDisappear {
+            ring.stop()
+            AppDelegate.escapeHandler = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
+            if openID == nil && !searching { writerFocus += 1 }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .popoverWillClose)) { _ in ring.close() }
     }
 
-    var savedNotesList: some View {
-        LazyVStack(spacing: 4) {
-            if visibleNotes.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white.opacity(0.12))
-                    Text("No notes yet")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.25))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+    // MARK: Header
+
+    @ViewBuilder private var header: some View {
+        Group {
+            if searching {
+                searchBar
             } else {
-                ForEach(visibleNotes) { note in
-                    NoteItemRow(note: note, onDelete: {
-                        notesManager.deleteNote(note)
-                    }, onPin: {
-                        notesManager.pinNote(note)
-                    }, onOpenInObsidian: {
-                        NoteOpener.open(note, notesManager: notesManager)
-                    }, onHoverChanged: { hovering in
-                        if hovering { forceOpen.hoveredId = note.id }
-                        else if forceOpen.hoveredId == note.id { forceOpen.hoveredId = nil }
-                    }, onUploadToJustType: {
-                        Task { await justTypeSync.addToJustType(note: note) }
-                    }, dragUpload: dragUpload)
-                    .contextMenu {
-                        Button("Open") { NoteOpener.open(note, notesManager: notesManager) }
-                        if justTypeSync.isConfigured {
-                            Button("Add to justtype") {
-                                Task { await justTypeSync.addToJustType(note: note) }
-                            }
-                        }
-                        Divider()
-                        Button("Delete", role: .destructive) { notesManager.deleteNote(note) }
-                    }
-                }
+                NoteWriter(text: $draft, focusRequest: writerFocus, onSave: save, onSearch: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { searching = true }
+                    DispatchQueue.main.async { searchFocused = true }
+                })
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 2)
     }
-}
 
-struct JustTypeNotesSection: View {
-    @ObservedObject var sync: JustTypeSyncManager
-    @ObservedObject var notesManager: QuickNotesManager
-    @ObservedObject var dragUpload: DragUploadState
-    @State private var showConnect = false
-    /// Brief confirmation tick shown when a sync finishes (dots collapse into it).
-    @State private var showSyncedCheck = false
-    private let syncAccent = Color.panelAccent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("justtype")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.45))
-                Spacer()
-                if sync.isSyncing || showSyncedCheck {
-                    SyncMatrix(color: syncAccent, isDone: !sync.isSyncing && showSyncedCheck)
-                        .padding(.trailing, 10)
-                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+            TextField("", text: $query, prompt: Text("Search notes").foregroundColor(.white.opacity(0.42)))
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.92))
+                .focused($searchFocused)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                    query = ""
+                    searching = false
                 }
-                Button(sync.isConfigured ? "Sync" : "Connect") {
-                    if sync.isConfigured {
-                        Task { await sync.syncNow() }
-                    } else {
-                        showConnect = true
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color.panelAccent.opacity(0.9))
-                .disabled(sync.isSyncing)
+                writerFocus += 1
+            } label: {
+                Text("Done")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.panelAccent)
             }
-            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: sync.isSyncing)
-            .animation(.spring(response: 0.32, dampingFraction: 0.72), value: showSyncedCheck)
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 11)
+        .frame(height: 34)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+        )
+        .transition(.opacity)
+    }
 
-            if !sync.status.isEmpty {
-                Text(sync.status)
-                    .font(.system(size: 10))
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: query.isEmpty ? "square.and.pencil" : "magnifyingglass")
+                .font(.system(size: 20))
+                .foregroundColor(.white.opacity(0.15))
+            Text(query.isEmpty ? "No notes yet" : "No matches")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.4))
+            if query.isEmpty {
+                Text("Write one above. ⌘↩ saves it.")
+                    .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.28))
-                    .lineLimit(2)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-            if sync.isConfigured {
-                if sync.items.isEmpty {
-                    Text("Right-click a note \u{2192} \u{201C}Add to justtype\u{201D}, or Sync to pull notes you\u{2019}ve shared with this app.")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.22))
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    VStack(spacing: 4) {
-                        ForEach(sync.items) { item in
-                            JustTypeItemRow(item: item, sync: sync)
-                        }
+    // MARK: Board
+
+    private func board(_ notes: [QuickNote]) -> some View {
+        let pinned = notes.filter(\.isPinned)
+        let recent = notes.filter { !$0.isPinned }
+        let (left, right) = Self.columns(recent)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if !pinned.isEmpty {
+                    sectionTitle("Pinned")
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(pinned) { note in item(note, compact: true) }
+                    }
+                }
+                if !recent.isEmpty {
+                    sectionTitle("Recent")
+                    HStack(alignment: .top, spacing: 8) {
+                        LazyVStack(spacing: 8) { ForEach(left) { item($0) } }
+                        LazyVStack(spacing: 8) { ForEach(right) { item($0) } }
                     }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 14)
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: notes.map(\.id))
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.035))
-        )
-        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
-        // Track this pane's global frame so rows can hit-test the drag location.
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { dragUpload.dropZoneFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, frame in dragUpload.dropZoneFrame = frame }
+        .coordinateSpace(.named(Self.space))
+        .background(PointerProbe(pointer: pointer))
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, _ in
+            ring.close()
+        }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                guard location != pointer.lastHover else { return }
+                pointer.lastHover = location
+            case .ended:
+                pointer.lastHover = nil
             }
-        )
-        // Drop affordance shown while a note is being dragged toward this pane.
-        .overlay {
-            if dragUpload.draggingNoteId != nil {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(syncAccent.opacity(dragUpload.isOverDrop ? 0.16 : 0.07))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                            .foregroundColor(syncAccent.opacity(dragUpload.isOverDrop ? 0.95 : 0.5))
-                    )
-                    .overlay(
-                        VStack(spacing: 5) {
-                            Image(systemName: "arrow.down.doc.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(dragUpload.isOverDrop ? "Release to upload" : "Drop here to upload to justtype")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundColor(syncAccent)
-                        .scaleEffect(dragUpload.isOverDrop ? 1.05 : 1.0)
-                    )
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
+            refreshHover(animated: true)
+        }
+        .overlay(alignment: .topLeading) {
+            if let state = ring.state {
+                ActionRing(state: state, onPick: ring.pick, onHighlight: ring.highlight,
+                           onConfirm: ring.confirm, onCancelConfirm: ring.cancelConfirm)
+                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: dragUpload.draggingNoteId)
-        .animation(.easeInOut(duration: 0.15), value: dragUpload.isOverDrop)
-        .sheet(isPresented: $showConnect) {
-            JustTypeConnectView(sync: sync, isPresented: $showConnect)
-        }
-        // Bind only (cheap: loads the cached list for instant display). The network sync is NOT
-        // triggered here — doing it on appear fired a full refresh on every tab switch, landing
-        // network + decode work on the slide's first frames (the tab-switch stutter). Auto-sync
-        // happens on panel open (popoverDidShow) instead, which is bind-safe below.
-        .onAppear { sync.bind(notesManager: notesManager) }
-        .onChange(of: sync.isSyncing) { wasSyncing, nowSyncing in
-            // Dots collapse into a checkmark when a sync completes, then it fades.
-            guard wasSyncing, !nowSyncing else { return }
-            showSyncedCheck = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                if !sync.isSyncing { showSyncedCheck = false }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.white.opacity(0.55))
+            .padding(.leading, 2)
+            .padding(.top, 12)
+            .padding(.bottom, 7)
+    }
+
+    /// A card or pinned tile. While its note is open the card keeps its place
+    /// but hides; the editor grows out of it and shrinks back into it.
+    @ViewBuilder private func item(_ note: QuickNote, compact: Bool = false) -> some View {
+        let isOpen = openID == note.id
+        let face = NoteCard(
+            note: note,
+            compact: compact,
+            isHovered: hoveredID == note.id && !isOpen && ring.state == nil,
+            onOpen: { open(note) },
+            onToggle: { notesManager.toggleCheck(note, line: $0) },
+            onPin: { pin(note) },
+            onDelete: { delete(note) })
+        Group {
+            if isOpen {
+                face.hidden()
+            } else {
+                face.matchedGeometryEffect(id: note.id, in: hero)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .notesDidChange)) { _ in
-            // A local edit landed; push tracked notes (don't re-pull the whole list).
-            guard sync.isConfigured, !sync.isSyncing else { return }
-            Task { await sync.pushEdits() }
+        .hoverFrame(note.id, in: pointer, space: Self.space, onChange: queueHoverRefresh)
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+    }
+
+    /// Deals cards into two columns, each to the shorter one so far, by a
+    /// rough height for its text.
+    private static func columns(_ notes: [QuickNote]) -> ([QuickNote], [QuickNote]) {
+        var left: [QuickNote] = [], right: [QuickNote] = []
+        var leftHeight: CGFloat = 0, rightHeight: CGFloat = 0
+        for note in notes {
+            let height = estimatedHeight(note) + 8
+            if leftHeight <= rightHeight {
+                left.append(note); leftHeight += height
+            } else {
+                right.append(note); rightHeight += height
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
-            // Auto-sync with justtype every time the panel opens (pull list + remote edits, push
-            // local). Bind first so this works even if it fires before onAppear on first open.
-            sync.bind(notesManager: notesManager)
-            guard sync.isConfigured, !sync.isSyncing else { return }
-            Task { await sync.syncNow() }
+        return (left, right)
+    }
+
+    private static func estimatedHeight(_ note: QuickNote) -> CGFloat {
+        let doc = note.document
+        var height: CGFloat = 44 + (doc.title == nil ? 0 : 20)
+        for block in doc.blocks.prefix(NoteCard.maxBlocks) {
+            switch block {
+            case .text(let s): height += 17 * CGFloat(min(4, max(1, s.count / 32 + 1)))
+            default: height += 22
+            }
+        }
+        return height
+    }
+
+    private var undoPill: some View {
+        HStack(spacing: 10) {
+            Text("Moved to Trash")
+                .foregroundColor(.white.opacity(0.85))
+            Button("Undo", action: undoDelete)
+                .buttonStyle(.plain)
+                .foregroundColor(Color.panelAccent)
+                .fontWeight(.semibold)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 14)
+        .frame(height: 32)
+        .glassEffect(.regular, in: Capsule())
+        .padding(.bottom, 10)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    // MARK: Hover
+
+    private func queueHoverRefresh() {
+        guard !pointer.refreshQueued else { return }
+        pointer.refreshQueued = true
+        DispatchQueue.main.async {
+            pointer.refreshQueued = false
+            refreshHover(animated: false)
+        }
+    }
+
+    private func refreshHover(animated: Bool) {
+        guard ring.state == nil else { return }
+        let id = pointer.location.flatMap { pointer.row(at: $0, slop: 0) }
+        guard id != hoveredID else { return }
+        withAnimation(animated ? .easeOut(duration: 0.15) : .easeOut(duration: 0.08)) { hoveredID = id }
+    }
+
+    // MARK: Right-click ring
+
+    private func startRing() {
+        ring.target = {
+            guard let point = pointer.location, let id = pointer.row(at: point, slop: 0) else { return nil }
+            return (id, point, pointer.viewport)
+        }
+        ring.choices = { id in
+            guard let note = notesManager.notes.first(where: { $0.id == id }) else { return [] }
+            return [
+                RingChoice(slot: .upLeft, icon: note.isPinned ? "pin.slash" : "pin", title: note.isPinned ? "Unpin" : "Pin"),
+                RingChoice(slot: .upRight, icon: "arrow.up.forward.app", title: "Open in \(NotesEditor.displayName)"),
+                RingChoice(slot: .down, icon: "trash", title: "Move to Trash", danger: true),
+            ]
+        }
+        ring.perform = { slot, id in
+            guard let note = notesManager.notes.first(where: { $0.id == id }) else { return }
+            switch slot {
+            case .upLeft:  pin(note)
+            case .upRight: NoteOpener.open(note, notesManager: notesManager)
+            case .down:    delete(note)
+            }
+        }
+        ring.onClose = { refreshHover(animated: true) }
+        ring.start()
+    }
+
+    // MARK: Actions
+
+    private func save() {
+        guard notesManager.addNote(draft) != nil else { return }
+        draft = ""
+    }
+
+    private func open(_ note: QuickNote) {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) { openID = note.id }
+    }
+
+    private func closeEditor() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) { openID = nil }
+        writerFocus += 1
+    }
+
+    private func pin(_ note: QuickNote) {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { notesManager.pinNote(note) }
+    }
+
+    private func delete(_ note: QuickNote) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) { notesManager.deleteNote(note) }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { undoShown += 1 }
+        let shown = undoShown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            if undoShown == shown { withAnimation(.easeOut(duration: 0.2)) { undoShown = 0 } }
+        }
+    }
+
+    private func undoDelete() {
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+            notesManager.undoDelete()
+            if !notesManager.canUndoDelete { undoShown = 0 }
         }
     }
 }
 
-/// A single row in the justtype subsection. Tap to open (fetch + decrypt on first open);
-/// right-click for Open / Unsync.
-struct JustTypeItemRow: View {
-    let item: JustTypeTrackedSlate
-    @ObservedObject var sync: JustTypeSyncManager
-    @State private var isHovered = false
+// MARK: - Writer
 
-    private var icon: String {
-        switch item.origin {
-        case .pushed: return "arrow.up.circle"
-        case .published: return "globe"
-        case .shared: return "tray.and.arrow.down"
-        }
-    }
+/// The writer at the top of the tab. One line until you click it or start
+/// typing; then it opens up and keeps growing with the text, up to a limit
+/// where it scrolls. Return is a new line; ⌘↩ or the Save button saves.
+struct NoteWriter: View {
+    @Binding var text: String
+    var focusRequest: Int
+    var onSave: () -> Void
+    var onSearch: () -> Void
 
-    private var badge: String {
-        if item.origin == .published { return item.localNoteId == nil ? "Public" : "Public copy" }
-        if item.origin == .shared && item.localNoteId == nil { return "Tap to open" }
-        return "Synced"
+    @State private var focused = false
+    /// Clicked into or typed in. Being focused when the panel opens isn't
+    /// enough to open it up.
+    @State private var engaged = false
+    @State private var textHeight: CGFloat = 34
+
+    private static let closedHeight: CGFloat = 34
+    private static let openMinimum: CGFloat = 60
+    private static let maximum: CGFloat = 220
+
+    private var hasText: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var isOpen: Bool { engaged || !text.isEmpty }
+    private var editorHeight: CGFloat {
+        isOpen ? min(max(textHeight, Self.openMinimum), Self.maximum) : Self.closedHeight
     }
 
     var body: some View {
-        Button {
-            Task { await sync.open(item) }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.4))
-                Text(item.title.isEmpty ? "Untitled" : item.title)
-                    .lineLimit(1)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.85))
-                Spacer()
-                Text(badge)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
+        VStack(spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                MarkdownEditor(
+                    text: $text,
+                    placeholder: "Write a note…",
+                    onHeight: { textHeight = $0 },
+                    onFocus: { now in
+                        focused = now
+                        if !now && text.isEmpty { engaged = false }
+                    },
+                    onClick: { engaged = true },
+                    onSubmit: save,
+                    focusRequest: focusRequest)
+                .frame(height: editorHeight)
+                if !isOpen {
+                    Button(action: onSearch) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.5))
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Search notes")
+                    .transition(.opacity)
+                }
             }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(isHovered ? 0.08 : 0.03))
-            )
+            if isOpen {
+                HStack {
+                    Spacer()
+                    saveButton
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+                .transition(.opacity)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: isOpen ? 14 : 11, style: .continuous)
+                .fill(Color.white.opacity(focused && isOpen ? 0.065 : 0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: isOpen ? 14 : 11, style: .continuous)
+                        .strokeBorder(Color.white.opacity(focused && isOpen ? 0.13 : 0.08), lineWidth: 0.5)
+                )
+        )
+        .animation(.spring(response: 0.34, dampingFraction: 0.84), value: isOpen)
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: editorHeight)
+        .onChange(of: text) { _, now in
+            if !now.isEmpty { engaged = true }
+        }
+    }
+
+    /// Save, with its shortcut written on it so ⌘↩ gets found.
+    private var saveButton: some View {
+        let ink = Color.inkOnAccent
+        return Button(action: save) {
+            HStack(spacing: 7) {
+                Text("Save")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("⌘↩")
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 5)
+                    .frame(height: 17)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill((hasText ? ink : Color.white).opacity(0.14))
+                    )
+            }
+            .foregroundColor(hasText ? ink : .white.opacity(0.4))
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .frame(height: 27)
+            .background(Capsule().fill(hasText ? Color.panelAccent : Color.white.opacity(0.07)))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help("Open")
-        .contextMenu {
-            Button("Open") { Task { await sync.open(item) } }
-            if item.origin == .pushed {
-                Button("Unsync from justtype", role: .destructive) {
-                    Task { await sync.unsync(item) }
+        .disabled(!hasText)
+        .help("Save the note (⌘↩)")
+    }
+
+    private func save() {
+        guard hasText else { return }
+        onSave()
+        engaged = false
+    }
+}
+
+// MARK: - Cards
+
+/// A note on the board: its title, the first few lines rendered (checklist
+/// boxes tick right there), and its date. Pin and Move to Trash float in the
+/// corner on hover. Click opens it. `compact` is the pinned tile.
+struct NoteCard: View {
+    let note: QuickNote
+    var compact = false
+    let isHovered: Bool
+    let onOpen: () -> Void
+    let onToggle: (Int) -> Void
+    let onPin: () -> Void
+    let onDelete: () -> Void
+
+    static let maxBlocks = 6
+
+    /// The corner buttons take clicks only once they've faded in, so a click
+    /// meant to open the card can't land on Move to Trash.
+    @State private var cornerArmed = false
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 13, style: .continuous) }
+
+    var body: some View {
+        Group {
+            if compact { tile } else { card }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 11)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, minHeight: compact ? 74 : nil, maxHeight: compact ? 74 : nil, alignment: .topLeading)
+        .background(shape.fill(Color.white.opacity(isHovered ? 0.075 : 0.05)))
+        .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+        .overlay(alignment: .topTrailing) { corner }
+        .contentShape(shape)
+        .onTapGesture(perform: onOpen)
+        .task(id: isHovered) {
+            cornerArmed = false
+            guard isHovered else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            if !Task.isCancelled { cornerArmed = true }
+        }
+    }
+
+    private var card: some View {
+        let doc = note.document
+        return VStack(alignment: .leading, spacing: 6) {
+            if let title = doc.title {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.94))
+                    .lineLimit(2)
+            }
+            ForEach(Array(doc.blocks.prefix(Self.maxBlocks).enumerated()), id: \.offset) { _, block in
+                blockView(block)
+            }
+            if doc.blocks.count > Self.maxBlocks {
+                Text("\(doc.blocks.count - Self.maxBlocks) more")
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            Text(note.dateLabel)
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
+
+    private var tile: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(tileTitle)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.94))
+                .lineLimit(2)
+            Spacer(minLength: 4)
+            Text(tileSummary)
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.5))
+                .lineLimit(1)
+        }
+    }
+
+    private var tileTitle: String {
+        if let title = note.document.title { return title }
+        switch note.document.blocks.first {
+        case .text(let s), .heading(let s), .bullet(let s), .quote(let s), .code(let s): return NoteDocument.plain(s)
+        case .check(_, let s, _): return NoteDocument.plain(s)
+        case nil: return "Note"
+        }
+    }
+
+    /// "2 of 4 done" for a checklist, "14 items" for a list, else the first line.
+    private var tileSummary: String {
+        let doc = note.document
+        if let list = doc.checklist { return "\(list.done) of \(list.total) done" }
+        let bullets = doc.blocks.filter { if case .bullet = $0 { return true } else { return false } }.count
+        if bullets > 1 { return "\(bullets) items" }
+        for block in doc.blocks.dropFirst(doc.title == nil ? 1 : 0) {
+            if case .text(let s) = block { return NoteDocument.plain(s) }
+        }
+        return note.dateLabel
+    }
+
+    @ViewBuilder private func blockView(_ block: NoteDocument.Block) -> some View {
+        switch block {
+        case .text(let s):
+            Text(NoteDocument.inline(s))
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.75))
+                .lineSpacing(2)
+                .lineLimit(4)
+        case .heading(let s):
+            Text(NoteDocument.plain(s))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(1)
+        case .bullet(let s):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("•").foregroundColor(Color.panelAccent)
+                Text(NoteDocument.inline(s))
+                    .foregroundColor(.white.opacity(0.78))
+                    .lineLimit(2)
+            }
+            .font(.system(size: 12))
+        case .check(let done, let s, let line):
+            NoteCheckRow(done: done, text: s, onToggle: { onToggle(line) })
+        case .quote(let s):
+            HStack(spacing: 7) {
+                Capsule().fill(Color.panelAccent.opacity(0.6)).frame(width: 2)
+                Text(NoteDocument.inline(s))
+                    .font(.system(size: 12))
+                    .italic()
+                    .foregroundColor(.white.opacity(0.62))
+                    .lineLimit(3)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        case .code(let s):
+            Text(s)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.8))
+                .lineLimit(1)
+        }
+    }
+
+    private var corner: some View {
+        HStack(spacing: 1) {
+            ClipIconButton(icon: note.isPinned ? "pin.slash" : "pin", help: note.isPinned ? "Unpin" : "Pin",
+                           size: CGSize(width: 24, height: 22), action: onPin)
+            ClipIconButton(icon: "trash", help: "Move to Trash", danger: true,
+                           size: CGSize(width: 24, height: 22), action: onDelete)
+        }
+        .padding(2)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .padding(6)
+        .opacity(isHovered ? 1 : 0)
+        .scaleEffect(isHovered ? 1 : 0.9, anchor: .topTrailing)
+        .allowsHitTesting(isHovered && cornerArmed)
+    }
+}
+
+/// A checklist item on a card. The box ticks the item in the note's file.
+struct NoteCheckRow: View {
+    let done: Bool
+    let text: String
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button(action: onToggle) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(done ? Color.panelAccent : Color.clear)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.white.opacity(done ? 0 : 0.4), lineWidth: 1.2)
+                    if done {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 7.5, weight: .heavy))
+                            .foregroundColor(.inkOnAccent)
+                    }
+                }
+                .frame(width: 13, height: 13)
+                .padding(.top, 1.5)
+                .contentShape(Rectangle().inset(by: -4))
+            }
+            .buttonStyle(.plain)
+            .help(done ? "Untick" : "Tick")
+            Text(NoteDocument.inline(text))
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(done ? 0.45 : 0.85))
+                .strikethrough(done, color: .white.opacity(0.45))
+                .lineLimit(2)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: done)
+    }
+}
+
+// MARK: - Editor
+
+/// A note open in the tab, edited in place and saved as you type. It grows
+/// out of the card and shrinks back into it on close (Esc, ⌘↩ or Notes).
+struct NoteEditorView: View {
+    let note: QuickNote
+    @ObservedObject var notesManager: QuickNotesManager
+    let onClose: () -> Void
+    let onDelete: () -> Void
+
+    @State private var text: String
+    /// What the file holds as far as this editor knows. Only text typed here
+    /// since then gets written, so a change made in another app isn't saved
+    /// over with an old copy.
+    @State private var saved: String
+    @State private var focus = 1
+    @State private var pendingSave: DispatchWorkItem?
+
+    init(note: QuickNote, notesManager: QuickNotesManager, onClose: @escaping () -> Void, onDelete: @escaping () -> Void) {
+        self.note = note
+        self.notesManager = notesManager
+        self.onClose = onClose
+        self.onDelete = onDelete
+        _text = State(initialValue: note.content)
+        _saved = State(initialValue: note.content)
+    }
+
+    private var current: QuickNote? { notesManager.notes.first { $0.id == note.id } }
+    private var isPinned: Bool { current?.isPinned ?? note.isPinned }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 2) {
+                Button(action: close) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Notes")
+                            .font(.system(size: 12.5))
+                    }
+                    .foregroundColor(.white.opacity(0.75))
+                    .padding(.horizontal, 6)
+                    .frame(height: 26)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Back to notes (Esc)")
+                Spacer()
+                ClipIconButton(icon: isPinned ? "pin.slash" : "pin", help: isPinned ? "Unpin" : "Pin") {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { notesManager.pinNote(note) }
+                }
+                ClipIconButton(icon: "doc.on.doc", help: "Copy") {
+                    flush()
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                openInButton
+                ClipIconButton(icon: "trash", help: "Move to Trash", danger: true) {
+                    pendingSave?.cancel()
+                    onDelete()
                 }
             }
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+
+            MarkdownEditor(
+                text: $text,
+                placeholder: "Write…",
+                fontSize: 13.5,
+                inset: NSSize(width: 16, height: 10),
+                onSubmit: close,
+                focusRequest: focus)
         }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.black.opacity(0.3)))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onChange(of: text) { scheduleSave() }
+        // Edited in another app: show it, unless something's been typed here
+        // since the last save.
+        .onChange(of: current?.content) { _, newer in
+            guard let newer, newer != saved else { return }
+            if text == saved { text = newer }
+            saved = newer
+        }
+        .onDisappear(perform: flush)
+        .onReceive(NotificationCenter.default.publisher(for: .popoverWillClose)) { _ in flush() }
+    }
+
+    private var openInButton: some View {
+        Button {
+            flush()
+            NoteOpener.open(note, notesManager: notesManager)
+        } label: {
+            HStack(spacing: 5) {
+                if let icon = NotesEditor.appIcon() {
+                    Image(nsImage: icon).resizable().frame(width: 14, height: 14)
+                }
+                Text("Open in \(NotesEditor.displayName)")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(Capsule().fill(Color.white.opacity(0.07)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 2)
+    }
+
+    private func scheduleSave() {
+        pendingSave?.cancel()
+        guard text != saved else { return }
+        let save = DispatchWorkItem { commit() }
+        pendingSave = save
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: save)
+    }
+
+    /// Saves now. An emptied note is left as it was rather than written blank.
+    private func flush() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        commit()
+    }
+
+    private func commit() {
+        guard text != saved, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        notesManager.updateNote(note.id, content: text)
+        saved = text
+    }
+
+    private func close() {
+        flush()
+        onClose()
     }
 }
 
@@ -358,706 +843,12 @@ enum NoteOpener {
     }
 }
 
-struct JustTypeConnectView: View {
-    @ObservedObject var sync: JustTypeSyncManager
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Connect justtype")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text("Sign in with justtype. On the consent screen, allow full private slate access so this app can read and edit your slates. Your notes stay end-to-end encrypted to this device.")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.45))
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                Button(sync.isConfigured ? "Done" : "Cancel") { isPresented = false }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.white.opacity(0.5))
-                Spacer()
-                if sync.isConfigured {
-                    Button("Disconnect") {
-                        sync.disconnect()
-                        isPresented = false
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.red.opacity(0.75))
-                }
-                Button(sync.isSigningIn ? "Connecting..." : (sync.isConfigured ? "Reconnect" : "Connect")) {
-                    sync.signIn()
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.panelAccent)
-                .disabled(sync.isSigningIn)
-            }
-
-            Text(sync.status)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-                .lineLimit(2)
-        }
-        .padding(16)
-        .frame(width: 330)
-        .background(Color(red: 0.07, green: 0.07, blue: 0.09))
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-struct NoteItemRow: View {
-    let note: QuickNote
-    let onDelete: () -> Void
-    let onPin: () -> Void
-    let onOpenInObsidian: () -> Void
-    var onHoverChanged: (Bool) -> Void = { _ in }
-    var onUploadToJustType: () -> Void = { }
-    @ObservedObject var dragUpload: DragUploadState
-    @State var offsetX: CGFloat = 0
-    @State var offsetY: CGFloat = 0
-    var isDraggingUpload: Bool { dragUpload.draggingNoteId == note.id }
-    @State var isHovered = false
-    @State var copied = false
-    @State var isDeleting = false
-    @State var holdProgress: Double = 0
-    @State var holdTimer: Timer?
-    @State var forceTouchFlag = ForceTouchFlag()
-
-    var swipeThreshold: CGFloat { 70 }
-    let holdDuration: Double = 0.6
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            if offsetX < 0 {
-                Image(systemName: "trash")
-                    .font(.system(size: 10))
-                    .foregroundColor(.red.opacity(0.6))
-                    .padding(.trailing, 12)
-            }
-
-            if offsetX > 0 {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.cyan.opacity(0.6))
-                    .padding(.leading, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            HStack(spacing: 6) {
-                if note.isPinned {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(.cyan)
-                }
-                Text(note.content)
-                    .lineLimit(2)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(copied ? 0.4 : 0.85))
-                Spacer()
-                if holdTimer != nil {
-                    Circle()
-                        .trim(from: 0, to: holdProgress)
-                        .stroke(Color.panelAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 16, height: 16)
-                        .transition(.opacity)
-                }
-                if copied {
-                    HStack(spacing: 3) {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 8, weight: .bold))
-                        Text("Copied")
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    .foregroundColor(.cyan)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.cyan.opacity(0.12))
-                    .cornerRadius(4)
-                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                }
-                Text(note.timestamp.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.3))
-            }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        offsetX < -swipeThreshold ? Color.red.opacity(0.15) :
-                        offsetX > swipeThreshold ? Color.cyan.opacity(0.15) :
-                        copied ? Color.cyan.opacity(0.1) :
-                        Color.white.opacity(isHovered ? 0.08 : 0.03)
-                    )
-            )
-            .offset(x: offsetX, y: offsetY)
-            .scaleEffect(isDeleting ? 0.85 : (isDraggingUpload ? 1.04 : 1))
-            .shadow(color: .black.opacity(isDraggingUpload ? 0.35 : 0), radius: isDraggingUpload ? 10 : 0, y: isDraggingUpload ? 5 : 0)
-            .opacity(isDeleting ? 0 : (isDraggingUpload ? 0.92 : 1))
-        }
-        .onHover { hovering in
-            isHovered = hovering
-            onHoverChanged(hovering)
-        }
-        .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { value in
-                    let t = value.translation
-                    let dist = hypot(t.width, t.height)
-
-                    if forceTouchFlag.wasForceTouched {
-                        cancelHold()
-                        return
-                    }
-
-                    // Vertical drag → "drag to justtype" mode. Sticky once started
-                    // so wiggling toward the pane doesn't drop back into a swipe.
-                    if dragUpload.draggingNoteId == note.id || (abs(t.height) > abs(t.width) && abs(t.height) > 22) {
-                        cancelHold()
-                        // Lift the row and let it follow the cursor for real feedback.
-                        offsetX = t.width
-                        offsetY = t.height
-                        dragUpload.draggingNoteId = note.id
-                        dragUpload.isOverDrop = dragUpload.dropZoneFrame.contains(value.location)
-                        return
-                    }
-
-                    if dist > 10 {
-                        offsetX = t.width
-                        cancelHold()
-                    } else if holdTimer == nil {
-                        holdProgress = 0
-                        holdTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { _ in
-                            // Don't capture the Timer into its own @Sendable block
-                            // (a non-Sendable type crossing the boundary is a data
-                            // race under strict concurrency). Drive everything off
-                            // the @State on the main actor instead.
-                            Task { @MainActor in
-                                let progress = min(holdProgress + 0.016 / holdDuration, 1.0)
-                                holdProgress = progress
-                                if progress >= 1.0 {
-                                    self.holdTimer?.invalidate()
-                                    self.holdTimer = nil
-                                    onOpenInObsidian()
-                                }
-                            }
-                        }
-                    }
-                }
-                .onEnded { value in
-                    if forceTouchFlag.wasForceTouched {
-                        forceTouchFlag.wasForceTouched = false
-                        cancelHold()
-                        return
-                    }
-
-                    // Finish a drag-to-justtype: upload if released over the pane.
-                    if dragUpload.draggingNoteId == note.id {
-                        let didDrop = dragUpload.isOverDrop
-                        dragUpload.draggingNoteId = nil
-                        dragUpload.isOverDrop = false
-                        cancelHold()
-                        if didDrop { onUploadToJustType() }
-                        // Spring the lifted row back into place.
-                        withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15)) {
-                            offsetX = 0
-                            offsetY = 0
-                        }
-                        return
-                    }
-
-                    let t = value.translation
-                    let dist = hypot(t.width, t.height)
-
-                    if dist >= swipeThreshold {
-                        if t.width < -swipeThreshold {
-                            isDeleting = true
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
-                                offsetX = -swipeThreshold * 2
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                onDelete()
-                            }
-                        } else if t.width > swipeThreshold {
-                            withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15)) {
-                                offsetX = swipeThreshold * 1.3
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                onPin()
-                                withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15)) {
-                                    offsetX = 0
-                                }
-                            }
-                        }
-                    } else {
-                        if holdProgress < 1.0 {
-                            copyToClipboard()
-                        }
-                        if offsetX != 0 {
-                            withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15)) {
-                                offsetX = 0
-                            }
-                        }
-                    }
-
-                    cancelHold()
-                }
-        )
-        .animation(.interpolatingSpring(mass: 0.7, stiffness: 180, damping: 15), value: isHovered)
-    }
-
-    private func cancelHold() {
-        holdTimer?.invalidate()
-        holdTimer = nil
-        holdProgress = 0
-    }
-
-    private func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(note.content, forType: .string)
-        withAnimation(.easeOut(duration: 0.15)) { copied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            withAnimation(.easeOut(duration: 0.15)) { copied = false }
-        }
-    }
-}
-
-// MARK: - Force Touch Flag
-
-class ForceTouchFlag {
-    var wasForceTouched = false
-}
-
-/// Shared state for dragging a local note onto the justtype pane to upload it.
-/// `dropZoneFrame` is the justtype section's global frame (captured via a
-/// GeometryReader); rows compare the drag's global location against it.
-@MainActor
-final class DragUploadState: ObservableObject {
-    @Published var draggingNoteId: UUID?
-    @Published var isOverDrop = false
-    var dropZoneFrame: CGRect = .zero
-}
-
-/// One app-level Force Touch (deep-press) monitor for the whole notes list.
-/// Opens whichever note is currently hovered — so a force-click opens exactly
-/// that note, not all of them (the old per-row monitors all fired at once).
-final class NoteForceOpen: @unchecked Sendable {
-    var hoveredId: UUID?
-    weak var notesManager: QuickNotesManager?
-    private var monitor: Any?
-    private var armed = true   // one open per deep-press
-
-    func start() {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.pressure]) { [weak self] event in
-            guard let self else { return event }
-            if event.stage >= 2 {
-                if self.armed {
-                    self.armed = false
-                    if let id = self.hoveredId,
-                       let nm = self.notesManager,
-                       let note = nm.notes.first(where: { $0.id == id }) {
-                        NoteOpener.open(note, notesManager: nm)
-                    }
-                }
-            } else {
-                self.armed = true
-            }
-            return event
-        }
-    }
-
-    func stop() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-    }
-}
-
-class QuickNotesManager: NSObject, ObservableObject, @unchecked Sendable {
-    @Published var notes: [QuickNote] = []
-
-    private var vaultPath: URL?
-    private let metadataPath = "notes-meta.json"
-    private var pollTimer: Timer?
-    private var knownFileDates: [String: Date] = [:]
-    var notesDirectory: URL? { vaultPath }
-
-    override init() {
-        super.init()
-        setupVault()
-        scanForNotes()
-        startPolling()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(notesFolderChanged),
-            name: .notesFolderChanged, object: nil)
-    }
-
-    private func setupVault() {
-        // Resolved from the configurable setting (default ~/Documents/Oxine Notes);
-        // NotesLocation creates the folder if needed.
-        vaultPath = NotesLocation.url
-    }
-
-    /// The notes folder moved (Settings change) — re-point and reload the list.
-    @objc private func notesFolderChanged() {
-        setupVault()
-        knownFileDates = [:]
-        scanForNotes()
-    }
-
-    private func metadataURL() -> URL? {
-        vaultPath?.appendingPathComponent(metadataPath)
-    }
-
-    private func loadMetadata() -> [String: Bool] {
-        guard let url = metadataURL(),
-              let data = try? Data(contentsOf: url),
-              let meta = try? JSONSerialization.jsonObject(with: data) as? [String: Bool] else {
-            return [:]
-        }
-        return meta
-    }
-
-    private func saveMetadata(_ meta: [String: Bool]) {
-        guard let url = metadataURL(),
-              let data = try? JSONSerialization.data(withJSONObject: meta) else { return }
-            try? data.write(to: url)
-    }
-
-    func noteFileURL(filename: String) -> URL? {
-        vaultPath?.appendingPathComponent("\(filename).md")
-    }
-
-    private func generateFilename(from content: String) -> String {
-        let words = content.split(separator: " ").prefix(6)
-        let base = words.map(String.init).joined(separator: "-")
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .lowercased()
-            .replacingOccurrences(of: "[^a-z0-9-]", with: "", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        let candidate = String(base.prefix(40))
-        if candidate.isEmpty { return UUID().uuidString }
-
-        let existingNames = Set(notes.map { $0.filename })
-        if !existingNames.contains(candidate) { return candidate }
-
-        var counter = 2
-        while existingNames.contains("\(candidate)-\(counter)") {
-            counter += 1
-        }
-        return "\(candidate)-\(counter)"
-    }
-
-    private func scanForNotes() {
-        guard let vaultPath else { return }
-        let meta = loadMetadata()
-        var loaded: [QuickNote] = []
-        var seen: [String: Date] = [:]
-
-        let files = (try? FileManager.default.contentsOfDirectory(at: vaultPath, includingPropertiesForKeys: [.contentModificationDateKey, .creationDateKey])) ?? []
-        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath && !file.lastPathComponent.hasPrefix(".") {
-            let filename = file.deletingPathExtension().lastPathComponent
-            let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
-            seen[filename] = modDate
-            guard let rawContent = try? String(contentsOf: file, encoding: .utf8) else { continue }
-            let parsed = parseNoteFile(rawContent)
-            let noteId = parsed.id.flatMap { UUID(uuidString: $0) } ?? UUID(uuidString: filename) ?? UUID()
-            let timestamp = parsed.created ?? (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date()
-            loaded.append(QuickNote(
-                id: noteId,
-                filename: filename,
-                content: parsed.content,
-                timestamp: timestamp,
-                isPinned: meta[noteId.uuidString] ?? false
-            ))
-        }
-
-        knownFileDates = seen
-        notes = loaded.sorted { $0.timestamp > $1.timestamp }
-    }
-
-    private func parseNoteFile(_ raw: String) -> (id: String?, content: String, created: Date?) {
-        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
-              let endIndex = lines[1...].firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }) else {
-            return (nil, raw, nil)
-        }
-        let frontMatter = lines[1..<endIndex]
-        var created: Date?
-        var id: String?
-        for line in frontMatter {
-            if line.hasPrefix("id:") {
-                id = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
-            }
-            if line.hasPrefix("created:") {
-                let dateStr = line.dropFirst(8).trimmingCharacters(in: .whitespaces)
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                created = formatter.date(from: dateStr)
-                if created == nil {
-                    formatter.formatOptions = [.withInternetDateTime]
-                    created = formatter.date(from: dateStr)
-                }
-            }
-        }
-        let content = lines[(endIndex + 1)...].joined(separator: "\n").trimmingCharacters(in: .newlines)
-        return (id, content.isEmpty ? raw : content, created)
-    }
-
-    private func formatNoteFile(_ note: QuickNote) -> String {
-        // Obsidian gets its flavored frontmatter (tags etc.); every other editor
-        // gets clean Markdown with only the minimal `id` we need to keep note
-        // identity stable across rescans (pins + justtype tracking key on it).
-        if NotesEditor.isObsidian {
-            return """
-            ---
-            id: \(note.id.uuidString)
-            tags:
-              - menubar
-              - quick-note
-            ---
-
-            \(note.content)
-            """
-        }
-        return """
-        ---
-        id: \(note.id.uuidString)
-        ---
-
-        \(note.content)
-        """
-    }
-
-    private func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.checkForExternalChanges()
-            }
-        }
-    }
-
-    private func checkForExternalChanges() {
-        guard let vaultPath else { return }
-        let files = (try? FileManager.default.contentsOfDirectory(at: vaultPath, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        var current: [String: Date] = [:]
-        for file in files where file.pathExtension == "md" && file.lastPathComponent != metadataPath && !file.lastPathComponent.hasPrefix(".") {
-            let filename = file.deletingPathExtension().lastPathComponent
-            let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
-            current[filename] = modDate
-        }
-
-        var changed = knownFileDates != current
-        if !changed {
-            for (filename, date) in current {
-                if knownFileDates[filename] != date {
-                    changed = true
-                    break
-                }
-            }
-        }
-
-        if changed {
-            scanForNotes()
-            objectWillChange.send()
-            NotificationCenter.default.post(name: .notesDidChange, object: nil)
-        }
-    }
-
-    func addNote(_ content: String) {
-        let trimmed = content.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty { return }
-        let filename = generateFilename(from: trimmed)
-        let note = QuickNote(id: UUID(), filename: filename, content: trimmed, timestamp: Date())
-        notes.insert(note, at: 0)
-        if notes.count > 100 { notes.removeLast() }
-        persistNote(note)
-        NotificationCenter.default.post(name: .notesDidChange, object: nil)
-    }
-
-    func deleteNote(_ note: QuickNote) {
-        notes.removeAll { $0.id == note.id }
-        if let fileURL = noteFileURL(filename: note.filename) {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
-        var meta = loadMetadata()
-        meta.removeValue(forKey: note.id.uuidString)
-        saveMetadata(meta)
-        knownFileDates.removeValue(forKey: note.filename)
-        objectWillChange.send()
-        NotificationCenter.default.post(name: .notesDidChange, object: nil)
-    }
-
-    func pinNote(_ note: QuickNote) {
-        if let index = notes.firstIndex(where: { $0.id == note.id }) {
-            notes[index].isPinned.toggle()
-            var meta = loadMetadata()
-            meta[note.id.uuidString] = notes[index].isPinned
-            saveMetadata(meta)
-            objectWillChange.send()
-        }
-    }
-
-    private func persistNote(_ note: QuickNote) {
-        guard let fileURL = noteFileURL(filename: note.filename) else { return }
-        try? formatNoteFile(note).write(to: fileURL, atomically: true, encoding: .utf8)
-        var meta = loadMetadata()
-        if note.isPinned { meta[note.id.uuidString] = true }
-        saveMetadata(meta)
-        if let modDate = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate {
-            knownFileDates[note.filename] = modDate
-        }
-    }
-
-    func note(idString: String) -> QuickNote? {
-        notes.first { $0.id.uuidString == idString }
-    }
-
-    func createSyncedNote(title: String?, content: String, slateNumber: Int) -> QuickNote {
-        let base = title?.isEmpty == false ? title! : "justtype slate \(slateNumber)"
-        let filename = generateFilename(from: base)
-        let note = QuickNote(id: UUID(), filename: filename, content: content, timestamp: Date())
-        notes.insert(note, at: 0)
-        persistNote(note)
-        return note
-    }
-
-    func writeSyncedNote(id: UUID, filename: String, content: String) {
-        let existing = notes.first { $0.id == id }
-        let note = QuickNote(id: id, filename: filename, content: content, timestamp: existing?.timestamp ?? Date(), isPinned: existing?.isPinned ?? false)
-        if let index = notes.firstIndex(where: { $0.id == id }) {
-            notes[index] = note
-        } else {
-            notes.insert(note, at: 0)
-        }
-        persistNote(note)
-        objectWillChange.send()
-    }
-
-    deinit {
-        pollTimer?.invalidate()
-    }
-}
-
-struct QuickNote: Identifiable {
-    let id: UUID
-    let filename: String
-    let content: String
-    let timestamp: Date
-    var isPinned: Bool
-
-    init(content: String) {
-        self.id = UUID()
-        self.filename = ""
-        self.content = content
-        self.timestamp = Date()
-        self.isPinned = false
-    }
-
-    init(id: UUID, filename: String, content: String, timestamp: Date, isPinned: Bool = false) {
-        self.id = id
-        self.filename = filename
-        self.content = content
-        self.timestamp = timestamp
-        self.isPinned = isPinned
-    }
-}
-
-/// justtype "syncing" indicator: a 5×4 grid of cyan cells whose sizes flicker
-/// fluidly-but-abruptly at semi-random — reads like work is happening. When the
-/// sync finishes the cells collapse and a bare checkmark strokes itself in (no
-/// circular outline).
-struct SyncMatrix: View {
-    var color: Color
-    var isDone: Bool
-
-    private let cols = 5
-    private let rows = 4
-    private let cell: CGFloat = 2.2     // dot size at full scale
-    private let gap: CGFloat = 1.8
-
-    @State private var scales: [CGFloat]
-    @State private var checkProgress: CGFloat = 0
-    private let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
-
-    init(color: Color, isDone: Bool) {
-        self.color = color
-        self.isDone = isDone
-        // Start collapsed so the grid grows in fluidly rather than popping.
-        _scales = State(initialValue: Array(repeating: 0, count: 20))
-    }
-
-    private var gridWidth: CGFloat { CGFloat(cols) * cell + CGFloat(cols - 1) * gap }
-    private var gridHeight: CGFloat { CGFloat(rows) * cell + CGFloat(rows - 1) * gap }
-
-    var body: some View {
-        ZStack {
-            // Dot matrix — fades out as the check draws in.
-            VStack(spacing: gap) {
-                ForEach(0..<rows, id: \.self) { r in
-                    HStack(spacing: gap) {
-                        ForEach(0..<cols, id: \.self) { c in
-                            let i = r * cols + c
-                            RoundedRectangle(cornerRadius: 0.7, style: .continuous)
-                                .fill(color)
-                                .frame(width: cell, height: cell)
-                                .scaleEffect(scales[i])
-                                .opacity(0.3 + 0.7 * scales[i])
-                        }
-                    }
-                }
-            }
-            .opacity(1 - checkProgress)
-
-            // Bare checkmark, stroked in on completion.
-            Checkmark()
-                .trim(from: 0, to: checkProgress)
-                .stroke(color, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
-                .frame(width: gridWidth, height: gridHeight)
-        }
-        .frame(width: gridWidth, height: gridHeight)
-        .onAppear {
-            guard !isDone else { return }
-            // Fluid grow-in from the collapsed initial state.
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                for i in scales.indices { scales[i] = CGFloat.random(in: 0.3...1.0) }
-            }
-        }
-        .onReceive(timer) { _ in
-            guard !isDone else { return }
-            // Re-roll most cells each tick; the eased spring gives the
-            // "fluid but abruptish" computing feel.
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
-                for i in scales.indices where Int.random(in: 0..<3) != 0 {
-                    scales[i] = CGFloat.random(in: 0.25...1.0)
-                }
-            }
-        }
-        .onChange(of: isDone) { _, done in
-            if done {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
-                    checkProgress = 1
-                    for i in scales.indices { scales[i] = 0 }
-                }
-            } else {
-                checkProgress = 0
-                for i in scales.indices { scales[i] = CGFloat.random(in: 0.3...1.0) }
-            }
-        }
-    }
-}
-
-/// Two-segment checkmark with no enclosing circle. Drawn within its frame so it
-/// can be `.trim`-animated.
-struct Checkmark: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.55))
-        p.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.minY + rect.height * 0.82))
-        p.addLine(to: CGPoint(x: rect.minX + rect.width * 0.92, y: rect.minY + rect.height * 0.18))
-        return p
+extension Color {
+    /// Text on an accent fill: dark on a light accent, white on a dark one.
+    @MainActor static var inkOnAccent: Color {
+        let luminance = NSColor(Color.panelAccent).usingColorSpace(.sRGB).map {
+            ClipColor.luminance($0.redComponent, $0.greenComponent, $0.blueComponent)
+        } ?? 0.6
+        return luminance > 0.4 ? Color(red: 0.03, green: 0.11, blue: 0.15) : .white
     }
 }

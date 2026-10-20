@@ -662,12 +662,11 @@ private struct MiniNotch: View {
 
 // MARK: - Notes
 
-/// Where notes live and what opens them, plus justtype sync.
+/// Where notes live and what opens them.
 private struct TourNotes: View {
     @Binding var isLoading: Bool
     @State private var vaultReady = false
     @State private var errorMessage: String?
-    @StateObject private var sync = JustTypeSyncManager()
     /// Re-read NotesEditor when the choice changes (the Obsidian row comes and goes).
     @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
     @State private var editorTick = 0
@@ -679,39 +678,13 @@ private struct TourNotes: View {
             VStack(spacing: 8) {
                 TourLabel(text: "Opens in")
                 EditorChip()
+                EditorSuggestions()
                 if NotesEditor.isObsidian { obsidianRow }
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.orange.opacity(0.9))
                         .multilineTextAlignment(.center)
-                }
-            }
-            VStack(spacing: 8) {
-                TourLabel(text: "Sync")
-                TourCard {
-                    HStack(spacing: 11) {
-                        Image(systemName: "cloud.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.panelAccent)
-                            .frame(width: 22)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("justtype")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text(sync.isConfigured ? sync.status : "Your notes as private slates, on the web and your phone. Allow private slate access when it asks.")
-                                .font(.system(size: 10.5, weight: .medium))
-                                .foregroundColor(.white.opacity(0.5))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 4)
-                        if sync.isConfigured {
-                            TourDone(text: "Connected")
-                        } else {
-                            TourButton(title: sync.isSigningIn ? "Connecting…" : "Connect") { sync.signIn() }
-                                .disabled(sync.isSigningIn)
-                        }
-                    }
                 }
             }
         }

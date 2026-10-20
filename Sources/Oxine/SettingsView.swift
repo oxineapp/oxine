@@ -11,7 +11,7 @@ import ServiceManagement
 /// flat list so related settings live together (e.g. the editor moved under
 /// Notes, Focus + Caffeine pair up).
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, tabs, footer, apps, notes, clipboard, notch, integrations, shortcuts, about
+    case general, tabs, footer, apps, notes, clipboard, notch, shortcuts, about
 
     var id: String { rawValue }
 
@@ -24,7 +24,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .clipboard:    return "Clipboard"
         case .notch:        return "Notch"
         case .apps:         return "Apps"
-        case .integrations: return "Integrations"
         case .shortcuts:    return "Shortcuts"
         case .about:        return "About & Updates"
         }
@@ -39,7 +38,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .clipboard:    return "clock.arrow.circlepath"
         case .notch:        return "macbook.gen2"
         case .apps:         return "shippingbox"
-        case .integrations: return "link"
         case .shortcuts:    return "command"
         case .about:        return "info.circle"
         }
@@ -55,7 +53,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .clipboard:    return "History size, lock, clear"
         case .notch:        return "Media, mirror, shelf at the notch"
         case .apps:         return "Install, manage & app settings"
-        case .integrations: return "justtype sync"
         case .shortcuts:    return "Keyboard shortcuts"
         case .about:        return "Version, updates, setup"
         }
@@ -68,11 +65,10 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .general:      return ["launch", "login", "startup", "glass", "tint", "opacity", "window", "size", "accent", "color", "colour", "appearance", "theme", "preview"]
         case .tabs:         return ["tab", "bar", "reorder", "navigation", "swipe", "haptic", "gesture"]
         case .footer:       return ["footer", "slot", "toggle", "quick", "bottom", "strip"]
-        case .notes:        return ["notes", "folder", "location", "obsidian", "editor", "markdown", "touch id", "lock", "biometrics"]
+        case .notes:        return ["notes", "folder", "location", "obsidian", "justtype", "writer", "editor", "markdown", "touch id", "lock", "biometrics"]
         case .clipboard:    return ["clipboard", "history", "paste", "clear", "touch id", "lock"]
         case .notch:        return ["notch", "dynamic", "island", "media", "now playing", "music", "mirror", "camera", "shelf", "airdrop", "drop"]
         case .apps:         return ["app", "apps", "store", "install", "extension", "feature", "caffeine", "awake", "sleep", "focus", "dim", "blur", "lyrics", "gestures", "sous", "battery", "charge", "temper", "thermal", "fan", "heat"]
-        case .integrations: return ["integration", "justtype", "sync", "connect", "account"]
         case .shortcuts:    return ["shortcut", "keyboard", "hotkey", "popup"]
         case .about:        return ["about", "version", "update", "software", "quit", "setup"]
         }
@@ -123,9 +119,10 @@ enum SettingIndex {
         // Notes
         SettingEntry("Notes folder location", .notes, ["folder", "path", "directory", "where", "save", "store"]),
         SettingEntry("Lock notes with Touch ID", .notes, ["touchid", "biometrics", "lock", "fingerprint", "faceid", "password", "passcode", "secure", "privacy", "protect"]),
-        SettingEntry("Markdown editor", .notes, ["editor", "markdown", "open", "app", "default", "text"]),
+        SettingEntry("Markdown editor", .notes, ["editor", "writer", "justtype", "markdown", "open", "app", "default", "text"]),
         SettingEntry("Obsidian vault", .notes, ["obsidian", "vault", "integration"]),
         // Clipboard
+        SettingEntry("Clipboard layout", .clipboard, ["layout", "stack", "board", "grid", "tiles", "list", "view", "cards"]),
         SettingEntry("Clipboard history size", .clipboard, ["history", "max", "items", "store", "count", "limit", "number", "size"]),
         SettingEntry("Lock clipboard with Touch ID", .clipboard, ["touchid", "biometrics", "lock", "fingerprint", "faceid", "password", "passcode", "secure", "privacy", "protect"]),
         SettingEntry("Clear all history", .clipboard, ["wipe", "delete", "erase", "remove", "clean"]),
@@ -158,7 +155,6 @@ enum SettingIndex {
         SettingEntry("ScreenLyrics", .apps, ["lyrics", "screenlyrics", "song", "words", "lrclib", "subtitles", "karaoke", "notch"]),
         SettingEntry("FnGestures", .apps, ["fn", "gestures", "trackpad", "scroll", "volume", "brightness", "swipe", "globe", "fngestures"]),
         // Integrations
-        SettingEntry("justtype sync", .integrations, ["justtype", "sync", "account", "connect", "sign", "login", "cloud"]),
         // Shortcuts
         SettingEntry("Toggle popup shortcut", .shortcuts, ["shortcut", "hotkey", "keyboard", "popup", "open", "command", "shift", "key"]),
         // About & Updates
@@ -296,9 +292,8 @@ enum SettingIndex {
         case "Swipe sensitivity", "One tab per swipe", "Invert swipe direction", "Haptic feedback": return "Navigation"
         case "Notes folder location", "Lock notes with Touch ID": return "Notes"
         case "Markdown editor", "Obsidian vault": return "Editor"
-        case "Clipboard history size", "Lock clipboard with Touch ID",
+        case "Clipboard layout", "Clipboard history size", "Lock clipboard with Touch ID",
              "Clear all history", "Clear clipboard": return "Clipboard"
-        case "justtype sync": return "Integrations"
         case "Toggle popup shortcut": return "Keyboard Shortcuts"
         case "App version": return "About"
         case "Check for updates": return "Software Update"
@@ -317,6 +312,7 @@ struct SettingsView: View {
     @AppStorage("launchAtLogin", store: UserDefaults(suiteName: "com.oxine.settings")) var launchAtLogin = true
     @AppStorage("showPreview", store: UserDefaults(suiteName: "com.oxine.settings")) var showPreview = true
     @AppStorage("maxItems", store: UserDefaults(suiteName: "com.oxine.settings")) var maxItems = 50
+    @AppStorage(ClipboardLayout.storeKey, store: UserDefaults(suiteName: "com.oxine.settings")) var clipboardLayout = ClipboardLayout.stack.rawValue
     @AppStorage("glassOpacity", store: UserDefaults(suiteName: "com.oxine.settings")) var glassOpacity = 0.7
     @AppStorage("requireBiometricsForClipboard", store: UserDefaults(suiteName: "com.oxine.settings")) var requireClipboardAuth = false
     @AppStorage("requireBiometricsForNotes", store: UserDefaults(suiteName: "com.oxine.settings")) var requireNotesAuth = false
@@ -351,7 +347,6 @@ struct SettingsView: View {
     @ObservedObject private var tabConfig = TabBarConfig.shared
     @State private var editingTabs = false
 
-    @StateObject private var justType = JustTypeSyncManager()
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var updater = UpdaterManager.shared
 
@@ -872,8 +867,6 @@ struct SettingsView: View {
                 slideForward = true
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) { storeListing = listing }
             })
-        case .integrations:
-            anchored("Integrations", justtypeSection)
         case .shortcuts:
             anchored("Keyboard Shortcuts", shortcutsSection)
         case .about:
@@ -1106,6 +1099,7 @@ struct SettingsView: View {
                         .foregroundColor(.white.opacity(0.5))
                 }
                 EditorChip()
+                EditorSuggestions()
 
                 // Obsidian-only: vault registration for the full experience.
                 if NotesEditor.isObsidian {
@@ -1140,6 +1134,28 @@ struct SettingsView: View {
 
     private var clipboardSection: some View {
         SettingSection(title: "Clipboard") {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Layout")
+                        .foregroundColor(.white.opacity(0.85))
+                    Text(clipboardLayout == ClipboardLayout.board.rawValue
+                         ? "Two columns of tiles, grouped by day"
+                         : "A list; open a row to see all of it")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
+                Picker("", selection: $clipboardLayout) {
+                    Text("Stack").tag(ClipboardLayout.stack.rawValue)
+                    Text("Board").tag(ClipboardLayout.board.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 130)
+            }
+
+            Divider()
+                .opacity(0.1)
+
             HStack {
                 Text("Max items to store")
                     .foregroundColor(.white.opacity(0.8))
@@ -1207,48 +1223,6 @@ struct SettingsView: View {
                 )
             }
             .buttonStyle(.plain)
-        }
-    }
-
-    private var justtypeSection: some View {
-        SettingSection(title: "Integrations") {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("justtype")
-                        .foregroundColor(.white.opacity(0.9))
-                    Text(justType.isConfigured ? "Connected" : "Recommended · not connected")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                Spacer()
-                if justType.isConfigured {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color.panelAccent)
-                } else {
-                    IntegrateButton(isLoading: justType.isSigningIn) { justType.signIn() }
-                }
-            }
-
-            if justType.isConfigured {
-                Button(action: { justType.disconnect() }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text("Log out of justtype")
-                            .fontWeight(.medium)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundColor(.red.opacity(0.85))
-                    .font(.system(size: 12))
-                    .background(Color.red.opacity(0.08))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red.opacity(0.15), lineWidth: 0.5)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
@@ -2036,6 +2010,47 @@ struct EditorChip: View {
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.06), lineWidth: 0.5))
+    }
+}
+
+/// One-click picks for the writers found on this Mac (justtype first), so
+/// setting the default doesn't need the app chooser.
+struct EditorSuggestions: View {
+    @AppStorage("notesEditorBundleID", store: UserDefaults(suiteName: "com.oxine.settings")) private var editorBundleID = ""
+
+    var body: some View {
+        let options = NotesEditor.installedSuggestions()
+        if !options.isEmpty {
+            let current = NotesEditor.resolvedBundleID()
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(options) { option in
+                    let on = option.id == current
+                    Button {
+                        NotesEditor.selectedBundleID = option.id
+                        editorBundleID = option.id
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(nsImage: NSWorkspace.shared.icon(forFile: option.url.path))
+                                .resizable()
+                                .frame(width: 16, height: 16)
+                            Text(option.name)
+                                .font(.system(size: 11.5, weight: on ? .semibold : .regular))
+                                .foregroundColor(on ? Color.panelAccent : .white.opacity(0.75))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 9)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(on ? Color.panelAccent.opacity(0.14) : Color.white.opacity(0.04))
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open notes in \(option.name)")
+                }
+            }
+        }
     }
 }
 

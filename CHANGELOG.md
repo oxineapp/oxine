@@ -4,6 +4,38 @@ All notable changes to Oxine. Each released version needs a section here; the
 matching entry is embedded into the Sparkle appcast and shown in the in-app
 updater.
 
+## 2.6.0
+- **Clipboard history, rebuilt.**
+  - Search sits at the top and is ready when the panel opens: just type. Chips narrow the list to Links, Code, Secrets or Pinned.
+  - Each row shows what it is (text, a link, code, or the color itself), its first line, and the app you copied it in.
+  - One highlight follows the pointer, also while the list scrolls under a mouse you're not moving. On the row you point at, the time makes way for Pin and Delete.
+  - Click a row to copy it. A row with more to it gets an arrow that opens all of it in place: the full text, the whole link, or code in a block. Drag a row into another app to drop its text there.
+  - Keys: ↑ ↓ to move, ↩ to copy, ⌘↩ to paste it straight into the app you were in (needs Accessibility), ⌘1–9 for the first nine, ⌘P to pin, ⌘⌫ to delete the row you picked with the arrows.
+  - Deleting shows Undo for a few seconds (⌘Z works too).
+  - Settings → Clipboard → Layout: Stack, or Board, which lays your history out as tiles grouped by day. A copied color gets a tile in that color.
+  - Swiping rows is gone, since it clashed with the two-finger tab swipe. So are the Cards/Classic switch and Save as Note.
+- **Secrets stay hidden.** Anything that looks like a secret shows in the history under invisible ink, like iMessage: copies a password manager marks as concealed, API keys and tokens (GitHub, OpenAI, AWS, Google, Stripe, Slack and more), private keys, 2FA links and generated passwords. Click its eye to show it, press and hold the row to peek, or hold ⌥ to see them all. Right-click to mark or unmark one yourself. Copying a secret again keeps it marked concealed for other apps.
+- **The clipboard history is kept in your keychain**, no longer in a plain file, since secrets land in it. Your history moves over the first time you open Oxine.
+- **Right-click opens a ring.** In History, Notes and Auth, right-clicking a row opens a ring of glass buttons around the pointer; click one. Or hold the right button a moment and drag toward one to pick it in one move. A right-click you let go of straight away only opens the ring. Delete always asks: its button splits into ✕ and ✓.
+- **Notes, rebuilt as cards.**
+  - Write at the top. The box opens up when you click it or start typing and grows with your note. Return makes a new line; ⌘↩ or Save saves it. What you've typed stays there if the panel closes.
+  - Markdown is styled as you write: ⌘B bold, ⌘I italic, ⌘E code, ⌘K link, ⇧⌘X strikethrough, ⇧⌘L checklist. Lists carry on when you press Return, and Tab moves an item in.
+  - Your notes show as cards with their title, first lines and date, and you can tick checklist items right on the card. Pinned notes sit on top as small tiles ("2 of 4 done").
+  - Click a card to open it full size in the panel. It saves as you type, shows changes made in other apps, and Esc takes you back. "Open in…" sends it to your editor.
+  - Search your notes from the magnifier in the writer.
+  - Deleting moves a note to the Trash, with Undo. It used to delete the file for good.
+  - Note files are plain Markdown now: Oxine no longer adds an `id:` header to them, and takes it out of notes that have one. Pins carry over.
+  - Fixed: notes written in other apps losing their pin.
+  - Swipes, hold-to-open and force-click on notes are gone.
+- **justtype sync is off for now.** The justtype section in Notes, Settings → Integrations and the tour's sync step are gone. Notes that were synced show up as ordinary notes.
+- Settings → Notes → Editor has one-click picks for the writers on your Mac: justtype, Obsidian, iA Writer, Typora, VS Code, Zed and TextEdit.
+- **Export your 2FA accounts.** In Auth, the share button (or right-click an account → Export) turns accounts into Google Authenticator transfer QR codes, ten accounts per code, after Touch ID. Scan them with Google Authenticator or any app that imports from it. Each code stays hidden under invisible ink until you click it. Copy Link copies the transfer link, marked concealed. Only 30-second, 6- or 8-digit codes can be moved this way; any others are listed.
+- Deleting an account in Auth asks first and shows Undo for 10 seconds. It used to be deleted at once.
+- Auth's add, export and lock buttons are Liquid Glass.
+- Fixed: ScreenLyrics and floating notifications going missing on some Spaces after the Mac had been on for days.
+- Fixed: a long sender name pushing the message out of a message notification.
+- Fixed: Sous's Power Flow showing the battery charging or draining by up to 10 W while it was held at your charge limit. The battery's flow now comes from its own current and voltage.
+
 ## 2.5.0
 - **New app: NotchsApp.** WhatsApp in the notch: your chats in a tall notch tab where you read, reply, react and send photos and files, with ticks, typing and last seen. New messages come down as notices you answer in place, and the notch glows in the color of whoever's waiting. You pick which chats the notch lists and which can notify you. Sign in by scanning a QR code, as with WhatsApp Web. It's a separate, open-source app by the NotchsApp team (github.com/oxineapp/notchsapp): install it from Settings → Apps, under From the community.
 - For app makers: an app can ship helper files beside its binary (`files` in its manifest), each checked against the release's SHA256SUMS before anything is installed. A failed download no longer installs an error page as the app. Community apps in the store show their own name, tagline and icon, and the store always loads its lists fresh (a copy saved before an app was listed could hide it).

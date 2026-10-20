@@ -47,6 +47,9 @@ class KeyablePanel: NSPanel {
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     static weak var instance: AppDelegate?
+    /// Something in the panel that takes Esc before it closes the panel (an
+    /// open note). Returns true when it handled it.
+    static var escapeHandler: (() -> Bool)?
 
     var statusItem: NSStatusItem?
     var orbitView: OrbitStatusView?
@@ -297,6 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard let self else { return event }
             if event.keyCode == 53 {
                 if self.panel?.isVisible == true {
+                    if let handler = AppDelegate.escapeHandler, handler() { return nil }
                     self.closeReason = "escape"
                     self.closePanel()
                     return nil

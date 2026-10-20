@@ -6,7 +6,14 @@ struct AuthView: View {
     @StateObject private var auth = AuthManager()
     @State private var message: String?
     @State private var showAddSecret = false
+    @State private var export: ExportRequest?
     @State private var authing = false
+    @State private var pointer = HoverPointer()
+    @StateObject private var ring = RingModel()
+    /// The last deleted account and where it was, while its Undo is up.
+    @State private var undo: (account: Account, index: Int, token: UUID)?
+
+    nonisolated private static let space = "authList"
     private var accent: Color { .panelAccent }
 
     var body: some View {
@@ -20,11 +27,43 @@ struct AuthView: View {
         .onAppear {
             log("AuthView.onAppear")
             AppDelegate.instance?.isAuthVisible = true
+            startRing()
+            // Esc closes the ring or the export card before it closes the panel.
+            AppDelegate.escapeHandler = {
+                if ring.state != nil { ring.close(); return true }
+                if export != nil { closeExport(); return true }
+                return false
+            }
         }
-        .onDisappear { log("AuthView.onDisappear"); AppDelegate.instance?.isAuthVisible = false }
+        .onDisappear {
+            log("AuthView.onDisappear")
+            AppDelegate.instance?.isAuthVisible = false
+            ring.stop()
+            AppDelegate.escapeHandler = nil
+        }
         .onReceive(NotificationCenter.default.publisher(for: .popoverWillClose)) { _ in
             log("AuthView.popoverWillClose")
+            export = nil
+            ring.close()
+            undo = nil
             auth.lock()
+        }
+        // The export card sits in the panel, over a dimmed tab, instead of a
+        // sheet with its own window frame.
+        .overlay {
+            ZStack {
+                if export != nil {
+                    Color.black.opacity(0.35)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: closeExport)
+                        .transition(.opacity)
+                }
+                if let request = export {
+                    ExportAccountsView(request: request, onDone: closeExport)
+                        .transition(.scale(scale: 0.88, anchor: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.42, dampingFraction: 0.84), value: export?.id)
         }
         .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
             log("AuthView.popoverDidShow isUnlocked=\(auth.isUnlocked)")
@@ -101,13 +140,27 @@ struct AuthView: View {
                     ScrollView {
                         VStack(spacing: 4) {
                             ForEach(store.accounts) { account in
-                                AccountRow(account: account, now: context.date, onDelete: {
-                                    store.remove(account)
-                                })
+                                AccountRow(account: account, now: context.date)
+                                    .hoverFrame(account.id, in: pointer, space: Self.space)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                             }
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
+                        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: store.accounts.map(\.id))
+                    }
+                    .coordinateSpace(.named(Self.space))
+                    .background(PointerProbe(pointer: pointer))
+                    .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, _ in ring.close() }
+                    .overlay(alignment: .topLeading) {
+                        if let state = ring.state {
+                            ActionRing(state: state, onPick: ring.pick, onHighlight: ring.highlight,
+                           onConfirm: ring.confirm, onCancelConfirm: ring.cancelConfirm)
+                                .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if undo != nil { undoPill }
                     }
                 }
             }
@@ -130,39 +183,48 @@ struct AuthView: View {
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.6))
             Spacer()
-            Menu {
-                Button {
-                    showAddSecret = true
-                } label: {
-                    Label("Add secret key", systemImage: "key.fill")
-                }
-                Divider()
-                Button("Scan QR from screen\u{2026}") { importFromScreen() }
-                Button("Scan QR from image\u{2026}") { importFromImage() }
-                if SimAuthImport.isAvailable() {
+            HStack(spacing: 6) {
+                Menu {
+                    Button {
+                        showAddSecret = true
+                    } label: {
+                        Label("Add secret key", systemImage: "key.fill")
+                    }
                     Divider()
-                    Button("Import from SimAuth") { importFromSimAuth() }
+                    Button("Scan QR from screen\u{2026}") { importFromScreen() }
+                    Button("Scan QR from image\u{2026}") { importFromImage() }
+                    if SimAuthImport.isAvailable() {
+                        Divider()
+                        Button("Import from SimAuth") { importFromSimAuth() }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(4)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Add account")
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .help("Add account")
 
-            if auth.biometricsAvailable {
-                Button(action: { auth.lock() }) {
-                    Image(systemName: "lock")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.35))
-                        .padding(4)
+                if !store.accounts.isEmpty {
+                    Button(action: { exportAccounts(store.accounts) }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .help("Export accounts as a QR code")
                 }
-                .buttonStyle(.plain)
-                .help("Lock")
+
+                if auth.biometricsAvailable {
+                    Button(action: { auth.lock() }) {
+                        Image(systemName: "lock")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .help("Lock")
+                }
             }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .controlSize(.small)
+            .foregroundStyle(.white.opacity(0.8))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -254,6 +316,81 @@ struct AuthView: View {
         addFromStrings(strings)
     }
 
+    private func closeExport() { export = nil }
+
+    // MARK: Right-click ring
+
+    private func startRing() {
+        ring.target = {
+            guard let point = pointer.location, let id = pointer.row(at: point) else { return nil }
+            return (id, point, pointer.viewport)
+        }
+        ring.choices = { id in
+            guard store.accounts.contains(where: { $0.id == id }) else { return [] }
+            return [
+                RingChoice(slot: .upLeft, icon: "doc.on.doc", title: "Copy code"),
+                RingChoice(slot: .upRight, icon: "square.and.arrow.up", title: "Export…"),
+                RingChoice(slot: .down, icon: "trash", title: "Delete", danger: true),
+            ]
+        }
+        ring.perform = { slot, id in
+            guard let account = store.accounts.first(where: { $0.id == id }) else { return }
+            switch slot {
+            case .upLeft:
+                guard let code = account.totp?.code(at: Date()) else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(code, forType: .string)
+                setMessage("Copied")
+            case .upRight:
+                exportAccounts([account])
+            case .down:
+                delete(account)
+            }
+        }
+        ring.start()
+    }
+
+    /// Deleting an account loses its secret, so Undo stays up for a while.
+    private func delete(_ account: Account) {
+        guard let index = withAnimation(.spring(response: 0.34, dampingFraction: 0.88), { store.remove(account) }) else { return }
+        let token = UUID()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { undo = (account, index, token) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            if undo?.token == token { withAnimation(.easeOut(duration: 0.2)) { undo = nil } }
+        }
+    }
+
+    private var undoPill: some View {
+        HStack(spacing: 10) {
+            Text("Deleted")
+                .foregroundColor(.white.opacity(0.85))
+            Button("Undo") {
+                guard let last = undo else { return }
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                    store.restore(last.account, at: last.index)
+                    undo = nil
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(Color.panelAccent)
+            .fontWeight(.semibold)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 14)
+        .frame(height: 32)
+        .glassEffect(.regular, in: Capsule())
+        .padding(.bottom, 10)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    /// The export shows raw secrets, so it asks for Touch ID again even though
+    /// the codes are already unlocked.
+    private func exportAccounts(_ accounts: [Account]) {
+        confirmWithBiometrics(reason: "show your authenticator secrets for export") { ok in
+            if ok { export = ExportRequest(accounts: accounts) }
+        }
+    }
+
     private func importFromSimAuth() {
         do {
             let accounts = try SimAuthImport.loadAccounts()
@@ -265,10 +402,10 @@ struct AuthView: View {
     }
 }
 
+/// One account: click copies its code. Right-click opens the ring.
 struct AccountRow: View {
     let account: Account
     let now: Date
-    let onDelete: () -> Void
     @State private var copied = false
 
     var body: some View {
@@ -310,9 +447,6 @@ struct AccountRow: View {
         }
         .buttonStyle(.plain)
         .help(copied ? "Copied!" : "Click to copy")
-        .contextMenu {
-            Button("Delete", action: onDelete).tint(.red)
-        }
     }
 
     private func formatted(_ code: String) -> String {

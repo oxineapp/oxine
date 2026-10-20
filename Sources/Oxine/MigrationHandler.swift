@@ -1,13 +1,15 @@
 import Foundation
 
-/// Imports Google Authenticator exports — the `otpauth-migration://offline?data=…`
-/// links its "Export accounts" QR codes encode. The `data` parameter is a
+/// Reads and writes Google Authenticator exports — the
+/// `otpauth-migration://offline?data=…` links its "Export accounts" QR codes
+/// encode, which most other authenticator apps import too. The `data` parameter is a
 /// base64'd protobuf. The schema is tiny and well-known, so we decode the wire
 /// format directly rather than pulling in a protobuf codegen toolchain.
 ///
 /// Real schema (note: algorithm/digits/type are *enum varints*, and the secret
 /// is raw *bytes* — not the strings the old stub assumed):
-///   MigrationPayload { repeated OtpParameters otp_parameters = 1; … }
+///   MigrationPayload { repeated OtpParameters otp_parameters = 1; int32 version=2;
+///                      int32 batch_size=3; int32 batch_index=4; int32 batch_id=5; }
 ///   OtpParameters { bytes secret=1; string name=2; string issuer=3;
 ///                   Algorithm algorithm=4; DigitCount digits=5; OtpType type=6;
 ///                   int64 counter=7; }
@@ -76,6 +78,51 @@ enum MigrationHandler {
                        period: 30,
                        algorithm: algorithm)
     }
+
+    /// The format has no period field (importers assume 30 s) and only knows
+    /// six- and eight-digit codes, so anything else can't go into a link.
+    static func canExport(_ account: Account) -> Bool {
+        account.period == 30 && (account.digits == 6 || account.digits == 8)
+            && !(Base32.decode(account.secret) ?? Data()).isEmpty
+    }
+
+    /// Builds migration links for `accounts`, split into batches the way Google
+    /// Authenticator does so each one still fits a scannable QR code. Accounts
+    /// that fail `canExport` are left out.
+    static func makeMigrationURLs(_ accounts: [Account], perBatch: Int = 10) -> [String] {
+        let exportable = accounts.filter(canExport)
+        let batches = stride(from: 0, to: exportable.count, by: perBatch).map {
+            Array(exportable[$0..<min($0 + perBatch, exportable.count)])
+        }
+        let batchID = Int.random(in: 1...Int(Int32.max))
+        return batches.enumerated().map { index, batch in
+            var payload = ProtoWriter()
+            for account in batch { payload.writeBytes(1, otpParameters(account)) }
+            payload.writeVarint(2, 1)                // version
+            payload.writeVarint(3, batches.count)    // batch_size
+            payload.writeVarint(4, index)            // batch_index
+            payload.writeVarint(5, batchID)          // batch_id
+            // Base64 carries '+', '/' and '=', which must be escaped in a query.
+            let b64 = payload.data.base64EncodedString()
+            let escaped = b64.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? b64
+            return "otpauth-migration://offline?data=\(escaped)"
+        }
+    }
+
+    private static func otpParameters(_ account: Account) -> Data {
+        var writer = ProtoWriter()
+        writer.writeBytes(1, Base32.decode(account.secret) ?? Data())
+        writer.writeString(2, account.account.isEmpty ? account.issuer : account.account)
+        if !account.issuer.isEmpty { writer.writeString(3, account.issuer) }
+        switch account.algorithm.uppercased() {
+        case "SHA256": writer.writeVarint(4, 2)
+        case "SHA512": writer.writeVarint(4, 3)
+        default:       writer.writeVarint(4, 1)
+        }
+        writer.writeVarint(5, account.digits == 8 ? 2 : 1)
+        writer.writeVarint(6, 2)   // TOTP
+        return writer.data
+    }
 }
 
 /// Minimal protobuf wire-format reader (varints + length-delimited fields).
@@ -124,5 +171,34 @@ private struct ProtoReader {
         case 5: i += 4
         default: i = bytes.count   // unknown wire type → stop
         }
+    }
+}
+
+/// Minimal protobuf wire-format writer, the counterpart of `ProtoReader`.
+private struct ProtoWriter {
+    private(set) var data = Data()
+
+    mutating func writeVarint(_ field: Int, _ value: Int) {
+        appendVarint(UInt64(field << 3))
+        appendVarint(UInt64(bitPattern: Int64(value)))
+    }
+
+    mutating func writeBytes(_ field: Int, _ bytes: Data) {
+        appendVarint(UInt64(field << 3 | 2))
+        appendVarint(UInt64(bytes.count))
+        data.append(bytes)
+    }
+
+    mutating func writeString(_ field: Int, _ string: String) {
+        writeBytes(field, Data(string.utf8))
+    }
+
+    private mutating func appendVarint(_ value: UInt64) {
+        var v = value
+        while v >= 0x80 {
+            data.append(UInt8(v & 0x7F) | 0x80)
+            v >>= 7
+        }
+        data.append(UInt8(v))
     }
 }
