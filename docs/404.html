@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- This page answers for any missing path at any depth, so everything resolves from the site root. Change this if the site moves off /oxine/. -->
+<base href="/oxine/">
+<title>Page not found: Oxine</title>
+<meta name="robots" content="noindex">
+<link rel="preload" href="fonts/MonaSans-normal-200-900.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="img/desk.webp" as="image" fetchpriority="high">
+<script>
+  // Stays black until the font and sky are in, then fades in whole (as the home page does). Shows anyway after 4 s.
+  (() => {
+    const root = document.documentElement;
+    root.classList.add('wait');
+    const parsed = new Promise((r) => addEventListener('DOMContentLoaded', r, { once: true }));
+    const sky = new Image();
+    sky.src = 'img/desk.webp';
+    const ready = Promise.allSettled([sky.decode(), parsed.then(() => document.fonts.load('500 1em "Mona Sans"'))]);
+    Promise.race([ready, new Promise((r) => setTimeout(r, 4000))])
+      .then(() => requestAnimationFrame(() => root.classList.remove('wait')));
+  })();
+</script>
+<link rel="icon" href="shared/oxine-icon.svg">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="./style.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  .lost { position: relative; isolation: isolate; height: 100vh; height: 100svh; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+  .lost .sky { inset: 0; height: 100%; -webkit-mask-image: none; mask-image: none; }
+  .lost canvas { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+  .lost h1 { margin-top: clamp(1.5rem, 5vh, 3rem); padding-inline: var(--gutter); }
+  .inring { position: absolute; left: var(--cx, 50%); top: var(--cy, 55%); z-index: 1; display: flex; flex-direction: column; align-items: center; width: min(var(--room, 20rem), 100% - 2 * var(--gutter)); translate: -50% -50%; text-align: center; }
+  .inring .button { color: #1b2450; }
+  .tight .inring { top: calc(var(--cy) + var(--outer) + 1.75rem); width: calc(100% - 2 * var(--gutter)); translate: -50% 0; }
+  /* Without WebGL there are no dots, so the number is just type. */
+  .plain404 { position: absolute; inset: auto 0 2rem; margin: 0; font-stretch: 125%; font-size: 30vw; font-weight: 500; letter-spacing: -.03em; line-height: 1; text-align: center; }
+  .lost.on .plain404 { display: none; }
+</style>
+</head>
+<body>
+<div class="lost">
+  <div class="sky" aria-hidden="true"></div>
+  <canvas aria-hidden="true"></canvas>
+  <nav class="topnav" aria-label="Main">
+    <a class="mark" href="./">
+      <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true"><path d="M47.037 16.129A34 34 0 1 1 22.149 30.498" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="33" cy="20.555" r="13" fill="currentColor"/></svg>
+      Oxine
+    </a>
+    <div class="toplinks">
+      <a href="./#notch">Notch</a>
+      <a href="./#panel">Panel</a>
+      <a href="./#apps">Apps</a>
+      <a href="https://github.com/oxineapp/oxine">GitHub</a>
+    </div>
+  </nav>
+  <main>
+    <h1>This page isn't here.</h1>
+    <p class="plain404" aria-hidden="true">404</p>
+    <div class="inring">
+      <a class="button" href="./">Back to Oxine</a>
+    </div>
+  </main>
+</div>
+<script src="shared/dots.js"></script>
+<script>
+  // 4, the ring, 4. The ball slips off the ring and lands on the floor. Throw it back on.
+  (() => {
+    const lost = document.querySelector('.lost');
+    const head = lost.querySelector('h1');
+    oxineDots(lost, {
+      free: true,
+      push: true,
+      plan: (w, h, measure) => {
+        const type = measure('4', 500, 0);
+        const gutter = Math.max(14, w * 0.024);
+        const top = head.getBoundingClientRect().bottom + Math.min(24, h * 0.03);
+        const ringF = (type.cap / 100) * 1.04, gapF = 0.05;
+        const fromW = (w - 2 * gutter) / (ringF + 2 * gapF + 2 * (type.w / 100));
+        const room = h - top;
+        const narrow = w < 700;
+        const fromH = (room * (narrow ? 0.42 : 0.84)) / ringF;
+        const size = Math.min(fromW, fromH);
+        const outer = (ringF * size) / 2;
+        const sw = size * 0.062;
+        const R = outer - sw;
+        const ball = Math.max(14, R * 0.3);
+        const cx = w / 2;
+        const cy = narrow ? top + outer + room * 0.09 : top + outer + Math.max(0, room * 0.84 - outer * 2) * 0.3;
+        const base = cy + outer * 0.985;
+        const digit = type.w / 100 * size;
+        const inner = R - sw;
+        lost.style.setProperty('--cx', `${cx}px`);
+        lost.style.setProperty('--cy', `${cy}px`);
+        lost.style.setProperty('--outer', `${outer}px`);
+        lost.style.setProperty('--room', `${inner * 1.7}px`);
+        lost.classList.toggle('tight', inner < 125);
+        return {
+          floor: h, gravity: 2500, pitch: oxineDots.pitchFor(w), skirt: Math.max(6, size * 0.03), ball,
+          ring: { x: cx, y: cy, R, sw },
+          glyphs: [
+            { text: '4', x: cx - outer - gapF * size - digit, y: base, size, weight: type.weight },
+            { text: '4', x: cx + outer + gapF * size, y: base, size, weight: type.weight },
+          ],
+        };
+      },
+    });
+  })();
+</script>
+</body>
+</html>

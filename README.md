@@ -10,15 +10,15 @@ Notes, clipboard history, 2FA codes, and battery health from your macOS menu bar
 
 Free and open source. macOS 26+.
 
-[Download](https://github.com/oxineapp/oxine/releases/latest) · [Website](https://oxineapp.github.io/oxine/)
+[Download](https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg) · [Website](https://oxineapp.github.io/oxine/)
 
 </div>
 
 ## install
 
-1. Download the latest `.dmg` from the [releases page](https://github.com/oxineapp/oxine/releases/latest).
+1. Download [Oxine.dmg](https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg) (older versions are on the [releases page](https://github.com/oxineapp/oxine/releases)).
 2. Open it and drag Oxine into Applications.
-3. On first launch, right-click the app and choose Open.
+3. Open Oxine. It's self-signed, so macOS stops it the first time: click Done, then go to System Settings → Privacy & Security and click Open Anyway.
 
 Oxine keeps itself up to date after that.
 

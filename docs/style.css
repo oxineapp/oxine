@@ -1,0 +1,258 @@
+/* the opening sits on the wallpaper. below it: a black page and tiles, each with its own color and one real thing in it. every picture of the app is a capture. */
+
+:root { color-scheme: dark; --dim: rgb(255 255 255 / .68); --rule: rgb(255 255 255 / .1); --gutter: clamp(1.25rem, 3.4vw, 3rem); --w: 71rem; }
+
+* { box-sizing: border-box; }
+html {
+  background: #000;
+  color: #fff;
+  font: 400 1rem/1.5 "Mona Sans", -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: 4.5rem;
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; overflow-x: clip; background: #000; }
+/* Black over everything while the script in the page head waits for the opening's font, sky and panel, then it fades off.
+   A cover rather than fading the page, so the root color motion.js sets for the bounce never shows on its own. */
+body::after { content: ""; position: fixed; inset: 0; z-index: 100; background: #000; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .35s ease-out, visibility 0s .35s; }
+html.wait body::after { opacity: 1; visibility: visible; pointer-events: auto; transition: none; }
+@media (prefers-reduced-motion: reduce) { body::after { transition: none; } }
+::selection { background: #fff; color: #000; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 6px; }
+img { display: block; max-width: 100%; height: auto; }
+[hidden] { display: none !important; }
+h1, h2, h3 { margin: 0; font-stretch: 116%; font-weight: 500; text-wrap: balance; }
+
+.button { display: inline-block; padding: .7rem 1.35rem; border-radius: 999px; background: #fff; color: #000; font-weight: 600; font-size: .9375rem; line-height: 1.4; text-decoration: none; transition: opacity .15s, background-color .15s; }
+.button:hover { opacity: .86; }
+.button.ghost { background: none; color: #fff; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .22); }
+.button.ghost:hover { opacity: 1; background: rgb(255 255 255 / .09); }
+
+/* ---- nav ---- */
+.nav { position: fixed; inset: 0 0 auto; z-index: 20; translate: 0 -100%; visibility: hidden; transition: translate .3s cubic-bezier(.3, .9, .3, 1), visibility 0s .3s; background: rgb(0 0 0 / .72); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: inset 0 -1px 0 rgb(255 255 255 / .07); }
+.nav.show { translate: 0; visibility: visible; transition: translate .3s cubic-bezier(.3, .9, .3, 1), visibility 0s; }
+.nav > div { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1.5rem; width: min(var(--w), 100% - 2 * var(--gutter)); height: 3.5rem; margin-inline: auto; }
+.mark { display: inline-flex; align-items: center; gap: .5rem; justify-self: start; font-stretch: 116%; font-size: 1.125rem; font-weight: 600; letter-spacing: -.03em; text-decoration: none; }
+.mark svg { transition: rotate .9s cubic-bezier(.3, 1.35, .5, 1); }
+.mark:hover svg { rotate: 360deg; }
+.links { display: flex; justify-content: center; gap: 1.75rem; font-size: .9375rem; }
+.links a { color: var(--dim); text-decoration: none; transition: color .12s; }
+.links a:hover { color: #fff; }
+.acts { display: flex; justify-content: flex-end; gap: .5rem; }
+.acts .button { padding: .4rem .95rem; font-size: .875rem; }
+
+/* ---- the opening: the wallpaper, one line of type, then the panel in its orbit with words on either side ---- */
+.opening { position: relative; isolation: isolate; }
+.sky { position: absolute; inset: 0 0 auto; z-index: -1; height: calc(100% + 12rem); background: url(img/desk.webp) center top / cover no-repeat; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.topnav { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 1.25rem var(--gutter) 0; }
+.toplinks { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .25rem 1.75rem; font-size: .9375rem; font-weight: 500; }
+.toplinks a { text-decoration: none; opacity: .86; transition: opacity .12s; }
+.toplinks a:hover { opacity: 1; }
+.hero { position: relative; padding: clamp(2.25rem, 6vh, 3.5rem) var(--gutter) 0; overflow-x: clip; touch-action: pan-y; }
+h1 { position: relative; z-index: 2; font-size: clamp(2.25rem, 1rem + 2.45vw, 3.25rem); line-height: 1.06; letter-spacing: -.034em; text-align: center; }
+.scene { display: grid; grid-template-columns: minmax(0, 1fr) 480px minmax(0, 1fr); align-items: center; column-gap: 11rem; margin-top: clamp(8rem, 17vh, 9.5rem); padding-bottom: clamp(8rem, 18vh, 10rem); }
+.pitch, .tour { position: relative; z-index: 2; }
+.pitch { padding-right: 1.5rem; }
+.tour { padding-left: 1.5rem; }
+.lead { margin: 0; font-size: 1.0625rem; line-height: 1.45; text-wrap: pretty; }
+.hero .get { margin: 1.5rem 0 0; }
+.hero .button, .closing .button:not(.ghost) { color: #1b2450; }
+.note { margin: 1rem 0 0; color: rgb(255 255 255 / .74); font-size: .8125rem; }
+.orbit { position: relative; width: 100%; }
+.orbit canvas { position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 0; pointer-events: none; }
+.orbit .real { z-index: 1; filter: drop-shadow(0 30px 50px rgb(6 10 40 / .55)); }
+.tour ul { margin: 0; padding: 0; list-style: none; }
+.tour li button { display: block; padding: .24rem 0; border: 0; background: none; color: rgb(255 255 255 / .55); font: inherit; font-stretch: 116%; font-size: 1.375rem; font-weight: 500; letter-spacing: -.035em; line-height: 1.25; cursor: pointer; transition: color .3s; }
+.tour li button:hover { color: rgb(255 255 255 / .85); }
+.tour li button[aria-pressed="true"] { color: #fff; }
+.about { display: grid; margin-block: 1.25rem; font-size: .9375rem; line-height: 1.45; }
+.about p { grid-area: 1 / 1; margin: 0; opacity: 0; visibility: hidden; text-wrap: pretty; transition: opacity .25s, visibility 0s .25s; }
+.about p.on { opacity: 1; visibility: visible; transition: opacity .4s .12s; }
+
+/* ---- sections ---- */
+.wrap { position: relative; z-index: 1; width: min(var(--w), 100% - 2 * var(--gutter)); margin-inline: auto; }
+.block { padding-top: clamp(5.5rem, 13vh, 8rem); scroll-margin-top: -2.5rem; }
+.block:first-of-type { padding-top: clamp(2rem, 6vh, 4rem); }
+.block > h2 { font-size: clamp(2.125rem, 1.25rem + 2.2vw, 3rem); line-height: 1.08; letter-spacing: -.034em; text-align: center; }
+.sub { max-width: 37em; margin: 1rem auto 0; color: var(--dim); font-size: clamp(1.0625rem, 1rem + .2vw, 1.1875rem); line-height: 1.5; text-align: center; text-wrap: balance; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: clamp(2.5rem, 6vh, 3.5rem); }
+
+/* ---- tiles ---- */
+.tile { position: relative; isolation: isolate; display: flex; flex-direction: column; min-width: 0; height: 31rem; border-radius: 22px; background: var(--bg, #0c0c10); overflow: hidden; }
+.tile::after { content: ""; position: absolute; inset: 0; z-index: 6; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .07); pointer-events: none; }
+.tile.wide { grid-column: 1 / -1; }
+.tile.short { height: 25rem; }
+.cap { position: relative; z-index: 2; flex: none; max-width: 33rem; padding: 1.75rem 2rem 0; }
+.cap h3 { font-size: 1.375rem; line-height: 1.2; letter-spacing: -.03em; }
+.cap p { margin: .5rem 0 0; color: rgb(255 255 255 / .74); font-size: 1rem; line-height: 1.42; text-wrap: pretty; }
+.cap.low { margin-top: auto; padding: 0 2rem 1.75rem; }
+
+/* a piece of the real panel, on the wallpaper it was captured on, so the glass and the tile are the same color */
+.crop { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; padding: 1.5rem 1.5rem 0; }
+.crop.end { align-items: flex-end; padding-bottom: 1.5rem; }
+.crop img { width: 30rem; max-width: 100%; filter: drop-shadow(0 16px 36px rgb(0 0 0 / .32)); }
+
+/* a real card from the notch, large */
+.widget { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-end; padding: 1.5rem 1.75rem 1.75rem; }
+.widget > img { width: 100%; max-width: 31rem; }
+
+/* a real notch hanging from the top edge: the tile is the screen */
+.hangtop { position: relative; z-index: 2; flex: none; display: flex; justify-content: center; }
+.hangtop::after { content: ""; position: absolute; left: 50%; top: 0; z-index: 2; width: 15.5rem; height: 2px; translate: -50% 0; background: #000; }
+.hangtop .under { position: absolute; left: 50%; top: 2.3125rem; translate: -50% 0; }
+
+/* ---- one notch, a day of moments ---- */
+.day { height: auto; }
+.day .screen { position: relative; isolation: isolate; height: 24.5rem; margin: 1.5rem 1.75rem 0; border-radius: 26px 26px 0 0; background: #2a2a55 url(img/desk.webp) center 12% / cover no-repeat; overflow: hidden; cursor: pointer; }
+.next { position: absolute; inset: 0; z-index: 4; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.next:focus-visible { outline-offset: -4px; border-radius: 26px 26px 0 0; }
+.morph { position: absolute; left: 50%; top: 0; z-index: 2; width: 0; height: 0; transform-origin: top center; transition: scale .42s cubic-bezier(.3, .9, .3, 1); }
+.shape { position: absolute; top: 0; left: -130px; width: 260px; height: 32px; border-radius: 0 0 14px 14px; background: #000; transition: left .42s cubic-bezier(.3, .9, .3, 1), width .42s cubic-bezier(.3, .9, .3, 1), height .42s cubic-bezier(.3, .9, .3, 1), border-radius .42s; }
+.morph img { position: absolute; top: 0; left: 0; max-width: none; translate: -50% 0; opacity: 0; transition: opacity .13s linear; }
+.morph img.on { opacity: 1; transition: opacity .2s linear .14s; }
+.morph img.pill { top: 37px; }
+.beats { position: absolute; inset: auto 1.5rem 1.5rem; z-index: 1; display: grid; margin: 0; padding: 0; list-style: none; font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem); font-weight: 500; line-height: 1.3; letter-spacing: -.012em; text-align: center; text-shadow: 0 1px 22px rgb(0 0 0 / .3); }
+.beats li { grid-area: 1 / 1; opacity: 0; text-wrap: balance; transition: opacity .28s; }
+.beats li.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .morph, .shape, .morph img, .morph img.on, .beats li { transition: none; } }
+
+/* ---- the notch tiles ---- */
+.music { --bg: linear-gradient(165deg, #2c2313, #5d4c2b 55%, #97825a); }
+
+.weather { background: #000; }
+.wxsky { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 1s; }
+.wxsky.on { opacity: 1; }
+.wxsky.night { background:
+  radial-gradient(1.6px 1.6px at 8% 22%, #fff, transparent), radial-gradient(1px 1px at 16% 48%, #fffb, transparent), radial-gradient(1.6px 1.6px at 27% 34%, #fff, transparent),
+  radial-gradient(1px 1px at 36% 60%, #fff9, transparent), radial-gradient(1.2px 1.2px at 45% 42%, #fffd, transparent), radial-gradient(1px 1px at 53% 26%, #fffa, transparent),
+  radial-gradient(1.8px 1.8px at 62% 52%, #fff, transparent), radial-gradient(1px 1px at 70% 30%, #fffb, transparent), radial-gradient(1.2px 1.2px at 78% 46%, #fffd, transparent),
+  radial-gradient(1px 1px at 86% 62%, #fff9, transparent), radial-gradient(1.6px 1.6px at 93% 28%, #fff, transparent), radial-gradient(1px 1px at 12% 70%, #fff8, transparent),
+  radial-gradient(1px 1px at 24% 12%, #fffa, transparent), radial-gradient(1.2px 1.2px at 58% 10%, #fffc, transparent), radial-gradient(1px 1px at 88% 12%, #fffa, transparent),
+  linear-gradient(#0a1436, #0d1a44 55%, #1a2a5c); }
+.wxsky.rain { background: linear-gradient(170deg, #4a5a70, #222d3b 62%, #1a2430); }
+.wxsky.snow { background: linear-gradient(170deg, #93a9bf, #566b84 58%, #33445a); }
+.wxsky.sun { background: linear-gradient(200deg, #e3a65a, #3a84cf 42%, #15508f); }
+.wxcards { display: grid; width: 100%; max-width: 27rem; }
+.wxcards img { grid-area: 1 / 1; width: 100%; }
+.wxcards img:not(.on, .was) { display: none; }
+.wxcards img.on { z-index: 1; }
+
+.calendar { --bg: radial-gradient(85% 62% at 50% 0, #8a4a14, transparent 74%), #000; }
+.files { --bg: radial-gradient(85% 62% at 70% 0, #1f4a7a, transparent 74%), #000; }
+.files .bleed { flex: 1; min-height: 0; display: flex; justify-content: flex-end; align-items: flex-end; padding-bottom: 1.75rem; }
+.files .bleed img { flex: none; width: 50rem; max-width: none; margin-right: 1.75rem; }
+
+.agents { --bg: linear-gradient(115deg, #34389a, #512a72 48%, #a0431f); }
+.blob { position: absolute; display: grid; place-items: center; border-radius: 3rem; background: #000; }
+.blob img { width: 6.25rem; }
+.blob.a { left: -2.5rem; bottom: -2.5rem; width: 17rem; height: 13rem; }
+.blob.b { right: -2.5rem; top: 10.5rem; width: 15rem; height: 11rem; }
+.blob.c { left: 44%; bottom: -3.5rem; width: 12rem; height: 9.5rem; }
+.blob.c img { width: 4.5rem; margin-top: -1.25rem; }
+.blob.b img { width: 5.25rem; }
+
+/* real notices, fanned out. pointing at the tile spreads them. */
+.notices { --bg: url(img/bg-teal.webp) center / cover; }
+.fan { position: relative; flex: 1; min-height: 0; }
+.fan img { position: absolute; left: 50%; top: 3rem; width: 17.125rem; max-width: none; margin-left: -8.5625rem; border-radius: 14px; filter: drop-shadow(0 14px 26px rgb(0 0 0 / .4)); transition: transform .55s cubic-bezier(.3, .9, .3, 1); }
+.fan img:nth-child(1) { transform: translate(-3rem, -1.5rem) rotate(-4deg); }
+.fan img:nth-child(2) { transform: translate(3.25rem, 2.75rem) rotate(3deg); }
+.fan img:nth-child(3) { transform: translate(-.75rem, 7rem) rotate(-1deg); }
+.notices:hover .fan img:nth-child(1) { transform: translate(-6.5rem, -1.75rem) rotate(-7deg); }
+.notices:hover .fan img:nth-child(2) { transform: translate(6.5rem, 2.25rem) rotate(6deg); }
+.notices:hover .fan img:nth-child(3) { transform: translate(-1rem, 7.5rem) rotate(0deg) scale(1.03); }
+@media (prefers-reduced-motion: reduce) { .fan img { transition: none; } }
+
+/* ---- wide, words beside the picture ---- */
+.split { flex-direction: row; align-items: stretch; height: 34rem; }
+.split .cap { flex: 0 1 25rem; align-self: flex-end; padding: 0 2rem 2rem; }
+.split .crop { padding: 2rem 2rem 0; }
+
+.toyline { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; }
+.cap .toyline { margin-top: .85rem; }
+.toy { padding: .45rem .9rem; border: 0; border-radius: 999px; background: #fff; color: #000; font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+.toy:hover { opacity: .86; }
+.toynote { color: rgb(255 255 255 / .8); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+
+/* Focus, for real: everything but its own tile falls back, as every window but the front one does on a Mac */
+.opening, .block > h2, .sub, .tile, .closing { transition: filter .6s; }
+.focusing :is(.nav, .opening, .block > h2, .sub, .tile:not(.t-focus), .closing) { filter: brightness(.4) blur(5px); }
+
+/* ---- plain sections ---- */
+
+.gettile { display: flex; flex-direction: column; align-items: center; margin-top: clamp(2rem, 5vh, 3rem); text-align: center; }
+.gettile img { width: 6rem; height: 6rem; }
+.gettile .get { display: flex; flex-wrap: wrap; justify-content: center; gap: .625rem; margin: 1.25rem 0 0; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; width: 100%; max-width: 60rem; margin: 2.5rem 0 0; padding: 0; list-style: none; counter-reset: s; text-align: left; font-size: .9375rem; line-height: 1.45; }
+.steps li { counter-increment: s; }
+.steps li::before { content: counter(s); display: block; margin-bottom: .4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---- from "Get it." down, the page is back on the opening's sky: one sky, no tile on it, the warm part under the first heading and night blue under the rest ---- */
+.closing { --sky: max(100vw, 90rem); --dim: rgb(255 255 255 / .88); --rule: rgb(255 255 255 / .24); position: relative; isolation: isolate; margin-top: clamp(2rem, 6vh, 3.5rem); }
+.closing .sky { inset: 0; height: 100%; overflow: hidden; background: linear-gradient(#000 calc(var(--sky) * .3), #0e3a60 calc(var(--sky) * .7)); -webkit-mask-image: none; mask-image: none; }
+.closing .sky::before, .closing .sky::after { content: ""; position: absolute; inset-inline: 0; height: var(--sky); background: url(img/desk.webp) center / cover no-repeat; }
+.closing .sky::before { top: 0; -webkit-mask-image: linear-gradient(transparent, #000 12rem, #000 80%, transparent); mask-image: linear-gradient(transparent, #000 12rem, #000 80%, transparent); }
+.closing .sky::after { bottom: 0; -webkit-mask-image: linear-gradient(transparent 44%, #000 64%); mask-image: linear-gradient(transparent 44%, #000 64%); }
+/* Behind the page, for the browser's bounce to uncover: see motion.js. Each is the sky's last few rows stretched out, so that the page's edge doesn't show against it. */
+.past { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.past.end, .at-end .past.top { display: none; }
+.at-end .past.end { display: block; }
+.past::after { content: ""; position: absolute; inset-inline: 0; background: url(img/desk.webp) center / cover no-repeat; transform: scaleY(8); }
+.past.top::after { top: 0; height: var(--opening-sky, 100vh); background-position: center top; transform-origin: top; }
+.past.end::after { bottom: 0; height: max(100vw, 90rem); transform-origin: bottom; }
+.closing .block:first-of-type { padding-top: clamp(11rem, 26vh, 14rem); }
+
+.foot { margin-top: clamp(6rem, 18vh, 10rem); }
+.footgrid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 2.5rem; width: min(var(--w), 100% - 2 * var(--gutter)); margin-inline: auto; }
+.footget .note { margin-top: .75rem; }
+.foot h2 { color: rgb(255 255 255 / .74); font-size: .875rem; letter-spacing: -.01em; }
+.foot ul { margin: .625rem 0 0; padding: 0; list-style: none; font-size: .9375rem; line-height: 1.75; }
+.foot li a { text-decoration: none; }
+.foot li a:hover { text-decoration: underline; }
+.footlegal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem 2rem; width: min(var(--w), 100% - 2 * var(--gutter)); margin: clamp(2.5rem, 7vh, 4rem) auto 0; color: rgb(255 255 255 / .74); font-size: .8125rem; }
+.footlegal p { margin: 0; }
+
+/* the mark, drawn big. .on means the dots are running; until then, and without WebGL, it's just the word */
+.sign { position: relative; margin-top: 1.5rem; overflow: clip; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.sign canvas { position: absolute; inset: 0 0 auto; width: 100%; height: 100%; }
+.signword { margin: 0; font-stretch: 125%; font-size: 26vw; font-weight: 500; letter-spacing: -.03em; line-height: 1; text-align: center; }
+.sign.on .signword { visibility: hidden; position: absolute; }
+
+/* ---- narrower ---- */
+@media (max-width: 1400px) {
+  .pitch, .tour { padding: 0; }
+  .scene { grid-template-columns: minmax(0, 480px); justify-content: center; margin-top: 2rem; padding-bottom: 5rem; }
+  .pitch { margin-bottom: clamp(8rem, 18vh, 9.5rem); text-align: center; }
+  .lead { max-width: 46ch; margin-inline: auto; text-wrap: balance; }
+  .tour { margin-top: clamp(7rem, 16vh, 8.5rem); text-align: center; }
+  .tour ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1.25rem; }
+  .about { max-width: 44ch; margin-inline: auto; }
+}
+@media (max-width: 900px) {
+  .links { display: none; }
+  .nav > div { grid-template-columns: 1fr auto; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .split { flex-direction: column; height: 40rem; }
+  .split .cap { flex: none; align-self: auto; padding: 1.75rem 2rem 0; }
+  .split .crop { padding: 1.5rem 1.5rem 0; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .footgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footget { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .acts .button.ghost { display: none; }
+  .toplinks a:not(:last-child) { display: none; }
+  .cap { padding: 1.5rem 1.5rem 0; }
+  .cap.low { padding: 0 1.5rem 1.5rem; }
+  .crop { padding: 1.25rem 1rem 0; }
+  .widget { padding: 1.25rem 1.25rem 1.5rem; }
+  .day .screen { height: 23rem; margin: 1.25rem .75rem 0; }
+  .files .bleed img { width: 31rem; margin-right: 1.25rem; }
+  .notices:hover .fan img:nth-child(1) { transform: translate(-3rem, -1.5rem) rotate(-4deg); }
+  .notices:hover .fan img:nth-child(2) { transform: translate(3.25rem, 2.75rem) rotate(3deg); }
+}
+}

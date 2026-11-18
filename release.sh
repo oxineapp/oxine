@@ -383,12 +383,16 @@ if [ "$PUBLISH" = "1" ]; then
     grab && /^## / { exit }
     grab { print }
   ' CHANGELOG.md > "$NOTES_MD"
+  # The website's Download buttons link to releases/latest/download/Oxine.dmg,
+  # so every release also carries the DMG under that fixed name.
+  LATEST_DMG="$DIST/Oxine.dmg"
+  cp "$DMG" "$LATEST_DMG"
   # Create the release (idempotent: if the tag exists, refresh assets + notes).
   if gh release view "$TAG" >/dev/null 2>&1; then
-    gh release upload "$TAG" "$DMG" "$UPDATES/Oxine-$VERSION.zip" --clobber
+    gh release upload "$TAG" "$DMG" "$LATEST_DMG" "$UPDATES/Oxine-$VERSION.zip" --clobber
     gh release edit "$TAG" --title "Oxine $VERSION" --notes-file "$NOTES_MD"
   else
-    gh release create "$TAG" "$DMG" "$UPDATES/Oxine-$VERSION.zip" \
+    gh release create "$TAG" "$DMG" "$LATEST_DMG" "$UPDATES/Oxine-$VERSION.zip" \
       --title "Oxine $VERSION" --notes-file "$NOTES_MD"
   fi
   rm -f "$NOTES_MD"
