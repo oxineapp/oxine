@@ -10,7 +10,7 @@ Notes, clipboard history, 2FA codes, and battery health from your macOS menu bar
 
 Free and open source. macOS 26+.
 
-[Download](https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg) · [Website](https://oxineapp.github.io/oxine/)
+[Download](https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg) · [Website](https://oxine.thunk.cc)
 
 </div>
 

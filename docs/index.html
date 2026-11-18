@@ -1,318 +1,310 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxine: the only menubar app you'll (probably) ever need</title>
-<meta name="description" content="Clipboard history, notes, 2FA codes, scripts, battery and fan control in one panel. Music, calendar, weather and a file shelf in your notch. Free and open source, for macOS.">
-<link rel="preload" href="fonts/MonaSans-normal-200-900.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="img/desk.webp" as="image" fetchpriority="high">
-<link rel="preload" href="img/panel-history.webp" as="image" fetchpriority="high">
-<script>
-  // The opening shows in one piece: the page stays black until its font, sky and panel are in, then fades in and the ring forms.
-  // It shows anyway after 4 s. Without scripts the page draws as it loads.
-  (() => {
-    const root = document.documentElement;
-    root.classList.add('wait');
-    const parsed = new Promise((r) => addEventListener('DOMContentLoaded', r, { once: true }));
-    const after = (f) => parsed.then(f);
-    const sky = new Image();
-    sky.src = 'img/desk.webp';
-    const ready = Promise.allSettled([
-      sky.decode(),
-      after(() => document.fonts.load('500 1em "Mona Sans"')),
-      after(() => document.querySelector('#heroshot img').decode()),
-    ]);
-    window.opened = Promise.race([ready, new Promise((r) => setTimeout(r, 4000))])
-      .then(() => new Promise((r) => requestAnimationFrame(() => { root.classList.remove('wait'); r(); })));
-  })();
-</script>
-<link rel="icon" href="shared/oxine-icon.svg">
-<link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="shared/real.css">
-<link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oxine, the only menubar app you'll (probably) ever need</title>
+<meta name="description" content="A fast, free, open-source macOS menu bar app: quick notes, clipboard history, local TOTP codes, scripts, and full battery care: charge limit, heat protection, and calibration.">
+<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Oxine">
+<meta property="og:description" content="The only menubar app you'll (probably) ever need, notes, clipboard, 2FA & battery health.">
+<meta property="og:image" content="https://oxineapp.github.io/oxine/shots/sous.png">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --accent: #66D9FF;
+    --accent-deep: #2E7B9E;
+    --bg: #000004;
+    --hairline: rgba(255,255,255,0.08);
+    --row: rgba(255,255,255,0.035);
+    --t1: #ffffff;
+    --t2: rgba(255,255,255,0.6);
+    --t3: rgba(255,255,255,0.38);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--t1);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
+  }
+  a { color: inherit; }
+
+  .bg { position: fixed; inset: 0; z-index: -2; }
+  .bg::before { content: ""; position: absolute; inset: -25%;
+    background:
+      radial-gradient(50% 42% at 50% -8%, rgba(102,217,255,0.13), transparent 70%),
+      radial-gradient(40% 38% at 88% 8%, rgba(46,123,158,0.10), transparent 72%); }
+  .grain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.4; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"); }
+
+  .shell { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  nav { position: sticky; top: 0; z-index: 50; background: rgba(4,5,8,0); border-bottom: 1px solid transparent; transition: background .3s, border-color .3s; }
+  nav.stuck { background: rgba(6,7,10,0.92); border-color: var(--hairline); }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.01em; text-decoration: none; }
+  .brand svg { width: 25px; height: 25px; }
+  .nav-links { display: flex; align-items: center; gap: 26px; font-size: 14px; }
+  .nav-links a { color: var(--t2); text-decoration: none; transition: color .2s; }
+  .nav-links a:hover { color: #fff; }
+  .nav-links a.nav-cta { display: inline-flex; align-items: center; gap: 7px; background: var(--accent); color: #001019; padding: 8px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; transition: transform .15s; }
+  .nav-links a.nav-cta:hover { transform: translateY(-1px); color: #001019; }
+  @media (max-width: 720px){ .nav-links a:not(.nav-cta){ display:none; } }
+
+  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; padding: 80px 0 64px; }
+  @media (max-width: 900px){ .hero { grid-template-columns: 1fr; text-align: center; padding-top: 56px; gap: 44px; } }
+
+  h1 { font-size: clamp(40px, 5.6vw, 60px); line-height: 1.0; font-weight: 700; letter-spacing: -0.04em; }
+  h1 .grad { background: linear-gradient(115deg, #fff 35%, var(--accent) 125%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  h1 .wink { color: var(--t3); font-weight: 500; }
+  .lede { margin-top: 18px; font-size: 16.5px; line-height: 1.55; color: var(--t2); max-width: 34ch; }
+  @media (max-width: 900px){ .lede { max-width: none; margin-inline: auto; } }
+  .cta-row { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+  @media (max-width: 900px){ .cta-row { justify-content: center; } }
+  .btn { text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 24px; border-radius: 12px; display: inline-flex; align-items: center; gap: 9px; transition: transform .14s ease, background .2s ease; }
+  .btn.primary { background: var(--accent); color: #00131c; }
+  .btn.primary:hover { transform: translateY(-2px); }
+  .btn.ghost { background: rgba(255,255,255,0.05); border: 1px solid var(--hairline); color: #fff; }
+  .btn.ghost:hover { background: rgba(255,255,255,0.09); transform: translateY(-2px); }
+  .meta { margin-top: 20px; font-size: 13px; color: var(--t3); line-height: 1.75; }
+  .meta code { background: rgba(255,255,255,0.07); padding: 2px 7px; border-radius: 6px; font: 12px/1 "SF Mono", ui-monospace, monospace; }
+
+  /* Real capture, cropped to the panel so it floats (rounded, transparent corners) */
+  .stage { perspective: 1100px; }
+  .device { position: relative; width: 100%; max-width: 384px; margin: 0 auto; aspect-ratio: 440 / 660;
+    border-radius: 18px; box-shadow: 0 28px 70px -22px rgba(0,0,0,0.78);
+    transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.7,.2,1); will-change: transform; }
+  .device img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 18px; opacity: 0; transition: opacity .5s ease; }
+  .device img.on { opacity: 1; }
+  /* the glint: a soft highlight that tracks the cursor like light on glass */
+  .glint { position: absolute; inset: 0; border-radius: 18px; pointer-events: none; z-index: 4; opacity: 0; transition: opacity .35s ease; mix-blend-mode: screen;
+    background: radial-gradient(240px circle at var(--gx, 50%) var(--gy, 0%), rgba(255,255,255,0.20), rgba(255,255,255,0.05) 32%, transparent 60%); }
+  .device.tilt .glint { opacity: 1; }
+  /* tab hotspots: panel is 440pt wide, tab row 46pt tall at the top; 5 tabs of 84pt from x=10 */
+  .hot { position: absolute; top: 0.6%; height: 6.3%; width: 19.1%; background: transparent; border: 0; cursor: pointer; z-index: 5; }
+
+  section { padding: 64px 0; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+  .h2 { font-size: clamp(30px, 4.2vw, 42px); font-weight: 700; letter-spacing: -0.03em; margin-top: 12px; line-height: 1.06; }
+  .sub { color: var(--t2); margin-top: 14px; font-size: 17px; max-width: 56ch; }
+  @media (max-width: 900px){ .sub { margin-inline: auto; } }
+
+  .flist { margin-top: 44px; display: flex; flex-direction: column; }
+  .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 34px 0; }
+  .frow + .frow { border-top: 1px solid var(--hairline); }
+  .fhead .fic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: rgba(102,217,255,0.1); }
+  .fhead .fic img { width: 24px; height: 24px; object-fit: contain; }
+  .fhead .fname { display: inline-block; margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+  .fhead h3 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 700; letter-spacing: -0.02em; margin-top: 8px; line-height: 1.14; }
+  .ftext { color: var(--t2); font-size: 16px; line-height: 1.62; max-width: 46ch; }
+  .frow:nth-child(even) .fhead { order: 2; }
+  @media (max-width: 820px){
+    .frow { grid-template-columns: 1fr; gap: 16px; padding: 26px 0; }
+    .frow:nth-child(even) .fhead { order: 0; }
+    .ftext { max-width: none; }
+  }
+
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity .65s ease, transform .65s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  .load { opacity: 0; transform: translateY(14px); animation: rise .75s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .d1{animation-delay:.04s} .d2{animation-delay:.12s} .d3{animation-delay:.2s} .d4{animation-delay:.34s}
+
+  footer { border-top: 1px solid var(--hairline); padding: 36px 0 56px; margin-top: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; color: var(--t3); font-size: 13px; }
+  footer a { color: var(--t2); text-decoration: none; }
+  footer a:hover { color: #fff; }
+  .foot-links { display: flex; gap: 22px; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } }
+</style>
 </head>
 <body>
-<div class="past top" aria-hidden="true"></div>
-<div class="past end" aria-hidden="true"></div>
+  <div class="bg"></div>
+  <div class="grain"></div>
 
-<nav class="nav" aria-label="Main, while scrolling"><div>
-  <a class="mark" href="#top">
-    <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true"><path d="M47.037 16.129A34 34 0 1 1 22.149 30.498" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="33" cy="20.555" r="13" fill="currentColor"/></svg>
-    Oxine
-  </a>
-  <div class="links">
-    <a href="#notch">Notch</a>
-    <a href="#panel">Panel</a>
-    <a href="#apps">Apps</a>
-  </div>
-  <div class="acts">
-    <a class="button ghost" href="https://github.com/oxineapp/oxine">GitHub</a>
-    <a class="button" href="https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg">Download</a>
-  </div>
-</div></nav>
-
-<div class="opening">
-  <div class="sky" aria-hidden="true"></div>
-  <nav class="topnav" aria-label="Main">
-    <a class="mark" href="#top">
-      <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true"><path d="M47.037 16.129A34 34 0 1 1 22.149 30.498" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="33" cy="20.555" r="13" fill="currentColor"/></svg>
+  <nav id="nav"><div class="shell nav-in">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 100 100" aria-label="Oxine"><path d="M 47 16 A 34 34 0 1 1 22.1 30.5" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><circle cx="33" cy="20.5" r="12" fill="#66D9FF"/></svg>
       Oxine
     </a>
-    <div class="toplinks">
-      <a href="#notch">Notch</a>
-      <a href="#panel">Panel</a>
-      <a href="#apps">Apps</a>
-      <a href="https://github.com/oxineapp/oxine">GitHub</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="https://github.com/oxineapp/oxine">Source</a>
+      <a class="nav-cta" href="https://github.com/oxineapp/oxine/releases/latest"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>Download</a>
     </div>
-  </nav>
+  </div></nav>
 
-  <header class="hero" id="top">
-    <h1>The only menubar app you'll (probably) ever need.</h1>
-    <div class="scene">
-      <div class="pitch">
-        <p class="lead">Clipboard history, notes, 2FA codes, scripts, battery and fan control in one panel. Music, calendar, weather and a file shelf in your notch.</p>
-        <p class="get"><a class="button" href="https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg">Download for Mac</a></p>
-        <p class="note">Free and open source.<br>2.6.0, macOS 26 or later.</p>
+  <header class="shell hero" id="top">
+    <div>
+      <h1 class="load d1">The only<br>menubar app<br>you'll <span class="wink">(probably)</span><br><span class="grad">ever need.</span></h1>
+      <p class="lede load d2">Quick notes, clipboard history, 2FA codes, scripts, and full battery care, one keystroke away. Local-first, free, and open source.</p>
+      <div class="cta-row load d3">
+        <a class="btn primary" href="https://github.com/oxineapp/oxine/releases/latest">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+          Download for macOS
+        </a>
+        <a class="btn ghost" href="https://github.com/oxineapp/oxine">View source</a>
       </div>
-      <div class="orbit">
-        <canvas aria-hidden="true"></canvas>
-        <div class="real" id="heroshot" data-set="panel" data-start="history">
-          <img src="img/panel-history.webp" width="480" height="560" alt="The History tab: a search box, filter chips and the things you copied, with secrets hidden under invisible ink.">
-        </div>
-      </div>
-      <div class="tour" data-real="#heroshot" data-start="history">
-        <ul>
-            <li><button type="button" data-tab="notes">Notes</button></li>
-            <li><button type="button" data-tab="history">History</button></li>
-            <li><button type="button" data-tab="auth">Auth</button></li>
-            <li><button type="button" data-tab="scripts">Scripts</button></li>
-            <li><button type="button" data-tab="sous">Sous</button></li>
-            <li><button type="button" data-tab="temper">Temper</button></li>
-        </ul>
-        <div class="about" aria-live="off">
-            <p data-about="notes">Plain Markdown files in a folder you choose. Write at the top, tick checklists right on the card, open any note in your own editor.</p>
-            <p data-about="history">Everything you copied, searchable the moment the panel opens. Passwords and API keys stay under invisible ink, and the whole list lives in your keychain.</p>
-            <p data-about="auth">Your 2FA codes, locked with Touch ID. Export them as Google Authenticator transfer codes whenever you like.</p>
-            <p data-about="scripts">Small scripts in any language, one tap away. They take your clipboard or latest note, and copy, save or show the result.</p>
-            <p data-about="sous">Battery health: charge limit, sailing, heat protection. It also shows where the power is going, and runs a calibration.</p>
-            <p data-about="temper">Temperatures, thermal pressure and fan control. Leave the fans to macOS, set them by hand, or draw a curve.</p>
-        </div>
+      <p class="meta load d3">Requires macOS&nbsp;26. Free &amp; open source.</p>
+    </div>
+
+    <div class="load d4 stage">
+      <div class="device" id="device">
+        <img class="on" data-i="0" src="shots/notes.png"   alt="Oxine Quick Notes">
+        <img         data-i="1" src="shots/history.png" alt="Oxine Clipboard History">
+        <img         data-i="2" src="shots/auth.png"    alt="Oxine Authenticator">
+        <img         data-i="3" src="shots/plugins.png" alt="Oxine Scripts">
+        <img         data-i="4" src="shots/sous.png"     alt="Oxine Sous battery">
+        <div class="glint"></div>
+        <button class="hot" data-i="0" style="left:2.3%"  aria-label="Notes"></button>
+        <button class="hot" data-i="1" style="left:21.4%" aria-label="History"></button>
+        <button class="hot" data-i="2" style="left:40.5%" aria-label="Auth"></button>
+        <button class="hot" data-i="3" style="left:59.5%" aria-label="Scripts"></button>
+        <button class="hot" data-i="4" style="left:78.6%" aria-label="Sous"></button>
       </div>
     </div>
   </header>
-</div>
 
-<main>
-<div class="wrap">
+  <section class="shell" id="features">
+    <span class="eyebrow reveal">What's inside</span>
+    <h2 class="h2 reveal">Six tools, one keystroke away.</h2>
 
-<section class="block" id="notch">
-  <h2>Point at the notch.</h2>
-  <p class="sub">Music, calendar, weather and files when it's open. Your agents and notices when it's closed.</p>
-  <div class="grid">
-    <article class="tile wide day">
-      <div class="cap"><h3>What it does all day</h3><p>Real screenshots, one after another. Click to skip ahead.</p></div>
-      <div class="screen">
-        <div class="morph" aria-hidden="true"><div class="shape"></div></div>
-        <ol class="beats">
-          <li data-cap="notch-closed" data-w="274" data-h="32" data-l="-130.0" data-r="130.5" data-bh="32.0" data-rad="14.5">Closed, it shows what's playing.</li>
-          <li data-cap="notch-notice-charging" data-w="420" data-h="32" data-l="-130.0" data-r="204.0" data-bh="32.0" data-rad="14.5">You plug in. It shows the charger's wattage.</li>
-          <li data-cap="notch-open-home" data-w="646" data-h="197" data-l="-301.5" data-r="301.5" data-bh="177.0" data-rad="28.0">Point at it and it opens: your song, and what's next.</li>
-          <li data-cap="notch-peek-meeting" data-w="274" data-h="114" data-l="-130.0" data-r="130.5" data-bh="114.0" data-rad="14.5">A meeting in a minute. Join from right here.</li>
-          <li data-cap="notch-peek-link" data-w="274" data-h="112" data-l="-130.0" data-r="130.5" data-bh="112.0" data-rad="14.5">You copied a link with trackers. One click cleans it.</li>
-          <li data-cap="notch-agent-needs" data-w="298" data-h="32" data-l="-130.0" data-r="143.0" data-bh="32.0" data-rad="14.5">Claude Code needs you, and Codex is still working.</li>
-          <li data-cap="notch-peek-held" data-w="274" data-h="114" data-l="-130.0" data-r="130.5" data-bh="114.0" data-rad="14.5">Charged to 80%, where you told it to stop.</li>
-          <li data-cap="notch-peek-door" data-w="274" data-h="114" data-l="-130.0" data-r="130.5" data-bh="114.0" data-rad="14.5">The doorbell, through your headphones. Music paused.</li>
-          <li data-cap="notch-peek-message" data-w="274" data-h="160" data-l="-130.0" data-r="130.5" data-bh="160.0" data-rad="14.5">Someone's asking. Answer right here.</li>
-          <li data-cap="notch-closed" data-w="274" data-h="32" data-l="-130.0" data-r="130.5" data-bh="32.0" data-rad="14.5" data-pill>The words of your song, under the notch.</li>
-        </ol>
-        <button class="next" type="button" aria-label="Next moment"></button>
+    <div class="flist">
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/square-and-pencil.png" alt=""></div>
+          <span class="fname">Notes</span>
+          <h3>Your brain's overflow drawer.</h3>
+        </div>
+        <p class="ftext">Hit a key, type the thing, and it's saved before the thought slips away. Every note is plain markdown in a folder you choose, so nothing is locked in a database. Open it in Obsidian, your editor, or Finder, whenever you like.</p>
       </div>
-    </article>
 
-    <article class="tile music">
-      <div class="cap"><h3>Your music</h3><p>Cover, scrubber and transport for whatever's playing. Pick which player it follows.</p></div>
-      <div class="widget"><img src="img/card-player.webp" width="285" height="114" alt="A player card: @defne.kalbim96 by Büyük Ev Ablukada, at 1:01 of 4:10." loading="lazy"></div>
-    </article>
-
-    <article class="tile weather">
-      <div class="wxsky night on" data-wx="night" aria-hidden="true"></div>
-      <div class="wxsky rain" data-wx="rain" aria-hidden="true"></div>
-      <div class="wxsky snow" data-wx="snow" aria-hidden="true"></div>
-      <div class="wxsky sun" data-wx="sun" aria-hidden="true"></div>
-      <div class="cap"><h3>Weather</h3><p>The temperature where you are, with the next few hours one tab away.</p></div>
-      <div class="widget"><div class="wxcards">
-        <img class="on" data-wx="night" src="img/card-wx-night.webp" width="285" height="114" alt="A weather card: 9 degrees and clear in Istanbul.">
-        <img data-wx="rain" src="img/card-wx-rain.webp" width="285" height="114" alt="">
-        <img data-wx="snow" src="img/card-wx-snow.webp" width="285" height="114" alt="">
-        <img data-wx="sun" src="img/card-wx-sun.webp" width="285" height="114" alt="">
-      </div></div>
-    </article>
-
-    <article class="tile calendar">
-      <div class="cap"><h3>The next hour</h3><p>Your events as bars on a timeline, so you can see if there's time for a coffee.</p></div>
-      <div class="widget"><img src="img/card-busy.webp" width="285" height="114" alt="A calendar card: Design review in progress with 33 minutes left, then Lunch with Sam in 38 minutes." loading="lazy"></div>
-    </article>
-
-    <article class="tile files">
-      <div class="cap"><h3>Files and AirDrop</h3><p>Drop files on the notch for later, kept for a day. Or send them with AirDrop.</p></div>
-      <div class="bleed"><img src="img/card-shelf.webp" width="580" height="114" alt="The Shelf: five files and an AirDrop tile." loading="lazy"></div>
-    </article>
-
-    <article class="tile agents">
-      <div class="cap"><h3>Your agents</h3><p>Claude Code, Codex and opencode show in the closed notch, working or waiting on you.</p></div>
-      <div class="blob a"><img src="img/glyph-claude.webp" width="86" height="86" alt="The orange Claude Code glyph, rippling while it works." loading="lazy"></div>
-      <div class="blob b"><img src="img/glyph-codex.webp" width="86" height="86" alt="The blue Codex glyph, a question mark pulsing when it needs you." loading="lazy"></div>
-      <div class="blob c"><img src="img/glyph-opencode.webp" width="86" height="86" alt="The white opencode glyph, rippling while it works." loading="lazy"></div>
-    </article>
-
-    <article class="tile notices">
-      <div class="cap"><h3>Notices you answer</h3><p>Your charge limit, a meeting, a link with trackers. Point at one on the notch and it opens, with its buttons.</p></div>
-      <div class="fan">
-        <img src="img/notch-peek-link.webp" width="274" height="112" alt="A notice: Link has trackers, with Clean." loading="lazy">
-        <img src="img/notch-peek-held.webp" width="274" height="114" alt="A notice: Charged to 80 percent, with Charge to 100 percent." loading="lazy">
-        <img src="img/notch-peek-meeting.webp" width="274" height="114" alt="A notice: Design review in a minute, with Join." loading="lazy">
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/clock-arrow-circlepath.png" alt=""></div>
+          <span class="fname">Clipboard</span>
+          <h3>Copy now, paste whenever.</h3>
+        </div>
+        <p class="ftext">Oxine quietly keeps a history of what you copy, so the link or snippet you grabbed an hour ago is still a click away. Search the whole thing, and pin the bits you reach for again and again. It never leaves your Mac.</p>
       </div>
-    </article>
-  </div>
-</section>
 
-<section class="block" id="panel">
-  <h2>Everything in the panel.</h2>
-  <p class="sub">Tabs along the top, and the apps you install get tabs too. Pick any accent color, like these.</p>
-  <div class="grid">
-    <article class="tile " style="--bg: url(img/bg-ink.webp) center / cover">
-      <div class="cap"><h3>Everything you copied</h3><p>Type to search. Chips narrow it to links, code, secrets or pinned, and secrets stay under invisible ink.</p></div>
-      <div class="crop"><img src="img/tile-history.webp" width="480" height="516" alt="History: search, chips and copied items, with secrets hidden." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-amber.webp) center / cover">
-      <div class="cap"><h3>Notes</h3><p>Plain Markdown files in a folder you choose. Tick checklists right on the card.</p></div>
-      <div class="crop"><img src="img/tile-notes.webp" width="480" height="516" alt="Notes: a writer and cards, one with a checklist." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-indigo.webp) center / cover">
-      <div class="cap"><h3>2FA codes</h3><p>Locked with Touch ID, and exported as Google Authenticator transfer codes whenever you like.</p></div>
-      <div class="crop end"><img src="img/tile-auth.webp" width="480" height="286" alt="Auth: five accounts with six digit codes and countdown rings." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-plum.webp) center / cover">
-      <div class="cap"><h3>Scripts</h3><p>Small scripts in any language, one tap away. They take your clipboard or latest note.</p></div>
-      <div class="crop end"><img src="img/tile-scripts.webp" width="480" height="228" alt="Scripts: tiles for Base64 Encode, JSON Pretty, Slugify, Uppercase and Word Count." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-emerald.webp) center / cover">
-      <div class="cap"><h3>Sous</h3><p>Battery health: charge limit, sailing, heat protection. And where the power is going.</p></div>
-      <div class="crop"><img src="img/tile-sous.webp" width="480" height="520" alt="Sous: charging at 64 percent, a limit of 80, power flow and battery health." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-ember.webp) center / cover">
-      <div class="cap"><h3>Temper</h3><p>Temperatures, thermal pressure and fan control. Leave the fans to macOS, set them by hand, or draw a curve.</p></div>
-      <div class="crop"><img src="img/tile-temper.webp" width="480" height="516" alt="Temper: 52 degrees, running cool, thermal pressure, CPU load and fan control." loading="lazy"></div>
-    </article>
-  </div>
-</section>
-
-<section class="block" id="apps">
-  <h2>Extra apps, if you want them.</h2>
-  <p class="sub">None of these are there until you install them from Settings.</p>
-  <div class="grid">
-    <article class="tile wide split" style="--bg: url(img/bg-violet.webp) center / cover">
-      <div class="cap"><h3>Decant</h3><p>App-level volume control. Turn one app down without touching the rest, mute it, boost a quiet one, or send it to different speakers. Live meters show who's making the sound.</p></div>
-      <div class="crop"><img src="img/tile-decant.webp" width="480" height="480" alt="Decant: the output volume, then a fader for Music, Safari and Podcasts, and FaceTime kept below." loading="lazy"></div>
-    </article>
-    <article class="tile " style="--bg: url(img/bg-coffee.webp) center / cover">
-      <div class="cap"><h3>Caffeine</h3><p>Keeps the Mac awake for a set time, from one click in the footer. This button does it for real.</p><p class="toyline"><button class="toy" type="button" data-toy="caffeine" hidden>Keep this screen awake</button> <span class="toynote" data-toy-note="caffeine"></span></p></div>
-      <div class="crop end"><img src="img/tile-caffeine.webp" width="480" height="182" alt="Caffeine settings: status, keep awake for 1 hour, and the default duration." loading="lazy"></div>
-    </article>
-    <article class="tile t-focus" style="--bg: url(img/bg-dusk.webp) center / cover">
-      <div class="cap"><h3>Focus</h3><p>Fades and blurs every window but the front one, so it stops pulling your eye.</p><p class="toyline"><button class="toy" type="button" data-toy="focus">Try it on this page</button></p></div>
-      <div class="crop end"><img src="img/tile-focus.webp" width="480" height="202" alt="Focus settings: a switch to dim background windows, the dim level and the blur intensity." loading="lazy"></div>
-    </article>
-    <article class="tile short" style="--bg: url(img/bg-gold.webp) center / cover">
-      <div class="hangtop"><img src="img/notch-peek-door.webp" width="274" height="114" alt="A notice: Doorbell, music paused, with Resume music." loading="lazy"></div>
-      <div class="cap low"><h3>Ears On</h3><p>Listens for the doorbell, knocking, alarms and other sounds while you wear headphones, and pauses your music. Nothing is recorded or sent.</p></div>
-    </article>
-    <article class="tile short" style="--bg: url(img/bg-ocean.webp) center / cover">
-      <div class="hangtop"><img src="img/notch-closed.webp" width="274" height="32" alt="The closed notch." loading="lazy"><img class="under" src="img/notch-lyrics.webp" width="272" height="41" alt="A lyric line in a glass pill under the notch." loading="lazy"></div>
-      <div class="cap low"><h3>ScreenLyrics</h3><p>Synced lyrics for the song that's playing, in a small glass pill. Seven sizes, and it steps aside when the notch opens.</p></div>
-    </article>
-    <article class="tile" style="--bg: url(img/bg-teal.webp) center / cover">
-      <div class="hangtop"><img src="img/notch-hud-volume.webp" width="472" height="32" alt="The notch showing Volume at 62." loading="lazy"></div>
-      <div class="cap"><h3>FnGestures</h3><p>Hold fn and scroll for volume or brightness. Flick sideways for the next or previous track.</p></div>
-      <div class="crop end"><img src="img/tile-fngestures.webp" width="480" height="212" alt="FnGestures settings: ready, then what fn and scroll and fn and swipe do." loading="lazy"></div>
-    </article>
-    <article class="tile" style="--bg: url(img/bg-leaf.webp) center / cover">
-      <div class="hangtop"><img src="img/notch-peek-message.webp" width="274" height="160" alt="A message from Sam Kaya, with reactions and a reply field." loading="lazy"></div>
-      <div class="cap low"><h3>NotchsApp</h3><p>WhatsApp in the notch, from the community. Read, reply and react from a tall notch tab, and answer new messages right on the notice.</p></div>
-    </article>
-  </div>
-</section>
-
-</div>
-
-<div class="closing">
-  <div class="sky" aria-hidden="true"></div>
-
-<div class="wrap">
-
-<section class="block" id="install">
-  <h2>Get it.</h2>
-  <p class="sub">Free and open source. 2.6.0, macOS 26 or later.</p>
-  <div class="gettile">
-    <img src="shared/oxine-icon.svg" width="96" height="96" alt="">
-    <p class="get"><a class="button" href="https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg">Download for Mac</a><a class="button ghost" href="https://github.com/oxineapp/oxine">Source on GitHub</a></p>
-    <ol class="steps">
-      <li>Open the downloaded DMG and drag Oxine to Applications.</li>
-      <li>Open Oxine. It's self-signed, so macOS stops it the first time: click Done, then Open Anyway in System Settings, Privacy &amp; Security.</li>
-      <li>The first run walks you through color, size, the notch and your tabs. After that, ⌘⇧V opens the panel.</li>
-    </ol>
-  </div>
-</section>
-
-</div>
-
-  <footer class="foot" role="contentinfo">
-    <div class="footgrid">
-      <div class="footget">
-        <a class="button" href="https://github.com/oxineapp/oxine/releases/latest/download/Oxine.dmg">Download for Mac</a>
-        <p class="note">Free and open source.<br>2.6.0, macOS 26 or later.</p>
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/lock-shield.png" alt=""></div>
+          <span class="fname">2FA</span>
+          <h3>Codes without the phone hunt.</h3>
+        </div>
+        <p class="ftext">Your two-factor codes sit right in the menu bar, generated on-device and stored in the Keychain. Unlock with Touch ID, grab the code, and you're in, no scrambling for your phone before the timer runs out.</p>
       </div>
-      <nav aria-labelledby="f-page">
-        <h2 id="f-page">On this page</h2>
-        <ul>
-          <li><a href="#notch">Notch</a></li>
-          <li><a href="#panel">Panel</a></li>
-          <li><a href="#apps">Apps</a></li>
-          <li><a href="#install">Get it</a></li>
-        </ul>
-      </nav>
-      <nav aria-labelledby="f-src">
-        <h2 id="f-src">Source</h2>
-        <ul>
-          <li><a href="https://github.com/oxineapp/oxine">GitHub</a></li>
-          <li><a href="https://github.com/oxineapp/oxine/releases">Releases</a></li>
-          <li><a href="https://github.com/oxineapp/oxine/issues">Report a bug</a></li>
-          <li><a href="https://github.com/oxineapp/oxine/blob/master/LICENSE">GPL-3.0</a></li>
-        </ul>
-      </nav>
-      <nav aria-labelledby="f-who">
-        <h2 id="f-who">Made by</h2>
-        <ul>
-          <li><a href="https://github.com/alfaoz">alfaoz</a></li>
-          <li><a href="https://github.com/Sha-Dox">Sha-Dox</a></li>
-        </ul>
-      </nav>
+
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/puzzlepiece-extension.png" alt=""></div>
+          <span class="fname">Scripts</span>
+          <h3>Teach it new tricks.</h3>
+        </div>
+        <p class="ftext">Write a tiny script in any language and Oxine runs it on whatever you've copied or selected. Format some JSON, convert a value, hit an API; wire it up once and it's a keystroke away from then on.</p>
+      </div>
+
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/battery-100-bolt.png" alt=""></div>
+          <span class="fname">Sous</span>
+          <h3>A healthier battery, a longer-lived Mac.</h3>
+        </div>
+        <p class="ftext">Full battery care, built in. Cap how far your Mac charges so it isn't cooked at 100% all day, the single biggest thing you can do for its lifespan, with heat protection and calibration to keep it honest. Low and slow beats a rolling boil.</p>
+      </div>
+
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/moon.png" alt=""></div>
+          <span class="fname">Focus</span>
+          <h3>Mute the noise, not the work.</h3>
+        </div>
+        <p class="ftext">Dim and blur everything except the window you're working in. One keystroke and the rest of the screen sinks into the background, so the only thing in front of you is the thing you're actually doing.</p>
+      </div>
+
+      <div class="frow reveal">
+        <div class="fhead">
+          <div class="fic"><img src="shots/icons/cloud-fill.png" alt=""></div>
+          <span class="fname">justtype</span>
+          <h3>More powerful than ever.</h3>
+        </div>
+        <p class="ftext">Connect your justtype account and your notes sync end-to-end encrypted across your devices, editable from anywhere you type. Local-first when you want it, everywhere when you need it.</p>
+      </div>
     </div>
-    <div class="footlegal">
-      <p>Lyrics and cover art of “@defne.kalbim96” © Büyük Ev Ablukada, Olmadı Kaçarız Plakçılık.</p>
-    </div>
-    <div class="sign">
-      <canvas aria-hidden="true"></canvas>
-      <p class="signword">Oxine</p>
+  </section>
+
+  <footer class="shell">
+    <div>© 2026 Oxine · Built for macOS</div>
+    <div class="foot-links">
+      <a href="https://github.com/oxineapp/oxine">GitHub</a>
+      <a href="https://github.com/oxineapp/oxine/releases/latest">Releases</a>
+      <a href="https://github.com/oxineapp/oxine/blob/master/LICENSE">License</a>
     </div>
   </footer>
-</div>
-</main>
 
-<script src="shared/real.js"></script>
-<script src="orbit.js"></script>
-<script src="shared/dots.js"></script>
-<script src="motion.js"></script>
+<script>
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('stuck', scrollY > 10);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.14 });
+  document.querySelectorAll('.reveal').forEach((el, i) => { el.style.transitionDelay = (i % 3 * 0.06) + 's'; io.observe(el); });
+
+  // Real-app device: clickable tabs + auto-cycle
+  const device = document.getElementById('device');
+  const imgs = [...device.querySelectorAll('img')];
+  const hots = [...device.querySelectorAll('.hot')];
+  let cur = 0, timer = null;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The tour opens on Sous and lingers there 3s longer than the other tabs.
+  const SOUS = imgs.findIndex((im) => /sous/i.test(im.src));
+  const BASE = 3600, SOUS_EXTRA = 3000;
+  const dwell = (i) => BASE + (i === SOUS ? SOUS_EXTRA : 0);
+  function show(n) {
+    cur = n;
+    imgs.forEach((im, k) => im.classList.toggle('on', k === cur));
+  }
+  function start() {
+    if (reduce) return;
+    stop();
+    const tick = () => { show((cur + 1) % imgs.length); timer = setTimeout(tick, dwell(cur)); };
+    timer = setTimeout(tick, dwell(cur));   // dwell on whatever's showing now
+  }
+  function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+  hots.forEach((h) => h.addEventListener('click', () => { show(+h.dataset.i); start(); }));
+  device.addEventListener('pointerenter', stop);
+  device.addEventListener('pointerleave', start);
+  show(SOUS < 0 ? 0 : SOUS); start();
+
+  // Cursor-follow 3D tilt + glass glint (desktop only, respects reduced-motion)
+  const stage = device.parentElement;
+  if (matchMedia('(pointer:fine)').matches && !reduce) {
+    const MAX = 9; // degrees
+    let raf = null, lastE = null;
+    stage.addEventListener('pointermove', (e) => {
+      lastE = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const r = device.getBoundingClientRect();
+        const px = Math.min(Math.max((lastE.clientX - r.left) / r.width, 0), 1);
+        const py = Math.min(Math.max((lastE.clientY - r.top) / r.height, 0), 1);
+        device.style.transition = 'transform .08s linear';
+        device.style.transform = `rotateX(${(0.5 - py) * 2 * MAX}deg) rotateY(${(px - 0.5) * 2 * MAX}deg)`;
+        device.style.setProperty('--gx', (px * 100) + '%');
+        device.style.setProperty('--gy', (py * 100) + '%');
+        device.classList.add('tilt');
+      });
+    });
+    stage.addEventListener('pointerleave', () => {
+      device.style.transition = 'transform .5s cubic-bezier(.2,.7,.2,1)';
+      device.style.transform = '';
+      device.classList.remove('tilt');
+    });
+  }
+</script>
 </body>
 </html>
